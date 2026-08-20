@@ -1,0 +1,16 @@
+# Dart / Flutter
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.iml
+*.log
+
+# IDE
+.idea/
+.vscode/
+
+# Env
+.env
+!.env.example

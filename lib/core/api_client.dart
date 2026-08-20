@@ -1,0 +1,155 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../models/api_models.dart';
+
+class ApiClient {
+  ApiClient({http.Client? client}) : _client = client ?? http.Client();
+
+  static const _configuredBaseUrl = String.fromEnvironment('INCOEX_API_URL');
+  static const defaultBaseUrl = 'http://10.0.2.2:3000/api';
+
+  final http.Client _client;
+  String? accessToken;
+  SessionUser? currentUser;
+
+  String get baseUrl =>
+      _configuredBaseUrl.isEmpty ? defaultBaseUrl : _configuredBaseUrl;
+
+  Future<LoginResponse> login({
+    required String email,
+    required String password,
+    required String role,
+  }) async {
+    final json = (await _send(
+      'POST',
+      '/auth/login',
+      body: {'email': email, 'password': password, 'role': role},
+    )) as Map<String, dynamic>;
+    final response = LoginResponse.fromJson(json);
+    accessToken = response.accessToken;
+    currentUser = response.user;
+    return response;
+  }
+
+  Future<LoginResponse> register({
+    required String name,
+    required String companyName,
+    required String email,
+    required String password,
+    required String role,
+  }) async {
+    final json = (await _send(
+      'POST',
+      '/auth/register',
+      body: {
+        'name': name,
+        'companyName': companyName,
+        'email': email,
+        'password': password,
+        'role': role,
+      },
+    )) as Map<String, dynamic>;
+    final response = LoginResponse.fromJson(json);
+    accessToken = response.accessToken;
+    currentUser = response.user;
+    return response;
+  }
+
+  Future<DashboardSummary> getDashboardSummary() async {
+    return DashboardSummary.fromJson(
+      (await _send('GET', '/dashboard/summary')) as Map<String, dynamic>,
+    );
+  }
+
+  Future<List<Trip>> getTrips() async {
+    final json = await _send('GET', '/trips');
+    final list = json is List
+        ? json
+        : json is Map && json['items'] is List
+            ? json['items'] as List
+            : [json];
+    return list
+        .whereType<Map>()
+        .map((item) => Trip.fromJson(item.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<Trip> createTrip({
+    required String client,
+    required String origin,
+    required String destination,
+    required int packages,
+    String? description,
+    String? recipientName,
+    String? recipientPhone,
+    bool fragile = false,
+  }) async {
+    final json = (await _send(
+      'POST',
+      '/trips',
+      body: {
+        'client': client,
+        'origin': origin,
+        'destination': destination,
+        'packages': packages,
+        'description': description,
+        'recipientName': recipientName,
+        'recipientPhone': recipientPhone,
+        'fragile': fragile,
+      },
+    )) as Map<String, dynamic>;
+    return Trip.fromJson(json);
+  }
+
+  Future<TrackingData> getTracking(String tripId) async {
+    final encodedTripId = Uri.encodeComponent(tripId);
+    return TrackingData.fromJson(
+      (await _send('GET', '/trips/$encodedTripId/tracking'))
+          as Map<String, dynamic>,
+    );
+  }
+
+  Future<dynamic> _send(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (accessToken != null && accessToken!.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $accessToken';
+    }
+
+    late http.Response response;
+    if (method == 'POST') {
+      response = await _client.post(
+        uri,
+        headers: headers,
+        body: jsonEncode(body ?? const {}),
+      );
+    } else {
+      response = await _client.get(uri, headers: headers);
+    }
+
+    final decoded =
+        response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = decoded is Map ? decoded['message'] : null;
+      throw ApiException(message?.toString() ?? 'La API respondió con error.');
+    }
+    if (decoded is Map) return decoded.cast<String, dynamic>();
+    if (decoded is List) return decoded;
+    throw const ApiException('La API devolvió una respuesta inválida.');
+  }
+}
+
+class ApiException implements Exception {
+  const ApiException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
