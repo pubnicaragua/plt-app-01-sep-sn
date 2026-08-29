@@ -30,7 +30,7 @@ class IncoexApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: scheme,
         scaffoldBackgroundColor: mist,
-        fontFamily: 'Arial',
+        fontFamily: 'Acumin Pro',
         textTheme: const TextTheme(
           headlineLarge: TextStyle(
             fontSize: 31,
@@ -137,6 +137,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final slide = slides[page];
+    final contentWidth =
+        (MediaQuery.sizeOf(context).width - 48).clamp(0.0, 330.0).toDouble();
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -173,31 +175,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 const SizedBox(height: 30),
                 const BrandLockup(light: true),
                 Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      MascotCard(icon: slide.icon, caption: slide.caption),
-                      const SizedBox(height: 36),
-                      Text(
-                        slide.title,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          MascotCard(icon: slide.icon, caption: slide.caption),
+                          const SizedBox(height: 36),
+                          SizedBox(
+                            width: contentWidth,
+                            child: Column(
+                              children: [
+                                Text(
+                                  slide.title,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 7),
+                                Text(
+                                  slide.description,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Color(0xFFE0E9FF),
+                                    fontSize: 13,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 7),
-                      Text(
-                        slide.description,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Color(0xFFE0E9FF),
-                          fontSize: 13,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 FilledButton(
@@ -249,6 +263,16 @@ class BrandLockup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (light) {
+      return SizedBox(
+        width: 178,
+        height: 48,
+        child: Image.asset(
+          'assets/brand/incoex-logo.png',
+          fit: BoxFit.contain,
+        ),
+      );
+    }
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -378,7 +402,19 @@ class MascotCard extends StatelessWidget {
                       color: Colors.white.withOpacity(.35),
                     ),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 56),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 88,
+                        height: 62,
+                        child: Image.asset(
+                          'assets/brand/incoex-logo.png',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 14),
                 Text(
@@ -472,142 +508,226 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fieldDecoration = (String label, IconData icon) => InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Color(0xFFD9E6FF)),
+          prefixIcon: Icon(icon, color: Colors.white70),
+          filled: true,
+          fillColor: const Color(0x2BFFFFFF),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: const BorderSide(color: Color(0x668CB6FF)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: const BorderSide(color: Colors.white, width: 1.4),
+          ),
+        );
+
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(22, 30, 22, 30),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0B3DB9), navy],
+          ),
+        ),
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 25),
             children: [
-              const BrandLockup(),
-              const SizedBox(height: 44),
-              Text(
-                isCompany ? 'Hola, empresa.' : 'Hola, conductor.',
-                style: Theme.of(context).textTheme.headlineLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isCompany
-                    ? 'Gestiona tus envíos con una vista clara de cada operación.'
-                    : 'Mantén tu ruta, disponibilidad y entregas bajo control.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 27),
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment<bool>(
-                    value: true,
-                    label: Text('Empresa'),
-                    icon: Icon(Icons.business_outlined),
-                  ),
-                  ButtonSegment<bool>(
-                    value: false,
-                    label: Text('Conductor'),
-                    icon: Icon(Icons.local_shipping_outlined),
-                  ),
-                ],
-                selected: {isCompany},
-                onSelectionChanged: (value) =>
-                    setState(() => isCompany = value.first),
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: emailController,
-                decoration: InputDecoration(
-                  labelText: 'Correo electrónico',
-                  prefixIcon: Icon(Icons.mail_outline),
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: passwordController,
-                obscureText: obscure,
-                decoration: InputDecoration(
-                  labelText: 'Contraseña',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      obscure
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
+              const BrandLockup(light: true),
+              const SizedBox(height: 28),
+              Container(
+                padding: const EdgeInsets.fromLTRB(18, 26, 18, 24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D4DCC),
+                  borderRadius: BorderRadius.circular(34),
+                  border: Border.all(color: const Color(0x447EA8FF)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x35000000),
+                      blurRadius: 24,
+                      offset: Offset(0, 14),
                     ),
-                    onPressed: () => setState(() => obscure = !obscure),
-                  ),
+                  ],
                 ),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {},
-                  child: const Text('¿Olvidaste tu contraseña?'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (errorMessage != null) ...[
-                Text(
-                  errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Color(0xFFD64545),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(53),
-                  backgroundColor: cobalt,
-                ),
-                onPressed: loading ? null : _login,
-                child: loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Acceder'),
-              ),
-              const SizedBox(height: 22),
-              Center(
-                child: Wrap(
-                  alignment: WrapAlignment.center,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      '¿No tienes cuenta? ',
-                      style: TextStyle(color: Color(0xFF78869C)),
+                    Text(
+                      'Inicia sesión',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const RegisterScreen(),
+                    const SizedBox(height: 7),
+                    Text(
+                      isCompany
+                          ? 'Accede al portal de tu empresa.'
+                          : 'Accede a tu jornada como conductor.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFFD2E0FF),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SegmentedButton<bool>(
+                      style: ButtonStyle(
+                        foregroundColor: WidgetStateProperty.all(Colors.white),
+                        backgroundColor: WidgetStateProperty.resolveWith(
+                          (states) => states.contains(WidgetState.selected)
+                              ? const Color(0xFF0755E8)
+                              : const Color(0x1FFFFFFF),
+                        ),
+                        side: WidgetStateProperty.all(
+                          const BorderSide(color: Color(0x668CB6FF)),
                         ),
                       ),
-                      child: const Text(
-                        'Regístrate aquí',
-                        style: TextStyle(
-                          color: cobalt,
-                          fontWeight: FontWeight.w800,
+                      segments: const [
+                        ButtonSegment<bool>(
+                          value: true,
+                          label: Text('Empresa'),
+                          icon: Icon(Icons.business_outlined),
                         ),
+                        ButtonSegment<bool>(
+                          value: false,
+                          label: Text('Conductor'),
+                          icon: Icon(Icons.local_shipping_outlined),
+                        ),
+                      ],
+                      selected: {isCompany},
+                      onSelectionChanged: (value) =>
+                          setState(() => isCompany = value.first),
+                    ),
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: emailController,
+                      style: const TextStyle(color: Colors.white),
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: fieldDecoration(
+                        'Usuario / correo electrónico',
+                        Icons.mail_outline,
+                      ),
+                    ),
+                    const SizedBox(height: 13),
+                    TextField(
+                      controller: passwordController,
+                      style: const TextStyle(color: Colors.white),
+                      obscureText: obscure,
+                      decoration:
+                          fieldDecoration('Contraseña', Icons.lock_outline)
+                              .copyWith(
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscure
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            color: Colors.white70,
+                          ),
+                          onPressed: () => setState(() => obscure = !obscure),
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => _showRecoveryDialog(context),
+                        child: const Text(
+                          '¿Olvidaste tu contraseña?',
+                          style: TextStyle(color: Color(0xFFE5EEFF)),
+                        ),
+                      ),
+                    ),
+                    if (errorMessage != null) ...[
+                      Text(
+                        errorMessage!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFFFD2D2),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(54),
+                        backgroundColor: Colors.white,
+                        foregroundColor: cobalt,
+                      ),
+                      onPressed: loading ? null : _login,
+                      child: loading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Acceder'),
+                    ),
+                    const SizedBox(height: 17),
+                    Center(
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        children: [
+                          const Text(
+                            '¿No tienes cuenta? ',
+                            style: TextStyle(color: Color(0xFFD2E0FF)),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const RegisterScreen(),
+                              ),
+                            ),
+                            child: const Text(
+                              'Regístrate aquí',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 36),
+              const SizedBox(height: 18),
               const Center(
                 child: Text(
                   'Al continuar aceptas los Términos y condiciones',
-                  style: TextStyle(
-                    color: Color(0xFF9AA6B8),
-                    fontSize: 10,
-                  ),
+                  style: TextStyle(color: Color(0xFFC3D4FF), fontSize: 10),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showRecoveryDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recuperar acceso'),
+        content: const Text(
+          'La recuperación se habilitará cuando conectemos el proveedor de identidad productivo. Para esta revisión local, solicita al administrador un acceso de prueba.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
       ),
     );
   }
@@ -681,21 +801,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Crear cuenta')),
+      backgroundColor: navy,
+      appBar: AppBar(
+        backgroundColor: navy,
+        foregroundColor: Colors.white,
+        title: const Text('Crear cuenta'),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
           children: [
-            const BrandLockup(),
+            const BrandLockup(light: true),
             const SizedBox(height: 25),
             Text(
               isCompany ? 'Registro de empresa' : 'Registro de conductor',
-              style: Theme.of(context).textTheme.headlineLarge,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 31,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -1.2,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               'Crea tu acceso para comenzar a operar en INCOEX.',
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: const TextStyle(
+                color: Color(0xFFD2E0FF),
+                fontSize: 13,
+                height: 1.35,
+              ),
             ),
             const SizedBox(height: 22),
             SegmentedButton<bool>(
@@ -1202,66 +1336,72 @@ class TransportCard extends StatelessWidget {
     required this.label,
     required this.eta,
     this.active = false,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final String eta;
   final bool active;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 13, 10, 11),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        color: active ? const Color(0xFFE8F0FF) : Colors.white,
-        border: Border.all(
-          color: active ? cobalt : const Color(0xFFE5EAF2),
-          width: active ? 1.3 : 1,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 13, 10, 11),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          color: active ? const Color(0xFFE8F0FF) : Colors.white,
+          border: Border.all(
+            color: active ? cobalt : const Color(0xFFE5EAF2),
+            width: active ? 1.3 : 1,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            color: active ? cobalt : const Color(0xFF70809C),
-            size: 22,
-          ),
-          const SizedBox(height: 9),
-          Text(
-            label,
-            style: const TextStyle(
-              color: ink,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              color: active ? cobalt : const Color(0xFF70809C),
+              size: 22,
             ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            eta,
-            style: const TextStyle(color: Color(0xFF8492A7), fontSize: 10),
-          ),
-          if (active) ...[
-            const SizedBox(height: 7),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(
-                color: cobalt,
-                borderRadius: BorderRadius.circular(5),
+            const SizedBox(height: 9),
+            Text(
+              label,
+              style: const TextStyle(
+                color: ink,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
               ),
-              child: const Text(
-                'Más rápido',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 8,
-                  fontWeight: FontWeight.w700,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              eta,
+              style: const TextStyle(color: Color(0xFF8492A7), fontSize: 10),
+            ),
+            if (active) ...[
+              const SizedBox(height: 7),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: cobalt,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: const Text(
+                  'Más rápido',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1443,6 +1583,8 @@ class RequestFlow extends StatefulWidget {
 class _RequestFlowState extends State<RequestFlow> {
   int step = 0;
   int packages = 1;
+  String transport = 'Moto';
+  bool fragile = true;
   bool submitting = false;
   final origin = TextEditingController();
   final destination = TextEditingController();
@@ -1528,22 +1670,25 @@ class _RequestFlowState extends State<RequestFlow> {
                 style: TextStyle(color: ink, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
-              const Row(
+              Row(
                 children: [
                   Expanded(
                     child: TransportCard(
                       icon: Icons.two_wheeler,
                       label: 'Moto',
                       eta: '15–30 min',
-                      active: true,
+                      active: transport == 'Moto',
+                      onTap: () => setState(() => transport = 'Moto'),
                     ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: TransportCard(
                       icon: Icons.directions_car,
                       label: 'Vehículo',
                       eta: '1–2 horas',
+                      active: transport == 'Vehículo',
+                      onTap: () => setState(() => transport = 'Vehículo'),
                     ),
                   ),
                 ],
@@ -1588,10 +1733,10 @@ class _RequestFlowState extends State<RequestFlow> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFE1E8F2)),
                 ),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       '¿Carga frágil?',
                       style: TextStyle(
                         color: ink,
@@ -1599,7 +1744,7 @@ class _RequestFlowState extends State<RequestFlow> {
                       ),
                     ),
                     SizedBox(height: 7),
-                    Text(
+                    const Text(
                       'Requiere manejo especial',
                       style: TextStyle(
                         color: Color(0xFF8996A8),
@@ -1607,7 +1752,10 @@ class _RequestFlowState extends State<RequestFlow> {
                       ),
                     ),
                     SizedBox(height: 3),
-                    Switch(value: true, onChanged: null),
+                    Switch(
+                      value: fragile,
+                      onChanged: (value) => setState(() => fragile = value),
+                    ),
                   ],
                 ),
               ),
@@ -1654,7 +1802,7 @@ class _RequestFlowState extends State<RequestFlow> {
         description: description.text.trim(),
         recipientName: recipient.text.trim(),
         recipientPhone: recipientPhone.text.trim(),
-        fragile: true,
+        fragile: fragile,
       );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(

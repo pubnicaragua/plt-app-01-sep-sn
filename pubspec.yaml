@@ -18,3 +18,16 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/brand/incoex-logo.png
+  fonts:
+    - family: Acumin Pro
+      fonts:
+        - asset: assets/fonts/Acumin-RPro.otf
+        - asset: assets/fonts/Acumin-ItPro.otf
+          style: italic
+        - asset: assets/fonts/Acumin-BdPro.otf
+          weight: 700
+        - asset: assets/fonts/Acumin-BdItPro.otf
+          weight: 700
+          style: italic
