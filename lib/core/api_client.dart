@@ -305,6 +305,17 @@ class ApiClient {
     )) as Map<String, dynamic>;
   }
 
+  Future<List<Map<String, dynamic>>> getPendingCortes() async {
+    final json = await _send('GET', '/cortes?status=pendiente');
+    if (json is List) {
+      return json
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList();
+    }
+    return [];
+  }
+
   Future<dynamic> _send(
     String method,
     String path, {

@@ -1,10 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/location_service.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/app_nav_bar.dart';
+import '../widgets/corte_banner.dart';
 import '../widgets/glass.dart';
 import '../widgets/place_field.dart';
 import 'crear_envio1.dart';
@@ -34,9 +35,16 @@ class _HomeClienteState extends State<HomeCliente> {
       body: AppBackground(
         child: SafeArea(
           bottom: false,
-          child: IndexedStack(
-            index: tab,
-            children: views,
+          child: Column(
+            children: [
+              const CorteBanner(),
+              Expanded(
+                child: IndexedStack(
+                  index: tab,
+                  children: views,
+                ),
+              ),
+            ],
           ),
         ),
       ),
