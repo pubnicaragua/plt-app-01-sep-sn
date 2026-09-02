@@ -21,6 +21,18 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
 
   Future<void> _arrived() async {
     if (updating) return;
+    if (widget.trip.status != 'En camino') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Este viaje está en estado «${widget.trip.status}»; no se puede marcar en entrega. Refresca la pantalla.',
+            style: const TextStyle(fontFamily: 'Acumin Pro'),
+          ),
+        ),
+      );
+      return;
+    }
     setState(() => updating = true);
     try {
       final updated = await apiClient.updateTripStatus(widget.trip.id, 'En entrega');
@@ -30,15 +42,18 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
           builder: (_) => ConfirmarEntrega(trip: updated),
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted) setState(() => updating = false);
+      final message = error is ApiException
+          ? error.message
+          : 'No se pudo actualizar. Verifica tu conexión.';
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             behavior: SnackBarBehavior.floating,
             content: Text(
-              'No se pudo actualizar. Verifica tu conexión.',
-              style: TextStyle(fontFamily: 'Acumin Pro'),
+              message,
+              style: const TextStyle(fontFamily: 'Acumin Pro'),
             ),
           ),
         );

@@ -44,14 +44,22 @@ class _ViajeAsignadoState extends State<ViajeAsignado> {
   }
 
   Future<void> _startTrip(Trip trip) async {
+    if (trip.status != 'Asignado') {
+      if (mounted) {
+        setState(() =>
+            error = 'El viaje está en estado «${trip.status}» y no se puede iniciar. Vuelve a atrás y refresca la lista.');
+      }
+      return;
+    }
     try {
       final updated = await apiClient.updateTripStatus(trip.id, 'En camino');
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => ViajeEnCurso(trip: updated)),
       );
-    } catch (_) {
-      if (mounted) setState(() => error = 'No se pudo iniciar el viaje.');
+    } catch (failure) {
+      final message = failure is ApiException ? failure.message : 'No se pudo iniciar el viaje.';
+      if (mounted) setState(() => error = message);
     }
   }
 

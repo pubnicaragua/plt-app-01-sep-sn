@@ -21,6 +21,20 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
 
   Future<void> _submit() async {
     if (updating) return;
+    if (widget.trip.status != 'En entrega') {
+      setState(() => updating = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Este viaje está en estado «${widget.trip.status}»; no se puede confirmar la entrega. Refresca.',
+            style: const TextStyle(fontFamily: 'Acumin Pro'),
+          ),
+        ),
+      );
+      setState(() => updating = false);
+      return;
+    }
     setState(() => updating = true);
     try {
       await apiClient.updateTripStatus(
@@ -32,15 +46,17 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
         MaterialPageRoute(builder: (_) => const HomeConductor()),
         (route) => false,
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(() => updating = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             behavior: SnackBarBehavior.floating,
             content: Text(
-              'No se pudo registrar. Verifica tu conexión.',
-              style: TextStyle(fontFamily: 'Acumin Pro'),
+              error is ApiException
+                  ? error.message
+                  : 'No se pudo confirmar la entrega. Verifica tu conexión.',
+              style: const TextStyle(fontFamily: 'Acumin Pro'),
             ),
           ),
         );
