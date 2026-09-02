@@ -1,5 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
+
+Future<void> requestAppPermissions() async {
+  try {
+    await ph.Permission.notification.request();
+  } catch (_) {}
+  await requestCurrentLocation();
+}
 
 Future<CurrentLocation?> requestCurrentLocation() async {
   if (kIsWeb) return null;

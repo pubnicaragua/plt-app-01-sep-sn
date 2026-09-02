@@ -23,6 +23,10 @@ class CrearEnvio3 extends StatefulWidget {
     this.destinationRefs = '',
     this.recipientName = '',
     this.recipientPhone = '',
+    this.serviceType = 'Express',
+    this.scheduledDate,
+    this.scheduledTime,
+    this.isScheduled = false,
   });
 
   final String origin;
@@ -36,6 +40,10 @@ class CrearEnvio3 extends StatefulWidget {
   final String destinationRefs;
   final String recipientName;
   final String recipientPhone;
+  final String serviceType;
+  final String? scheduledDate;
+  final String? scheduledTime;
+  final bool isScheduled;
 
   @override
   State<CrearEnvio3> createState() => _CrearEnvio3State();
@@ -112,6 +120,10 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
         destinationRefs: widget.destinationRefs.isEmpty ? null : widget.destinationRefs,
         recipientName: widget.recipientName.isEmpty ? null : widget.recipientName,
         recipientPhone: widget.recipientPhone.isEmpty ? null : widget.recipientPhone,
+        serviceType: widget.serviceType,
+        scheduledDate: widget.scheduledDate,
+        scheduledTime: widget.scheduledTime,
+        isScheduled: widget.serviceType == 'Programado',
       );
       await Future<void>.delayed(const Duration(milliseconds: 2200));
       if (!mounted) return;

@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/location_service.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/app_nav_bar.dart';
@@ -90,6 +91,7 @@ class _HomeTabState extends State<_HomeTab> {
     apiClient.getSettings().then((data) {
       if (mounted) setState(() => settings = data);
     }).catchError((_) {});
+    requestAppPermissions();
   }
 
   @override

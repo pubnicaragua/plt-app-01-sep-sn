@@ -390,22 +390,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                for (final (label, cap, icon) in [
-                  (
-                    'Moto',
-                    'Hasta 20 kg',
-                    Icons.two_wheeler
-                  ),
-                  (
-                    'Vehículo',
-                    'Hasta 300 kg',
-                    Icons.directions_car_filled
-                  ),
-                  (
-                    'Camión',
-                    'Hasta 1,500 kg',
-                    Icons.local_shipping_outlined
-                  ),
+                for (final (label, cap, icon, maxKg) in [
+                  ('Moto', 'Hasta 20 kg', Icons.two_wheeler, 20),
+                  ('Vehículo', 'Hasta 300 kg', Icons.directions_car_filled, 300),
+                  ('Camión', 'Hasta 1,500 kg', Icons.local_shipping_outlined, 1500),
                 ])
                   Padding(
                     padding: const EdgeInsets.only(bottom: 9),
@@ -421,7 +409,23 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                       price: _priceFor(label),
                       selected: transport == label,
                       recommended: _recommended == label,
-                      onTap: () => setState(() => transport = label),
+                      blocked: weight > maxKg,
+                      blockedNote: weight > maxKg
+                          ? 'Tu carga de $weight kg supera la capacidad de $label'
+                          : null,
+                      onTap: weight > maxKg
+                          ? () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  behavior: SnackBarBehavior.floating,
+                                  content: Text(
+                                    '$label no soporta $weight kg. Cambia el peso o usa otro vehículo.',
+                                    style: const TextStyle(fontFamily: 'Acumin Pro'),
+                                  ),
+                                ),
+                              );
+                            }
+                          : () => setState(() => transport = label),
                     ),
                   ),
                 if (price != null) ...[
@@ -502,6 +506,8 @@ class _VehicleRateTile extends StatelessWidget {
     required this.recommended,
     required this.onTap,
     this.price,
+    this.blocked = false,
+    this.blockedNote,
   });
 
   final IconData icon;
@@ -512,6 +518,8 @@ class _VehicleRateTile extends StatelessWidget {
   final bool recommended;
   final VoidCallback onTap;
   final double? price;
+  final bool blocked;
+  final String? blockedNote;
 
   @override
   Widget build(BuildContext context) {
@@ -525,11 +533,20 @@ class _VehicleRateTile extends StatelessWidget {
               : Colors.white.withValues(alpha: .07),
           borderRadius: BorderRadius.circular(15),
           border: Border.all(
-            color: selected ? cyan : glassBorder,
-            width: 1.2,
+            color: blocked
+                ? const Color(0xFFE5484D).withValues(alpha: .55)
+                : selected
+                    ? cyan
+                    : glassBorder,
+            width: blocked ? 1.4 : 1.2,
           ),
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Opacity(
+              opacity: blocked ? 0.55 : 1,
+              child: Row(
           children: [
             Container(
               width: 42,
@@ -629,12 +646,34 @@ class _VehicleRateTile extends StatelessWidget {
             ),
             const SizedBox(width: 9),
             Icon(
-              selected
+              selected && !blocked
                   ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
-              color: selected ? cyan : Colors.white38,
+                  : blocked
+                      ? Icons.not_interested_rounded
+                      : Icons.radio_button_unchecked,
+              color: blocked
+                  ? const Color(0xFFE5484D)
+                  : selected
+                      ? cyan
+                      : Colors.white38,
               size: 21,
             ),
+          ],
+              ),
+            ),
+            if (blockedNote != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 11),
+                child: Text(
+                  blockedNote!,
+                  style: const TextStyle(
+                    color: Color(0xFFFFB4B4),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
           ],
         ),
       ),

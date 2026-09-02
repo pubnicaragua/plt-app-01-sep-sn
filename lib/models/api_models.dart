@@ -109,6 +109,9 @@ class Trip {
     this.originLng,
     this.destinationLat,
     this.destinationLng,
+    this.scheduledDate,
+    this.scheduledTime,
+    this.isScheduled = false,
   });
 
   final String id;
@@ -133,6 +136,9 @@ class Trip {
   final double? originLng;
   final double? destinationLat;
   final double? destinationLng;
+  final String? scheduledDate;
+  final String? scheduledTime;
+  final bool isScheduled;
 
   bool get isPending => status == 'Pendiente';
   bool get isAssigned => status == 'Asignado';
@@ -182,6 +188,9 @@ class Trip {
       originLng: (json['originLng'] as num?)?.toDouble(),
       destinationLat: (json['destinationLat'] as num?)?.toDouble(),
       destinationLng: (json['destinationLng'] as num?)?.toDouble(),
+      scheduledDate: json['scheduledDate']?.toString(),
+      scheduledTime: json['scheduledTime']?.toString(),
+      isScheduled: json['isScheduled']?.toString() == 'true',
     );
   }
 }
@@ -300,10 +309,14 @@ class AppSettings {
   const AppSettings({
     required this.dollarRate,
     required this.vehicleRates,
+    this.prioritySurchargePct = 25,
+    this.scheduledSurchargePct = 0,
   });
 
   final double dollarRate;
   final Map<String, VehicleRate> vehicleRates;
+  final double prioritySurchargePct;
+  final double scheduledSurchargePct;
 
   VehicleRate rateFor(String vehicle) =>
       vehicleRates[vehicle] ?? vehicleRates['Vehículo'] ?? const VehicleRate(baseFeeCs: 80, farePerKmCs: 8.5);
@@ -318,6 +331,8 @@ class AppSettings {
           VehicleRate.fromJson((value as Map?)?.cast<String, dynamic>() ?? const {}),
         ),
       ),
+      prioritySurchargePct: (json['prioritySurchargePct'] as num?)?.toDouble() ?? 25,
+      scheduledSurchargePct: (json['scheduledSurchargePct'] as num?)?.toDouble() ?? 0,
     );
   }
 }
