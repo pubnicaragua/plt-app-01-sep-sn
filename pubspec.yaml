@@ -10,6 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.3.0
+  google_maps_flutter: ^2.10.0
+  geolocator: ^13.0.1
 
 dev_dependencies:
   flutter_test:
@@ -20,6 +22,10 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/incoex-logo.png
+    - assets/img/
+    - assets/img/brand-x.png
+    - assets/img/PantallaInicio/
+    - assets/img/EstadosCrearEnvio/
   fonts:
     - family: Acumin Pro
       fonts:

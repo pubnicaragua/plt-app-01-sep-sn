@@ -1,8 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
-        android:label="incoex_logistics_app"
+        android:label="INCOEX Logistics"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Reemplaza este valor con tu API key de Android (Maps SDK for Android):
+             Google Cloud Console > Credentials > API key > Android apps > SHA-1 del keystore -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="REEMPLAZA_CON_TU_API_KEY_ANDROID" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
