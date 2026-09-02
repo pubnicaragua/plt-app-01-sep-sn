@@ -75,7 +75,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
           icon: widget.icon,
           controller: widget.controller,
           onChanged: _onChanged,
-          helper: results.isEmpty ? null : 'Sugerencias de Managua',
+          helper: results.isEmpty ? null : 'Sugerencias en tiempo real',
         ),
         if (open && results.isNotEmpty) ...[
           const SizedBox(height: 7),
@@ -96,9 +96,26 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
                   itemBuilder: (context, index) {
                     final suggestion = results[index];
                     return InkWell(
-                      onTap: () {
+                      onTap: () async {
                         widget.controller.text = suggestion.description;
-                        widget.onSelected?.call(suggestion);
+                        var resolved = suggestion;
+                        if (suggestion.latitude == null ||
+                            suggestion.longitude == null) {
+                          final detail = await apiClient
+                              .placeDetail(suggestion.placeId);
+                          if (detail != null && detail.latitude != null) {
+                            resolved = PlaceSuggestion(
+                              placeId: suggestion.placeId,
+                              description: suggestion.description,
+                              main: suggestion.main,
+                              secondary: suggestion.secondary,
+                              latitude: detail.latitude,
+                              longitude: detail.longitude,
+                            );
+                          }
+                        }
+                        widget.onSelected?.call(resolved);
+                        if (!mounted) return;
                         FocusScope.of(context).unfocus();
                         setState(() => open = false);
                       },

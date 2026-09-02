@@ -16,12 +16,22 @@ class CrearEnvio1 extends StatefulWidget {
     this.startDestination = '',
     this.startOriginPlace,
     this.startDestinationPlace,
+    this.startTransport = 'Moto',
+    this.startOriginRefs = '',
+    this.startDestinationRefs = '',
+    this.startRecipientName = '',
+    this.startRecipientPhone = '',
   });
 
   final String startOrigin;
   final String startDestination;
   final PlaceSuggestion? startOriginPlace;
   final PlaceSuggestion? startDestinationPlace;
+  final String startTransport;
+  final String startOriginRefs;
+  final String startDestinationRefs;
+  final String startRecipientName;
+  final String startRecipientPhone;
 
   @override
   State<CrearEnvio1> createState() => _CrearEnvio1State();
@@ -30,7 +40,7 @@ class CrearEnvio1 extends StatefulWidget {
 class _CrearEnvio1State extends State<CrearEnvio1> {
   int weight = 10;
   int bundles = 1;
-  String transport = 'Vehículo';
+  late String transport;
   late final TextEditingController origin;
   late final TextEditingController destination;
   late PlaceSuggestion? originPlace;
@@ -40,6 +50,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   @override
   void initState() {
     super.initState();
+    transport = widget.startTransport;
     origin = TextEditingController(text: widget.startOrigin);
     destination = TextEditingController(text: widget.startDestination);
     originPlace = widget.startOriginPlace;
@@ -439,6 +450,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   originPlace: originPlace,
                   destinationPlace: destinationPlace,
                   transport: transport,
+                  originRefs: widget.startOriginRefs,
+                  destinationRefs: widget.startDestinationRefs,
+                  recipientName: widget.startRecipientName,
+                  recipientPhone: widget.startRecipientPhone,
                 ),
               ),
             ),

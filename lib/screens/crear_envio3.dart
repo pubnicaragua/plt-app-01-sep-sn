@@ -19,6 +19,10 @@ class CrearEnvio3 extends StatefulWidget {
     this.originPlace,
     this.destinationPlace,
     this.transport = 'Vehículo',
+    this.originRefs = '',
+    this.destinationRefs = '',
+    this.recipientName = '',
+    this.recipientPhone = '',
   });
 
   final String origin;
@@ -28,6 +32,10 @@ class CrearEnvio3 extends StatefulWidget {
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
   final String transport;
+  final String originRefs;
+  final String destinationRefs;
+  final String recipientName;
+  final String recipientPhone;
 
   @override
   State<CrearEnvio3> createState() => _CrearEnvio3State();
@@ -100,6 +108,10 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
         ),
         transport: widget.transport,
         autoAssign: true,
+        originRefs: widget.originRefs.isEmpty ? null : widget.originRefs,
+        destinationRefs: widget.destinationRefs.isEmpty ? null : widget.destinationRefs,
+        recipientName: widget.recipientName.isEmpty ? null : widget.recipientName,
+        recipientPhone: widget.recipientPhone.isEmpty ? null : widget.recipientPhone,
       );
       await Future<void>.delayed(const Duration(milliseconds: 2200));
       if (!mounted) return;

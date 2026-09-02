@@ -119,6 +119,8 @@ class ApiClient {
     String? serviceType,
     String? transport,
     bool autoAssign = false,
+    String? originRefs,
+    String? destinationRefs,
   }) async {
     final json = (await _send(
       'POST',
@@ -140,6 +142,8 @@ class ApiClient {
         'serviceType': serviceType,
         'transport': transport,
         'autoAssign': autoAssign,
+        'originRefs': originRefs,
+        'destinationRefs': destinationRefs,
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);
@@ -154,7 +158,7 @@ class ApiClient {
   }
 
   Future<List<PlaceSuggestion>> searchPlaces(String query) async {
-    if (query.trim().length < 2) return const [];
+    if (query.trim().isEmpty) return const [];
     final json = await _send(
       'GET',
       '/places/autocomplete?q=${Uri.encodeComponent(query)}',
@@ -164,6 +168,25 @@ class ApiClient {
         .whereType<Map>()
         .map((item) => PlaceSuggestion.fromJson(item.cast<String, dynamic>()))
         .toList();
+  }
+
+  Future<PlaceSuggestion?> placeDetail(String placeId) async {
+    final json = await _send(
+      'GET',
+      '/places/detail?place_id=${Uri.encodeComponent(placeId)}',
+    );
+    final map = json is Map ? json.cast<String, dynamic>() : null;
+    final latitude = (map?['latitude'] as num?)?.toDouble();
+    final longitude = (map?['longitude'] as num?)?.toDouble();
+    if (latitude == null || longitude == null) return null;
+    return PlaceSuggestion(
+      placeId: placeId,
+      description: '',
+      main: '',
+      secondary: '',
+      latitude: latitude,
+      longitude: longitude,
+    );
   }
 
   Future<AppSettings> getSettings() async {

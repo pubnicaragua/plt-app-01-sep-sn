@@ -16,6 +16,10 @@ class CrearEnvio2 extends StatefulWidget {
     this.originPlace,
     this.destinationPlace,
     this.transport = 'Vehículo',
+    this.originRefs = '',
+    this.destinationRefs = '',
+    this.recipientName = '',
+    this.recipientPhone = '',
   });
 
   final String origin;
@@ -25,6 +29,10 @@ class CrearEnvio2 extends StatefulWidget {
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
   final String transport;
+  final String originRefs;
+  final String destinationRefs;
+  final String recipientName;
+  final String recipientPhone;
 
   @override
   State<CrearEnvio2> createState() => _CrearEnvio2State();
@@ -32,10 +40,17 @@ class CrearEnvio2 extends StatefulWidget {
 
 class _CrearEnvio2State extends State<CrearEnvio2> {
   final description = TextEditingController();
-  final recipient = TextEditingController();
-  final phone = TextEditingController();
+  late final TextEditingController recipient;
+  late final TextEditingController phone;
   bool fragile = true;
   bool priority = true;
+
+  @override
+  void initState() {
+    super.initState();
+    recipient = TextEditingController(text: widget.recipientName);
+    phone = TextEditingController(text: widget.recipientPhone);
+  }
 
   @override
   void dispose() {
@@ -367,6 +382,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                   originPlace: widget.originPlace,
                   destinationPlace: widget.destinationPlace,
                   transport: widget.transport,
+                  originRefs: widget.originRefs,
+                  destinationRefs: widget.destinationRefs,
+                  recipientName: recipient.text.trim(),
+                  recipientPhone: phone.text.trim(),
                 ),
               ),
             ),

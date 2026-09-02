@@ -172,16 +172,44 @@ class _HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<_HomeTab> {
   bool programado = true;
+  String transport = 'Moto';
+  AppSettings? settings;
   final origin = TextEditingController();
   final destination = TextEditingController();
+  final refOrigin = TextEditingController();
+  final refDestination = TextEditingController();
+  final recipientName = TextEditingController();
+  final recipientPhone = TextEditingController();
   PlaceSuggestion? originPlace;
   PlaceSuggestion? destinationPlace;
+
+  @override
+  void initState() {
+    super.initState();
+    apiClient.getSettings().then((data) {
+      if (mounted) setState(() => settings = data);
+    }).catchError((_) {});
+  }
 
   @override
   void dispose() {
     origin.dispose();
     destination.dispose();
+    refOrigin.dispose();
+    refDestination.dispose();
+    recipientName.dispose();
+    recipientPhone.dispose();
     super.dispose();
+  }
+
+  double? get _km => distanceKm(originPlace, destinationPlace);
+
+  double? _fareFor(String vehicle) {
+    final km = _km;
+    if (km == null) return null;
+    final rate = settings?.rateFor(vehicle);
+    if (rate == null) return null;
+    return rate.baseFeeCs + km * rate.farePerKmCs;
   }
 
   @override
@@ -321,7 +349,7 @@ class _HomeTabState extends State<_HomeTab> {
           ),
         ),
         const SizedBox(height: 12),
-        const Row(
+        Row(
           children: [
             Expanded(
               child: _TransportTile(
@@ -329,24 +357,30 @@ class _HomeTabState extends State<_HomeTab> {
                 label: 'Moto',
                 eta: '15-30 min',
                 badge: 'Más rápido',
+                selected: transport == 'Moto',
+                onTap: () => setState(() => transport = 'Moto'),
               ),
             ),
-            SizedBox(width: 9),
+            const SizedBox(width: 9),
             Expanded(
               child: _TransportTile(
                 icon: Icons.directions_car_filled,
                 label: 'Vehículo',
                 eta: '1-2 hrs',
                 badge: 'Versátil',
+                selected: transport == 'Vehículo',
+                onTap: () => setState(() => transport = 'Vehículo'),
               ),
             ),
-            SizedBox(width: 9),
+            const SizedBox(width: 9),
             Expanded(
               child: _TransportTile(
                 icon: Icons.local_shipping_outlined,
                 label: 'Camión',
                 eta: '2-4 hrs',
                 badge: 'Carga grande',
+                selected: transport == 'Camión',
+                onTap: () => setState(() => transport = 'Camión'),
               ),
             ),
           ],
@@ -359,14 +393,41 @@ class _HomeTabState extends State<_HomeTab> {
           onDestinationSelected: (place) =>
               setState(() => destinationPlace = place),
         ),
-        const SizedBox(height: 14),
-        const _ReferencesCard(),
-        const SizedBox(height: 14),
-        const Row(
+        const SizedBox(height: 10),
+        _FareCard(
+          km: _km,
+          fare: _fareFor(transport),
+          transportLabel: transport,
+          rate: settings?.rateFor(transport),
+          usdRate: settings?.dollarRate ?? 36.5,
+        ),
+        const SizedBox(height: 10),
+        _ReferencesCard(
+          originController: refOrigin,
+          destinationController: refDestination,
+        ),
+        const SizedBox(height: 10),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _RecipientCard(label: 'Destinatario', hint: 'Nombre completo')),
-            SizedBox(width: 10),
-            Expanded(child: _RecipientCard(label: 'Teléfono', hint: '+505 …', icon: Icons.call_outlined)),
+            Expanded(
+              child: GlassField(
+                label: 'Destinatario',
+                hint: 'Nombre completo',
+                icon: Icons.person_outline_rounded,
+                controller: recipientName,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GlassField(
+                label: 'Teléfono',
+                hint: '+505 …',
+                icon: Icons.call_outlined,
+                controller: recipientPhone,
+                keyboardType: TextInputType.phone,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -386,6 +447,11 @@ class _HomeTabState extends State<_HomeTab> {
                 startDestination: destination.text.trim(),
                 startOriginPlace: originPlace,
                 startDestinationPlace: destinationPlace,
+                startTransport: transport,
+                startOriginRefs: refOrigin.text.trim(),
+                startDestinationRefs: refDestination.text.trim(),
+                startRecipientName: recipientName.text.trim(),
+                startRecipientPhone: recipientPhone.text.trim(),
               ),
             ),
           ),
@@ -454,82 +520,196 @@ class _TransportTile extends StatelessWidget {
     required this.label,
     required this.eta,
     required this.badge,
+    this.selected = false,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final String eta;
   final String badge;
+  final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(11, 12, 11, 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .10),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: glassBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D4DCC),
-                  borderRadius: BorderRadius.circular(11),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.fromLTRB(11, 12, 11, 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF0D4DCC).withValues(alpha: .65)
+              : Colors.white.withValues(alpha: .10),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: selected ? figmaBlue : glassBorder,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? Colors.white.withValues(alpha: .22)
+                        : const Color(0xFF0D4DCC),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 20),
                 ),
-                child: Icon(icon, color: Colors.white, size: 20),
-              ),
-              Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
+                Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
+                  color: selected
+                      ? cyan
+                      : Colors.white.withValues(alpha: .55),
+                  size: 15,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14.5,
-              fontWeight: FontWeight.w800,
-              fontFamily: 'Acumin Pro',
+              ],
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            eta,
-            style: const TextStyle(
-              color: Color(0xFFB9D4FF),
-              fontSize: 10,
-              fontFamily: 'Acumin Pro',
-            ),
-          ),
-          const SizedBox(height: 7),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: figmaBlue,
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: Text(
-              badge,
+            const SizedBox(height: 9),
+            Text(
+              label,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 8.5,
-                fontWeight: FontWeight.w700,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w800,
                 fontFamily: 'Acumin Pro',
               ),
             ),
+            const SizedBox(height: 2),
+            Text(
+              eta,
+              style: const TextStyle(
+                color: Color(0xFFB9D4FF),
+                fontSize: 10,
+                fontFamily: 'Acumin Pro',
+              ),
+            ),
+            const SizedBox(height: 7),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: figmaBlue,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Text(
+                badge,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FareCard extends StatelessWidget {
+  const _FareCard({
+    required this.km,
+    required this.fare,
+    required this.transportLabel,
+    required this.rate,
+    required this.usdRate,
+  });
+
+  final double? km;
+  final double? fare;
+  final String transportLabel;
+  final VehicleRate? rate;
+  final double usdRate;
+
+  @override
+  Widget build(BuildContext context) {
+    final distance = km;
+    final price = fare;
+    final valid = distance != null && price != null && rate != null;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: valid
+              ? [Color(0xFF0E5B3E), Color(0xFF07472F)]
+              : [Color(0xFF101F45).withValues(alpha: .9), Color(0xFF0A1330)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: glassBorder),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.payments_outlined, color: cyan, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tarifa estimada · $transportLabel',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  valid
+                      ? '${distance.toStringAsFixed(1)} km · base '
+                          'C\$ ${rate!.baseFeeCs.toStringAsFixed(0)} + '
+                          '${distance.toStringAsFixed(1)} × C\$ '
+                          '${rate!.farePerKmCs.toStringAsFixed(2)}'
+                      : 'Selecciona ambos lugares para cotizar tu envío',
+                  style: const TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 10.5,
+                    height: 1.35,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ],
+            ),
           ),
+          if (valid)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  'C\$ ${price.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                Text(
+                  '≈ US\$ ${(price / usdRate).toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 10,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -605,101 +785,37 @@ class _EditableRouteCard extends StatelessWidget {
 }
 
 class _ReferencesCard extends StatelessWidget {
-  const _ReferencesCard();
+  const _ReferencesCard({
+    required this.originController,
+    required this.destinationController,
+  });
+
+  final TextEditingController originController;
+  final TextEditingController destinationController;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      padding: const EdgeInsets.fromLTRB(12, 13, 12, 13),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: .10),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: glassBorder),
       ),
-      child: Row(
+      child: Column(
         children: [
-          const Icon(Icons.edit_location_alt_outlined,
-              color: Colors.white70, size: 19),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Referencias',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'Ej. Casa verde frente al parque…',
-                  style: TextStyle(
-                    color: const Color(0xFFB9D4FF)
-                        .withValues(alpha: .85),
-                    fontSize: 10.5,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-              ],
-            ),
+          GlassField(
+            label: 'Referencia de la recogida',
+            hint: 'Ej: portón azul después del semáforo',
+            icon: Icons.edit_location_alt_outlined,
+            controller: originController,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecipientCard extends StatelessWidget {
-  const _RecipientCard({required this.label, required this.hint, this.icon});
-
-  final String label;
-  final String hint;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .10),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: glassBorder),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon ?? Icons.person_outline_rounded,
-              color: Colors.white70, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  hint,
-                  style: TextStyle(
-                    color: const Color(0xFFB9D4FF)
-                        .withValues(alpha: .8),
-                    fontSize: 10,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(height: 10),
+          GlassField(
+            label: 'Referencia de la entrega',
+            hint: 'Ej: recepción del tercer nivel',
+            icon: Icons.edit_location_alt_outlined,
+            controller: destinationController,
           ),
         ],
       ),
