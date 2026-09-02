@@ -6,6 +6,7 @@ import '../core/api_client.dart';
 import '../core/location_service.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
+import '../services/location_sync.dart';
 import '../widgets/glass.dart';
 import 'viaje_asignado.dart';
 
@@ -34,11 +35,13 @@ class _HomeConductorState extends State<HomeConductor> {
     super.initState();
     _load();
     poll = Timer.periodic(const Duration(seconds: 15), (_) => _refresh());
+    LocationSync.instance.start();
   }
 
   @override
   void dispose() {
     poll?.cancel();
+    LocationSync.instance.stop();
     super.dispose();
   }
 
@@ -59,6 +62,7 @@ class _HomeConductorState extends State<HomeConductor> {
     }
     final loc = await requestCurrentLocation();
     if (mounted && loc != null) setState(() => location = loc);
+    await requestAppPermissions();
   }
 
   Future<void> _refresh() async {

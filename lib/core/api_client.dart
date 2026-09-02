@@ -121,6 +121,9 @@ class ApiClient {
     bool autoAssign = false,
     String? originRefs,
     String? destinationRefs,
+    String? scheduledDate,
+    String? scheduledTime,
+    bool isScheduled = false,
   }) async {
     final json = (await _send(
       'POST',
@@ -144,6 +147,9 @@ class ApiClient {
         'autoAssign': autoAssign,
         'originRefs': originRefs,
         'destinationRefs': destinationRefs,
+        'scheduledDate': scheduledDate,
+        'scheduledTime': scheduledTime,
+        'isScheduled': isScheduled,
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);
@@ -253,6 +259,27 @@ class ApiClient {
       );
     }
     return (decoded as Map).cast<String, dynamic>();
+  }
+
+  Future<Map<String, dynamic>> sendDriverLocation({
+    required String driver,
+    required double latitude,
+    required double longitude,
+    double? accuracy,
+    double? speedKmh,
+  }) async {
+    return (await _send(
+      'POST',
+      '/drivers/location',
+      body: {
+        'driver': driver,
+        'latitude': latitude,
+        'longitude': longitude,
+        if (accuracy != null) 'accuracy': accuracy,
+        if (speedKmh != null) 'speedKmh': speedKmh,
+        'source': 'app',
+      },
+    )) as Map<String, dynamic>;
   }
 
   Future<dynamic> _send(
