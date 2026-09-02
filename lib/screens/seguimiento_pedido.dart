@@ -51,8 +51,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         ),
       ),
       extendBodyBehindAppBar: true,
-      body: Container(
-        decoration: const BoxDecoration(gradient: bgGradient),
+      body: AppBackground(
         child: SafeArea(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 72, 20, 26),

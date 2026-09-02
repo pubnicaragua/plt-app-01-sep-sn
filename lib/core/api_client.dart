@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 
 import '../models/api_models.dart';
 
+final ApiClient apiClient = ApiClient();
+
 class ApiClient {
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
@@ -63,8 +65,15 @@ class ApiClient {
     );
   }
 
-  Future<List<Trip>> getTrips() async {
-    final json = await _send('GET', '/trips');
+  Future<List<Trip>> getTrips({String? status, String? driver}) async {
+    final query = <String, String>{
+      if (status != null) 'status': status,
+      if (driver != null) 'driver': driver,
+    };
+    final params = query.isEmpty
+        ? ''
+        : '?${query.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+    final json = await _send('GET', '/trips$params');
     final list = json is List
         ? json
         : json is Map && json['items'] is List
@@ -74,6 +83,23 @@ class ApiClient {
         .whereType<Map>()
         .map((item) => Trip.fromJson(item.cast<String, dynamic>()))
         .toList();
+  }
+
+  Future<Trip> getTrip(String id) async {
+    final json = (await _send(
+      'GET',
+      '/trips/${Uri.encodeComponent(id)}',
+    )) as Map<String, dynamic>;
+    return Trip.fromJson(json);
+  }
+
+  Future<Trip> updateTripStatus(String id, String status) async {
+    final json = (await _send(
+      'PATCH',
+      '/trips/${Uri.encodeComponent(id)}/status',
+      body: {'status': status},
+    )) as Map<String, dynamic>;
+    return Trip.fromJson(json);
   }
 
   Future<Trip> createTrip({
@@ -111,6 +137,25 @@ class ApiClient {
     );
   }
 
+  Future<List<PlaceSuggestion>> searchPlaces(String query) async {
+    if (query.trim().length < 2) return const [];
+    final json = await _send(
+      'GET',
+      '/places/autocomplete?q=${Uri.encodeComponent(query)}',
+    );
+    final list = json is List ? json : const <dynamic>[];
+    return list
+        .whereType<Map>()
+        .map((item) => PlaceSuggestion.fromJson(item.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<AppSettings> getSettings() async {
+    return AppSettings.fromJson(
+      (await _send('GET', '/settings')) as Map<String, dynamic>,
+    );
+  }
+
   Future<dynamic> _send(
     String method,
     String path, {
@@ -125,6 +170,12 @@ class ApiClient {
     late http.Response response;
     if (method == 'POST') {
       response = await _client.post(
+        uri,
+        headers: headers,
+        body: jsonEncode(body ?? const {}),
+      );
+    } else if (method == 'PATCH') {
+      response = await _client.patch(
         uri,
         headers: headers,
         body: jsonEncode(body ?? const {}),
