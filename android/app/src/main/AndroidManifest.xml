@@ -10,7 +10,7 @@
              Google Cloud Console > Credentials > API key > Android apps > SHA-1 del keystore -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="REEMPLAZA_CON_TU_API_KEY_ANDROID" />
+            android:value="AIzaSyCMwxArmM-BEJuxgbjOiON8KdH_IsNH1F4" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
