@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+﻿import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
@@ -353,133 +354,28 @@ class _IncoexMap extends StatefulWidget {
 }
 
 class _IncoexMapState extends State<_IncoexMap> {
-  GoogleMapController? _controller;
-  BitmapDescriptor _originIcon =
-      BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
-  BitmapDescriptor _destIcon =
-      BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-
-  static const String _mapStyle = '['
-      '{"elementType":"geometry","stylers":[{"color":"#f6f9fe"}]},'
-      '{"elementType":"labels.text.fill","stylers":[{"color":"#6b7791"}]},'
-      '{"elementType":"labels.text.stroke","stylers":[{"color":"#f6f9fe"}]},'
-      '{"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#d3def2"}]},'
-      '{"featureType":"poi","elementType":"geometry","stylers":[{"color":"#e9f0fb"}]},'
-      '{"featureType":"poi","elementType":"labels","stylers":[{"visibility":"off"}]},'
-      '{"featureType":"road","elementType":"geometry","stylers":[{"color":"#c8d9f5"}]},'
-      '{"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#f6f9fe"}]},'
-      '{"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#9fb9ec"}]},'
-      '{"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#f6f9fe"}]},'
-      '{"featureType":"road.highway","elementType":"labels","stylers":[{"color":"#3c4f7d"}]},'
-      '{"featureType":"transit","elementType":"geometry","stylers":[{"color":"#d9e8f7"}]},'
-      '{"featureType":"water","elementType":"geometry","stylers":[{"color":"#0a2c7d"}]}'
-      ']';
-
-  static const LatLng _managua = LatLng(12.114993, -86.236174);
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPins();
-  }
-
-  Future<void> _loadPins() async {
-    const cfg = ImageConfiguration(devicePixelRatio: 2, size: Size(48, 72));
-    final origin =
-        await BitmapDescriptor.asset(cfg, 'assets/img/PantallaInicio/pin_incoex_cyan.png');
-    final dest =
-        await BitmapDescriptor.asset(cfg, 'assets/img/PantallaInicio/pin_incoex_red.png');
-    if (!mounted) return;
-    setState(() {
-      _originIcon = origin;
-      _destIcon = dest;
-    });
-  }
-
-  void _fitRoute() {
-    final pts = widget.route.map((p) => LatLng(p.latitude, p.longitude)).toList();
-    final c = _controller;
-    if (c == null || pts.isEmpty) return;
-    if (pts.length == 1) {
-      c.moveCamera(CameraUpdate.newLatLngZoom(pts.first, 14));
-      return;
-    }
-    var minLat = pts.first.latitude, maxLat = pts.first.latitude;
-    var minLng = pts.first.longitude, maxLng = pts.first.longitude;
-    for (final p in pts) {
-      if (p.latitude < minLat) minLat = p.latitude;
-      if (p.latitude > maxLat) maxLat = p.latitude;
-      if (p.longitude < minLng) minLng = p.longitude;
-      if (p.longitude > maxLng) maxLng = p.longitude;
-    }
-    c.moveCamera(
-      CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-          southwest: LatLng(minLat, minLng),
-          northeast: LatLng(maxLat, maxLng),
-        ),
-        60,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final pts = widget.route.map((p) => LatLng(p.latitude, p.longitude)).toList();
-    final center = pts.isNotEmpty ? pts.first : _managua;
-    final markers = <Marker>{
-      Marker(
-        markerId: const MarkerId('incoex-origen'),
-        position: pts.first,
-        icon: _originIcon,
-        infoWindow: InfoWindow(title: widget.route.first.label),
-      ),
-      if (pts.length > 1)
-        Marker(
-          markerId: const MarkerId('incoex-destino'),
-          position: pts.last,
-          icon: _destIcon,
-          infoWindow: InfoWindow(title: widget.route.last.label),
-        ),
-    };
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        height: 240,
+      child: Container(
+        height: 250,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8ECF2),
+          borderRadius: BorderRadius.circular(16),
+        ),
         child: Stack(
           children: [
-            GoogleMap(
-              initialCameraPosition:
-                  CameraPosition(target: center, zoom: pts.length > 1 ? 13 : 14),
-              onMapCreated: (controller) {
-                _controller = controller;
-                _fitRoute();
-              },
-              zoomControlsEnabled: false,
-              myLocationButtonEnabled: false,
-              mapToolbarEnabled: false,
-              compassEnabled: false,
-              trafficEnabled: false,
-              mapType: MapType.normal,
-              style: _mapStyle,
-              rotateGesturesEnabled: true,
-              polylines: pts.length > 1
-                  ? {
-                      Polyline(
-                        polylineId: const PolylineId('ruta-incoex'),
-                        points: pts,
-                        color: const Color(0xFF1D5CFF),
-                        width: 4,
-                      ),
-                    }
-                  : const {},
-              markers: markers,
+            CustomPaint(
+              painter: _RouteMapPainter(route: widget.route),
+              size: Size.infinite,
             ),
             Positioned(
               top: 10,
               right: 10,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
@@ -503,4 +399,131 @@ class _IncoexMapState extends State<_IncoexMap> {
       ),
     );
   }
+}
+
+class _RouteMapPainter extends CustomPainter {
+  const _RouteMapPainter({required this.route});
+
+  final List<TrackingPoint> route;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFFE8ECF2),
+    );
+
+    // Calles: cuadrícula de bloques como mapa de ciudad
+    final street = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 24;
+    final streetThin = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 13;
+    final grid = [
+      (Offset(0, size.height * .20), Offset(size.width, size.height * .16)),
+      (Offset(0, size.height * .52), Offset(size.width, size.height * .60)),
+      (Offset(0, size.height * .84), Offset(size.width, size.height * .78)),
+      (Offset(size.width * .28, 0), Offset(size.width * .34, size.height)),
+      (Offset(size.width * .70, 0), Offset(size.width * .62, size.height)),
+    ];
+    for (final (from, to) in grid) {
+      canvas.drawLine(from, to, streetThin);
+    }
+    canvas.drawLine(
+      Offset(-30, size.height * .05),
+      Offset(size.width * .6, size.height * .03),
+      street,
+    );
+    canvas.drawLine(
+      Offset(size.width * .22, size.height + 30),
+      Offset(size.width * .95, size.height * .66),
+      street,
+    );
+    canvas.drawLine(
+      Offset(-20, size.height * .95),
+      Offset(size.width * .75, size.height * .92),
+      street,
+    );
+
+    if (route.isEmpty) return;
+
+    // Normalizar la ruta a coordenadas de pantalla con padding
+    final pts = route.map((p) => Offset(p.longitude, p.latitude)).toList();
+    var minX = pts.first.dx, maxX = pts.first.dx;
+    var minY = pts.first.dy, maxY = pts.first.dy;
+    for (final p in pts) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+    final pad = 46.0;
+    final spanX = math.max(maxX - minX, 0.0009);
+    final spanY = math.max(maxY - minY, 0.0009);
+    final scale = math.min(
+      (size.width - pad * 2) / spanX,
+      (size.height - pad * 2) / spanY,
+    );
+    final offsetX = (size.width - spanX * scale) / 2 - minX * scale;
+    final offsetY = (size.height - spanY * scale) / 2 - minY * scale;
+    final mapped = pts.map((p) => Offset(p.dx * scale + offsetX, p.dy * scale + offsetY)).toList();
+
+    // Ruta polilínea azul
+    if (mapped.length > 1) {
+      final path = Path()..moveTo(mapped.first.dx, mapped.first.dy);
+      for (final p in mapped.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = const Color(0xFF1D5CFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    // Pin de origen (cian) y destino (rojo)
+    final origin = mapped.first;
+    _drawPin(canvas, origin, const Color(0xFF0C7DFF));
+    if (mapped.length > 1) {
+      _drawPin(canvas, mapped.last, const Color(0xFFE5484D), open: false);
+    }
+  }
+
+  void _drawPin(Canvas canvas, Offset center, Color color, {bool open = true}) {
+    Paint _light(Color c, double alpha) =>
+        Paint()..color = c.withValues(alpha: alpha);
+    canvas.drawCircle(center, 15, _light(color, .20));
+    canvas.drawCircle(center, 26, _light(color, .10));
+    if (open) {
+      canvas.drawCircle(center, 9.5, Paint()..color = color);
+      canvas.drawCircle(center, 3.2, Paint()..color = Colors.white);
+    } else {
+      canvas.drawCircle(
+        center,
+        12,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+      canvas.drawCircle(
+        center,
+        5.5,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5,
+      );
+      canvas.drawCircle(center, 1.8, Paint()..color = color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RouteMapPainter oldDelegate) =>
+      oldDelegate.route != route;
 }
