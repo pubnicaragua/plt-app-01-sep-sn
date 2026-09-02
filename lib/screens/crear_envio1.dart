@@ -10,7 +10,18 @@ import '../widgets/wizard.dart';
 import 'crear_envio2.dart';
 
 class CrearEnvio1 extends StatefulWidget {
-  const CrearEnvio1({super.key});
+  const CrearEnvio1({
+    super.key,
+    this.startOrigin = '',
+    this.startDestination = '',
+    this.startOriginPlace,
+    this.startDestinationPlace,
+  });
+
+  final String startOrigin;
+  final String startDestination;
+  final PlaceSuggestion? startOriginPlace;
+  final PlaceSuggestion? startDestinationPlace;
 
   @override
   State<CrearEnvio1> createState() => _CrearEnvio1State();
@@ -20,28 +31,34 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   int weight = 10;
   int bundles = 1;
   String transport = 'Vehículo';
-  final origin = TextEditingController();
-  final destination = TextEditingController();
-  PlaceSuggestion? originPlace;
-  PlaceSuggestion? destinationPlace;
+  late final TextEditingController origin;
+  late final TextEditingController destination;
+  late PlaceSuggestion? originPlace;
+  late PlaceSuggestion? destinationPlace;
   AppSettings? settings;
 
   @override
   void initState() {
     super.initState();
-    requestCurrentLocation().then((location) {
-      if (location != null) {
-        originPlace = PlaceSuggestion(
-          placeId: 'current',
-          description: '${location.label}',
-          main: location.label,
-          secondary: 'Managua',
-          latitude: location.latitude,
-          longitude: location.longitude,
-        );
-        if (mounted) origin.text = location.label;
-      }
-    });
+    origin = TextEditingController(text: widget.startOrigin);
+    destination = TextEditingController(text: widget.startDestination);
+    originPlace = widget.startOriginPlace;
+    destinationPlace = widget.startDestinationPlace;
+    if (origin.text.isEmpty && widget.startOriginPlace == null) {
+      requestCurrentLocation().then((location) {
+        if (location != null) {
+          originPlace = PlaceSuggestion(
+            placeId: 'current',
+            description: '${location.label}',
+            main: location.label,
+            secondary: 'Managua',
+            latitude: location.latitude,
+            longitude: location.longitude,
+          );
+          if (mounted) origin.text = location.label;
+        }
+      });
+    }
     apiClient.getSettings().then((data) {
       if (mounted) setState(() => settings = data);
     }).catchError((_) {});
@@ -65,6 +82,12 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
       return null;
     }
     return haversineKm(from.latitude!, from.longitude!, to.latitude!, to.longitude!);
+  }
+
+  String get _recommended {
+    if (weight <= 20) return 'Moto';
+    if (weight <= 200) return 'Vehículo';
+    return 'Camión';
   }
 
   double? _priceFor(String vehicle) {
@@ -307,86 +330,95 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   ),
                 ],
                 const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Transporte recomendado',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Acumin Pro',
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cyan.withValues(alpha: .15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.auto_awesome,
+                              color: cyan, size: 12),
+                          const SizedBox(width: 4),
+                          Text(
+                            'RECOMENDADO: ${_recommended}',
+                            style: const TextStyle(
+                              color: cyan,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 const Text(
-                  'Transporte sugerido',
+                  'Selecciona el transporte según tu tipo de carga. El precio se calcula con tu origen y destino.',
                   style: TextStyle(
                     color: Color(0xFFB9D4FF),
-                    fontSize: 10.5,
+                    fontSize: 11,
                     fontFamily: 'Acumin Pro',
                   ),
                 ),
-                const SizedBox(height: 8),
-                Column(
-                  children: [
-                    for (final (label, sub) in [
-                      ('Moto', '15–30 min · ligera'),
-                      ('Vehículo', '1–2 horas'),
-                      ('Camión', '2–4 horas'),
-                    ])
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _TransportPriceLine(
-                          label: label,
-                          sub: sub,
-                          selected: transport == label,
-                          price: _priceFor(label),
-                          onTap: () => setState(() => transport = label),
-                        ),
-                      ),
-                  ],
-                ),
+                const SizedBox(height: 10),
+                for (final (label, cap, icon) in [
+                  (
+                    'Moto',
+                    'Hasta 20 kg',
+                    Icons.two_wheeler
+                  ),
+                  (
+                    'Vehículo',
+                    'Hasta 300 kg',
+                    Icons.directions_car_filled
+                  ),
+                  (
+                    'Camión',
+                    'Hasta 1,500 kg',
+                    Icons.local_shipping_outlined
+                  ),
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 9),
+                    child: _VehicleRateTile(
+                      icon: icon,
+                      label: label,
+                      capacity: cap,
+                      subtitle: label == 'Moto'
+                          ? 'Para cargas pequeñas y livianas'
+                          : label == 'Vehículo'
+                              ? 'Para cargas medianas'
+                              : 'Para cargas grandes y pesadas',
+                      price: _priceFor(label),
+                      selected: transport == label,
+                      recommended: _recommended == label,
+                      onTap: () => setState(() => transport = label),
+                    ),
+                  ),
                 if (price != null) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          figmaBlue.withValues(alpha: .45),
-                          figmaBlue.withValues(alpha: .20),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: cyan.withValues(alpha: .5)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.payments_rounded, color: cyan, size: 22),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Precio estimado',
-                                style: TextStyle(
-                                  color: Color(0xFFB9D4FF),
-                                  fontSize: 10.5,
-                                  fontFamily: 'Acumin Pro',
-                                ),
-                              ),
-                              Text(
-                                '${transport} · ${distance!.toStringAsFixed(1)} km',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11.5,
-                                  fontFamily: 'Acumin Pro',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          'C\$${price.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Acumin Pro',
-                          ),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 8),
+                  _PriceBreakdown(
+                    transport: transport,
+                    price: price,
+                    recommended: _recommended == transport,
                   ),
                 ],
               ],
@@ -394,7 +426,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
           ),
           const SizedBox(height: 24),
           GlassButton(
-            label: 'Continuar',
+            label: 'Confirmar envío',
             filled: true,
             textColor: Colors.white,
             onPressed: () => Navigator.of(context).push(
@@ -404,6 +436,9 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   destination: destination.text.trim(),
                   weight: weight,
                   bundles: bundles,
+                  originPlace: originPlace,
+                  destinationPlace: destinationPlace,
+                  transport: transport,
                 ),
               ),
             ),
@@ -442,18 +477,24 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   }
 }
 
-class _TransportPriceLine extends StatelessWidget {
-  const _TransportPriceLine({
+class _VehicleRateTile extends StatelessWidget {
+  const _VehicleRateTile({
+    required this.icon,
     required this.label,
-    required this.sub,
+    required this.capacity,
+    required this.subtitle,
     required this.selected,
+    required this.recommended,
     required this.onTap,
     this.price,
   });
 
+  final IconData icon;
   final String label;
-  final String sub;
+  final String capacity;
+  final String subtitle;
   final bool selected;
+  final bool recommended;
   final VoidCallback onTap;
   final double? price;
 
@@ -462,71 +503,335 @@ class _TransportPriceLine extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
         decoration: BoxDecoration(
           color: selected
-              ? figmaBlue.withValues(alpha: .40)
-              : Colors.white.withValues(alpha: .08),
+              ? Colors.white.withValues(alpha: .14)
+              : Colors.white.withValues(alpha: .07),
           borderRadius: BorderRadius.circular(15),
           border: Border.all(
-            color: selected ? cyan : Colors.transparent,
+            color: selected ? cyan : glassBorder,
             width: 1.2,
           ),
         ),
         child: Row(
           children: [
-            Icon(
-              label == 'Moto'
-                  ? Icons.two_wheeler
-                  : label == 'Camión'
-                      ? Icons.local_shipping_outlined
-                      : Icons.directions_car_filled,
-              color: Colors.white,
-              size: 20,
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: selected
+                    ? figmaBlue
+                    : Colors.white.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Colors.white, size: 21),
             ),
-            const SizedBox(width: 11),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          fontFamily: 'Acumin Pro',
+                        ),
+                      ),
+                      if (recommended) ...[
+                        const SizedBox(width: 7),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: mint.withValues(alpha: .18),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'RECOMENDADO',
+                            style: TextStyle(
+                              color: mint,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
                   Text(
-                    label,
+                    subtitle,
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13.5,
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 10,
                       fontFamily: 'Acumin Pro',
                     ),
                   ),
                   Text(
-                    sub,
+                    'Capacidad: $capacity',
                     style: const TextStyle(
                       color: Color(0xFFB9D4FF),
-                      fontSize: 10.5,
+                      fontSize: 10,
                       fontFamily: 'Acumin Pro',
                     ),
                   ),
                 ],
               ),
             ),
-            if (price != null)
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text(
+                  'ENVÍO DESDE',
+                  style: TextStyle(
+                    color: Color(0xFF8FA0C4),
+                    fontSize: 8,
+                    letterSpacing: .6,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  price == null
+                      ? 'C\$ —'
+                      : 'C\$${price!.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 9),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              color: selected ? cyan : Colors.white38,
+              size: 21,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PriceBreakdown extends StatelessWidget {
+  const _PriceBreakdown({
+    required this.transport,
+    required this.price,
+    required this.recommended,
+  });
+
+  final String transport;
+  final double price;
+  final bool recommended;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .09),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: glassBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'TOTAL A COBRAR AL DESTINATARIO',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: mint.withValues(alpha: .15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  transport,
+                  style: const TextStyle(
+                    color: mint,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'C\$${price.toStringAsFixed(2)}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 27,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Acumin Pro',
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (recommended)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(
+                color: mint.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle, color: mint, size: 13),
+                  SizedBox(width: 5),
+                  Text(
+                    'Tarifa calculada al instante',
+                    style: TextStyle(
+                      color: mint,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 5),
+              child: Text(
+                'Tarifa calculada con el transporte seleccionado',
+                style: TextStyle(
+                  color: Color(0xFFB9D4FF),
+                  fontSize: 10.5,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+          Divider(color: glassBorder, height: 1),
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Tarifa base de envío',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 11.5,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
               Text(
-                'C\$${price!.toStringAsFixed(2)}',
-                style: const TextStyle(
+                'Incluida',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11.5,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 7),
+          const Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Costo por kilómetro de la ruta',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 11.5,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+              Text(
+                'Incluido',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11.5,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 7),
+          const Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '+ Paquete del cliente (valor)',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 11.5,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+              Text(
+                'C\$ 450',
+                style: TextStyle(
                   color: mint,
-                  fontSize: 13.5,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w800,
                   fontFamily: 'Acumin Pro',
                 ),
               ),
-            const SizedBox(width: 8),
-            Icon(
-              selected ? Icons.check_circle : Icons.circle_outlined,
-              color: selected ? cyan : Colors.white38,
-              size: 20,
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Divider(color: glassBorder, height: 1),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Envío C\$${(price * 0.20).toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    color: Color(0xFF8FA0C4),
+                    fontSize: 10.5,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  'Total a pagar por el cliente\nC\$${(price + 450).toStringAsFixed(2)}',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    height: 1.4,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

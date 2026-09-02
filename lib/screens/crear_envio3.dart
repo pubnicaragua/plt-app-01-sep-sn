@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
+import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/wizard.dart';
 import 'seguimiento_pedido.dart';
@@ -15,12 +16,18 @@ class CrearEnvio3 extends StatefulWidget {
     required this.destination,
     required this.weight,
     required this.bundles,
+    this.originPlace,
+    this.destinationPlace,
+    this.transport = 'Vehículo',
   });
 
   final String origin;
   final String destination;
   final int weight;
   final int bundles;
+  final PlaceSuggestion? originPlace;
+  final PlaceSuggestion? destinationPlace;
+  final String transport;
 
   @override
   State<CrearEnvio3> createState() => _CrearEnvio3State();
@@ -74,6 +81,8 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
 
   Future<void> _create() async {
     try {
+      final originPlace = widget.originPlace;
+      final destinationPlace = widget.destinationPlace;
       final created = await apiClient.createTrip(
         client: apiClient.currentUser?.displayName ?? 'Empresa INCOEX',
         origin: widget.origin,
@@ -81,6 +90,16 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
         packages: widget.bundles,
         description:
             'Peso ${widget.weight}kg, ${widget.bundles} bulto(s)',
+        originLat: originPlace?.latitude,
+        originLng: originPlace?.longitude,
+        destinationLat: destinationPlace?.latitude,
+        destinationLng: destinationPlace?.longitude,
+        distanceKm: distanceKm(
+          originPlace,
+          destinationPlace,
+        ),
+        transport: widget.transport,
+        autoAssign: true,
       );
       await Future<void>.delayed(const Duration(milliseconds: 2200));
       if (!mounted) return;

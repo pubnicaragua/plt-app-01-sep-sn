@@ -111,6 +111,14 @@ class ApiClient {
     String? recipientName,
     String? recipientPhone,
     bool fragile = false,
+    double? originLat,
+    double? originLng,
+    double? destinationLat,
+    double? destinationLng,
+    double? distanceKm,
+    String? serviceType,
+    String? transport,
+    bool autoAssign = false,
   }) async {
     final json = (await _send(
       'POST',
@@ -124,6 +132,14 @@ class ApiClient {
         'recipientName': recipientName,
         'recipientPhone': recipientPhone,
         'fragile': fragile,
+        'originLat': originLat,
+        'originLng': originLng,
+        'destinationLat': destinationLat,
+        'destinationLng': destinationLng,
+        'distanceKm': distanceKm,
+        'serviceType': serviceType,
+        'transport': transport,
+        'autoAssign': autoAssign,
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);

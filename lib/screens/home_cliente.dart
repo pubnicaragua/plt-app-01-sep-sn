@@ -2,7 +2,9 @@
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
+import '../models/api_models.dart';
 import '../widgets/glass.dart';
+import '../widgets/place_field.dart';
 import 'crear_envio1.dart';
 import 'pedido.dart';
 import 'mi_perfil_cliente.dart';
@@ -170,6 +172,17 @@ class _HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<_HomeTab> {
   bool programado = true;
+  final origin = TextEditingController();
+  final destination = TextEditingController();
+  PlaceSuggestion? originPlace;
+  PlaceSuggestion? destinationPlace;
+
+  @override
+  void dispose() {
+    origin.dispose();
+    destination.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +352,13 @@ class _HomeTabState extends State<_HomeTab> {
           ],
         ),
         const SizedBox(height: 14),
-        const _RouteCard(),
+        _EditableRouteCard(
+          origin: origin,
+          destination: destination,
+          onOriginSelected: (place) => setState(() => originPlace = place),
+          onDestinationSelected: (place) =>
+              setState(() => destinationPlace = place),
+        ),
         const SizedBox(height: 14),
         const _ReferencesCard(),
         const SizedBox(height: 14),
@@ -361,7 +380,14 @@ class _HomeTabState extends State<_HomeTab> {
           filled: true,
           textColor: Colors.white,
           onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CrearEnvio1()),
+            MaterialPageRoute(
+              builder: (_) => CrearEnvio1(
+                startOrigin: origin.text.trim(),
+                startDestination: destination.text.trim(),
+                startOriginPlace: originPlace,
+                startDestinationPlace: destinationPlace,
+              ),
+            ),
           ),
         ),
       ],
@@ -510,8 +536,18 @@ class _TransportTile extends StatelessWidget {
   }
 }
 
-class _RouteCard extends StatelessWidget {
-  const _RouteCard();
+class _EditableRouteCard extends StatelessWidget {
+  const _EditableRouteCard({
+    required this.origin,
+    required this.destination,
+    required this.onOriginSelected,
+    required this.onDestinationSelected,
+  });
+
+  final TextEditingController origin;
+  final TextEditingController destination;
+  final ValueChanged<PlaceSuggestion> onOriginSelected;
+  final ValueChanged<PlaceSuggestion> onDestinationSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -522,76 +558,50 @@ class _RouteCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: glassBorder),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            children: [
-              Container(
-                width: 15,
-                height: 15,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  border: Border.all(color: cyan, width: 2),
-                ),
-              ),
-              Container(
-                width: 2,
-                height: 52,
-                color: Colors.white.withValues(alpha: .30),
-              ),
-              const Icon(Icons.place_rounded, color: figmaBlue, size: 22),
-            ],
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'DESDE',
-                  style: TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 9,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Mi ubicación actual (Los Robles)',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'HACIA',
-                  style: TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 9,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Oficinas Incoex, Edificio Pellas',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-              ],
+          const Text(
+            'DESDE',
+            style: TextStyle(
+              color: Color(0xFFB9D4FF),
+              fontSize: 9,
+              letterSpacing: 1,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'Acumin Pro',
             ),
+          ),
+          const SizedBox(height: 7),
+          GlassField(
+            label: 'Desde',
+            hint: 'Busca un lugar de Managua…',
+            icon: Icons.radio_button_checked,
+            controller: origin,
+            readOnly: true,
+            suffix: IconButton(
+              onPressed: () => origin.clear(),
+              icon: const Icon(Icons.close_rounded,
+                  color: Colors.white70, size: 18),
+            ),
+          ),
+          const SizedBox(height: 15),
+          const Text(
+            'HACIA',
+            style: TextStyle(
+              color: Color(0xFFB9D4FF),
+              fontSize: 9,
+              letterSpacing: 1,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'Acumin Pro',
+            ),
+          ),
+          const SizedBox(height: 7),
+          PlaceAutocompleteField(
+            label: 'Hacia',
+            hint: 'Busca un lugar de Managua…',
+            icon: Icons.place_rounded,
+            controller: destination,
+            onSelected: onDestinationSelected,
           ),
         ],
       ),

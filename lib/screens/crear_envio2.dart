@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
+import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/wizard.dart';
 import 'crear_envio3.dart';
@@ -12,12 +13,18 @@ class CrearEnvio2 extends StatefulWidget {
     required this.destination,
     required this.weight,
     required this.bundles,
+    this.originPlace,
+    this.destinationPlace,
+    this.transport = 'Vehículo',
   });
 
   final String origin;
   final String destination;
   final int weight;
   final int bundles;
+  final PlaceSuggestion? originPlace;
+  final PlaceSuggestion? destinationPlace;
+  final String transport;
 
   @override
   State<CrearEnvio2> createState() => _CrearEnvio2State();
@@ -357,6 +364,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                   destination: widget.destination,
                   weight: widget.weight,
                   bundles: widget.bundles,
+                  originPlace: widget.originPlace,
+                  destinationPlace: widget.destinationPlace,
+                  transport: widget.transport,
                 ),
               ),
             ),

@@ -333,4 +333,20 @@ double haversineKm(double lat1, double lng1, double lat2, double lng2) {
   return earthRadiusKm * 2 * math.asin(math.sqrt(a));
 }
 
+double? distanceKm(PlaceSuggestion? from, PlaceSuggestion? to) {
+  if (from == null || to == null) return null;
+  if (from.latitude == null ||
+      from.longitude == null ||
+      to.latitude == null ||
+      to.longitude == null) {
+    return null;
+  }
+  return haversineKm(
+    from.latitude!,
+    from.longitude!,
+    to.latitude!,
+    to.longitude!,
+  );
+}
+
 double _radians(double degrees) => degrees * math.pi / 180.0;
