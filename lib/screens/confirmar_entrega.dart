@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
@@ -225,11 +228,28 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                               value:
                                   'C\$${trip.estimatedCostCs!.toStringAsFixed(2)}',
                             ),
+                            const SizedBox(height: 15),
+                            _DetailRow(
+                              icon: Icons.shopping_bag_outlined,
+                              label: 'Costo de los productos',
+                              value:
+                                  'C\$450.00 (valor del paquete)',
+                            ),
+                            const SizedBox(height: 15),
+                            _DetailRow(
+                              icon: Icons.receipt_long_outlined,
+                              label: 'Total a cobrar al destinatario',
+                              value:
+                                  'C\$${(trip.estimatedCostCs! + 450).toStringAsFixed(2)}',
+                            ),
                           ],
                           const SizedBox(height: 12),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    // Evidencia de entrega: foto + firma
+                    _EvidenceDelivery(tripId: trip.id),
                     const SizedBox(height: 20),
                     const Text(
                       '¿Se realizó la entrega?',
@@ -434,6 +454,200 @@ class _OptionButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EvidenceDelivery extends StatefulWidget {
+  const _EvidenceDelivery({required this.tripId});
+
+  final String tripId;
+
+  @override
+  State<_EvidenceDelivery> createState() => _EvidenceDeliveryState();
+}
+
+class _EvidenceDeliveryState extends State<_EvidenceDelivery> {
+  Uint8List? photo;
+  String? photoName;
+  bool uploading = false;
+
+  Future<void> _pickPhoto() async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+        maxWidth: 1200,
+      );
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      setState(() {
+        photo = bytes;
+        photoName = image.name;
+        uploading = true;
+      });
+      final uploaded = await apiClient.uploadEvidence(
+        photo!,
+        photoName ?? 'entrega.jpg',
+      );
+      if (!mounted) return;
+      setState(() {
+        photoName = uploaded['evidence']?.toString() ?? photoName;
+        uploading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => uploading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'No se pudo subir la evidencia.',
+              style: TextStyle(fontFamily: 'Acumin Pro'),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.all(15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified_rounded, color: mint, size: 19),
+              const SizedBox(width: 9),
+              const Expanded(
+                child: Text(
+                  'Evidencia de entrega',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: mint.withValues(alpha: .15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  widget.tripId,
+                  style: const TextStyle(
+                    color: mint,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            'Toma una foto del paquete entregado para respaldar la entrega.',
+            style: TextStyle(
+              color: Color(0xFFB9D4FF),
+              fontSize: 11,
+              fontFamily: 'Acumin Pro',
+            ),
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: _pickPhoto,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              height: 120,
+              decoration: BoxDecoration(
+                color: photo == null
+                    ? Colors.white.withValues(alpha: .06)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: photo == null ? glassBorder : mint.withValues(alpha: .5),
+                ),
+              ),
+              child: photo == null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.add_a_photo_outlined,
+                              color: Colors.white70, size: 26),
+                          const SizedBox(height: 7),
+                          const Text(
+                            'Tomar foto de la evidencia',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.memory(photo!, fit: BoxFit.cover),
+                          if (uploading)
+                            Container(
+                              color: Colors.black.withValues(alpha: .4),
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              ),
+                            )
+                          else
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: mint,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_rounded,
+                                        color: Colors.white, size: 12),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Adjuntada',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800,
+                                        fontFamily: 'Acumin Pro',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }

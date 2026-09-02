@@ -180,6 +180,7 @@ class GlassField extends StatefulWidget {
     this.suffix,
     this.helper,
     this.readOnly = false,
+    this.maxLines = 1,
   });
 
   final String label;
@@ -192,6 +193,7 @@ class GlassField extends StatefulWidget {
   final Widget? suffix;
   final String? helper;
   final bool readOnly;
+  final int maxLines;
 
   @override
   State<GlassField> createState() => _GlassFieldState();
@@ -232,6 +234,8 @@ class _GlassFieldState extends State<GlassField> {
                   keyboardType: widget.keyboardType,
                   onChanged: widget.onChanged,
                   readOnly: widget.readOnly,
+                  maxLines: widget.maxLines,
+                  minLines: widget.maxLines == 1 ? null : 2,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16.5,

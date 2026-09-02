@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
+import '../widgets/incident_sheet.dart';
 import 'confirmar_entrega.dart';
 
 class ViajeEnCurso extends StatefulWidget {
@@ -18,6 +20,26 @@ class ViajeEnCurso extends StatefulWidget {
 
 class _ViajeEnCursoState extends State<ViajeEnCurso> {
   bool updating = false;
+  double progress = 0.35;
+  Timer? sim;
+
+  @override
+  void initState() {
+    super.initState();
+    sim = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted) return;
+      setState(() {
+        progress = math.min(1, progress + 0.04);
+      });
+      if (progress >= 1) sim?.cancel();
+    });
+  }
+
+  @override
+  void dispose() {
+    sim?.cancel();
+    super.dispose();
+  }
 
   Future<void> _arrived() async {
     if (updating) return;
@@ -101,8 +123,7 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
                             fontWeight: FontWeight.w800,
                             fontFamily: 'Acumin Pro',
                           ),
-                        ),
-                        Text(
+                        ),                        Text(
                           trip.id,
                           style: const TextStyle(
                             color: Color(0xFF9FB2DC),
@@ -115,7 +136,7 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
                   ),
                   _TinyStat(
                     icon: Icons.alt_route_rounded,
-                    value: '${distance.toStringAsFixed(1)} km',
+                    value: '${(distance * (1 - progress)).toStringAsFixed(1)} km',
                     label: 'Restantes',
                   ),
                   Container(
@@ -126,7 +147,8 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
                   ),
                   _TinyStat(
                     icon: Icons.access_time_filled,
-                    value: '$eta min',
+                    value:
+                        '${(eta.clamp(4, 999) * (1 - progress)).round().clamp(1, 999)} min',
                     label: 'ETA Llegada',
                   ),
                 ],
@@ -138,7 +160,7 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
               children: [
                 Positioned.fill(
                   child: CustomPaint(
-                    painter: _RouteMapPainter(),
+                    painter: _RouteMapPainter(progress: progress),
                   ),
                 ),
                 Positioned(
@@ -158,36 +180,14 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
                   ),
                 ),
                 Positioned(
-                  bottom: 235,
-                  left: 42,
-                  child: Container(
-                    width: 52,
-                    height: 52,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF0D47D9),
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: .25),
-                          blurRadius: 12,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.navigation_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                ),
-                Positioned(
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: _DeliverySheet(trip: trip, onArrived: _arrived, updating: updating),
+                  child: _DeliverySheet(
+                    trip: trip,
+                    onArrived: _arrived,
+                    updating: updating,
+                  ),
                 ),
               ],
             ),
@@ -320,7 +320,7 @@ class _DeliverySheet extends StatelessWidget {
                 ),
               ),
               InkWell(
-                onTap: () => _showHelp(context),
+                onTap: () => _openIncidentSheet(context),
                 borderRadius: BorderRadius.circular(30),
                 child: Container(
                   width: 36,
@@ -328,17 +328,15 @@ class _DeliverySheet extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: .10),
-                    border: Border.all(color: glassBorder),
-                  ),
-                  child: const Text(
-                    '?',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Acumin Pro',
+                    color: const Color(0xFFE5484D).withValues(alpha: .18),
+                    border: Border.all(
+                      color: const Color(0xFFE5484D).withValues(alpha: .45),
                     ),
+                  ),
+                  child: const Icon(
+                    Icons.report_problem_rounded,
+                    color: Color(0xFFFFB4B4),
+                    size: 16,
                   ),
                 ),
               ),
@@ -540,65 +538,33 @@ class _DeliverySheet extends StatelessWidget {
     );
   }
 
-  void _showHelp(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: const Color(0xFF0B1D4D),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Ayuda del viaje',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Acumin Pro',
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Sigue la ruta marcada en el mapa hasta el destino.\n'
-                'Si tienes inconvenientes con la entrega, contacta al cliente\n'
-                'o reporta la incidencia desde el botón «?».',
-                style: TextStyle(
-                  color: Color(0xFFB9D4FF),
-                  fontSize: 13,
-                  height: 1.55,
-                  fontFamily: 'Acumin Pro',
-                ),
-              ),
-              const SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text(
-                    'Entendido',
-                    style: TextStyle(
-                      color: cyan,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Acumin Pro',
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+  void _openIncidentSheet(BuildContext context) {
+    showIncidentSheet(
+      context,
+      tripId: trip.id,
+      driverName:
+          apiClient.currentUser?.displayName ?? trip.driver,
+      clientName: trip.client,
     );
   }
 }
 
 class _RouteMapPainter extends CustomPainter {
+  const _RouteMapPainter({required this.progress});
+
+  final double progress;
+
+  List<Offset> get _routePoints => const [
+        Offset(.115, .76),
+        Offset(.115, .60),
+        Offset(.185, .52),
+        Offset(.40, .465),
+        Offset(.455, .40),
+        Offset(.455, .235),
+        Offset(.56, .165),
+        Offset(.70, .135),
+      ];
+
   @override
   void paint(Canvas canvas, Size size) {
     // Fondo del mapa (gris claro tipo Google Maps)
@@ -636,23 +602,16 @@ class _RouteMapPainter extends CustomPainter {
       street,
     );
 
-    // Ruta polilínea en azul con esquinas redondeadas
-    final route = Path()
-      ..moveTo(size.width * .115, size.height * .76)
-      ..lineTo(size.width * .115, size.height * .60)
-      ..quadraticBezierTo(
-          size.width * .115, size.height * .545,
-          size.width * .185, size.height * .52)
-      ..lineTo(size.width * .40, size.height * .465)
-      ..quadraticBezierTo(
-          size.width * .455, size.height * .455,
-          size.width * .455, size.height * .40)
-      ..lineTo(size.width * .455, size.height * .235)
-      ..quadraticBezierTo(
-          size.width * .455, size.height * .185,
-          size.width * .51, size.height * .175)
-      ..lineTo(size.width * .70, size.height * .135);
+    // Puntos de ruta en coordenadas relativas
+    final points = _routePoints
+        .map((p) => Offset(p.dx * size.width, p.dy * size.height))
+        .toList();
 
+    // Ruta polilínea completa en azul claro (tránsito recorrido)
+    final route = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final p in points.skip(1)) {
+      route.lineTo(p.dx, p.dy);
+    }
     canvas.drawPath(
       route,
       Paint()
@@ -662,8 +621,74 @@ class _RouteMapPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round,
     );
+
+    // Posición del conductor: interpolación sobre la polilínea
+    final position = _pointAlong(points, progress.clamp(0, 1));
+
+    // Halo del conductor
+    final halo = Paint()
+      ..color = const Color(0xFF0D47D9).withValues(alpha: .18)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(position, 30, halo);
+    canvas.drawCircle(
+      position,
+      20,
+      Paint()..color = const Color(0xFF0D47D9).withValues(alpha: .38),
+    );
+
+    // Pin del conductor (navegación)
+    canvas.drawCircle(
+      position,
+      13,
+      Paint()..color = const Color(0xFF0D47D9),
+    );
+    canvas.drawCircle(
+      position,
+      13,
+      Paint()
+        ..color = const Color(0xFF0D47D9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4,
+    );
+    // Flecha de dirección
+    final arrow = Path()
+      ..moveTo(position.dx, position.dy - 6)
+      ..lineTo(position.dx - 5, position.dy + 5)
+      ..lineTo(position.dx, position.dy + 2)
+      ..lineTo(position.dx + 5, position.dy + 5)
+      ..close();
+    canvas.drawPath(
+      arrow,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill,
+    );
+  }
+
+  Offset _pointAlong(List<Offset> points, double t) {
+    if (points.length == 1) return points.first;
+    final totalLength = _pathLength(points);
+    var remaining = t * totalLength;
+    for (var i = 0; i < points.length - 1; i++) {
+      final segmentLength = (points[i + 1] - points[i]).distance;
+      if (remaining <= segmentLength) {
+        final local = segmentLength == 0 ? 0.0 : remaining / segmentLength;
+        return Offset.lerp(points[i], points[i + 1], local)!;
+      }
+      remaining -= segmentLength;
+    }
+    return points.last;
+  }
+
+  double _pathLength(List<Offset> points) {
+    var total = 0.0;
+    for (var i = 0; i < points.length - 1; i++) {
+      total += (points[i + 1] - points[i]).distance;
+    }
+    return total;
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RouteMapPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }

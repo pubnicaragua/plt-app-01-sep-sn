@@ -195,6 +195,66 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> reportIncident({
+    required String type,
+    required String client,
+    String? trip,
+    String? driver,
+    String? priority,
+    String? description,
+    double? latitude,
+    double? longitude,
+    String? evidence,
+  }) async {
+    final json = await _send(
+      'POST',
+      '/incidents',
+      body: {
+        'type': type,
+        'client': client,
+        'trip': trip,
+        'driver': driver,
+        'priority': priority,
+        'description': description,
+        'latitude': latitude,
+        'longitude': longitude,
+        'evidence': evidence,
+      },
+    );
+    return json as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> uploadEvidence(
+    List<int> bytes,
+    String filename,
+  ) async {
+    final uri = Uri.parse('$baseUrl/uploads/evidence');
+    final request = http.MultipartRequest('POST', uri);
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+      ),
+    );
+    if (accessToken != null && accessToken!.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $accessToken';
+    }
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    final decoded = response.body.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        decoded is Map
+            ? decoded['message']?.toString() ?? 'No se pudo subir la evidencia.'
+            : 'No se pudo subir la evidencia.',
+      );
+    }
+    return (decoded as Map).cast<String, dynamic>();
+  }
+
   Future<dynamic> _send(
     String method,
     String path, {
