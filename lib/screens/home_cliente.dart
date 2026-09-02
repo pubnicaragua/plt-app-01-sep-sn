@@ -3,6 +3,7 @@
 import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
+import '../widgets/app_nav_bar.dart';
 import '../widgets/glass.dart';
 import '../widgets/place_field.dart';
 import 'crear_envio1.dart';
@@ -38,109 +39,9 @@ class _HomeClienteState extends State<HomeCliente> {
           ),
         ),
       ),
-      bottomNavigationBar: _FloatingNavBar(
+      bottomNavigationBar: AppNavBar(
         current: tab,
         onChanged: (index) => setState(() => tab = index),
-      ),
-    );
-  }
-}
-
-class _FloatingNavBar extends StatelessWidget {
-  const _FloatingNavBar({required this.current, required this.onChanged});
-
-  final int current;
-  final ValueChanged<int> onChanged;
-
-  static const items = [
-    (Icons.home_rounded, 'Inicio'),
-    (Icons.inventory_2_outlined, 'Envíos'),
-    (Icons.history_rounded, 'Historial'),
-    (Icons.person_outline_rounded, 'Perfil'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(14, 8, 14, 8 + bottom),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0C1B3E), Color(0xFF080F26)],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: const Color(0x2EFFFFFF)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: .35),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            _item(0, items[0].$1, items[0].$2),
-            _item(1, items[1].$1, items[1].$2),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: SizedBox(
-                width: 50,
-                height: 32,
-                child: Image.asset(
-                  'assets/img/brand-x.png',
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            _item(2, items[2].$1, items[2].$2),
-            _item(3, items[3].$1, items[3].$2),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _item(int index, IconData icon, String label) {
-    final active = current == index;
-    return Expanded(
-      child: InkWell(
-        onTap: () => onChanged(index),
-        borderRadius: BorderRadius.circular(14),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color:
-                  active ? Colors.white : const Color(0xFF8FA0C4),
-              size: 21,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color:
-                    active ? Colors.white : const Color(0xFF8FA0C4),
-                fontSize: 9.5,
-                fontWeight:
-                    active ? FontWeight.w800 : FontWeight.w600,
-                fontFamily: 'Acumin Pro',
-              ),
-            ),
-            const SizedBox(height: 2),
-            Container(
-              width: 4,
-              height: 4,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: active ? cyan : Colors.transparent,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
