@@ -12,6 +12,7 @@ class CrearEnvio2 extends StatefulWidget {
     required this.origin,
     required this.destination,
     required this.weight,
+    this.weightUnit = 'kg',
     required this.bundles,
     this.originPlace,
     this.destinationPlace,
@@ -25,6 +26,7 @@ class CrearEnvio2 extends StatefulWidget {
   final String origin;
   final String destination;
   final int weight;
+  final String weightUnit;
   final int bundles;
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
@@ -520,6 +522,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                     origin: widget.origin,
                     destination: widget.destination,
                     weight: widget.weight,
+                    weightUnit: widget.weightUnit,
                     bundles: widget.bundles,
                     originPlace: widget.originPlace,
                     destinationPlace: widget.destinationPlace,

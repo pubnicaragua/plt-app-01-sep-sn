@@ -9,6 +9,7 @@ import '../widgets/corte_banner.dart';
 import '../widgets/glass.dart';
 import '../widgets/place_field.dart';
 import 'crear_envio1.dart';
+import 'inicio.dart';
 import 'pedido.dart';
 import 'mi_perfil_cliente.dart';
 import 'resumen_cliente.dart';
@@ -100,6 +101,20 @@ class _HomeTabState extends State<_HomeTab> {
       if (mounted) setState(() => settings = data);
     }).catchError((_) {});
     requestAppPermissions();
+    _checkRemoteSession();
+  }
+
+  Future<void> _checkRemoteSession() async {
+    final ok = await apiClient.checkSession();
+    if (!mounted || ok) return;
+    await apiClient.clearSession();
+    if (!mounted) return;
+    if (context.mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const Inicio()),
+        (route) => false,
+      );
+    }
   }
 
   @override

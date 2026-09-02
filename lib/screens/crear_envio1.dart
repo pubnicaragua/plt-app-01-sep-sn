@@ -39,6 +39,7 @@ class CrearEnvio1 extends StatefulWidget {
 
 class _CrearEnvio1State extends State<CrearEnvio1> {
   int weight = 10;
+  String weightUnit = 'kg';
   int bundles = 1;
   late String transport;
   late final TextEditingController origin;
@@ -95,9 +96,12 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     return haversineKm(from.latitude!, from.longitude!, to.latitude!, to.longitude!);
   }
 
+  double get _weightKg =>
+      weightUnit == 'lb' ? weight / 2.20462 : weight.toDouble();
+
   String get _recommended {
-    if (weight <= 20) return 'Moto';
-    if (weight <= 200) return 'Vehículo';
+    if (_weightKg <= 20) return 'Moto';
+    if (_weightKg <= 200) return 'Vehículo';
     return 'Camión';
   }
 
@@ -181,7 +185,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 18),
                       child: Text(
-                        '$weight kg',
+                        '$weight $weightUnit',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 26,
@@ -193,6 +197,58 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                     RoundStep(
                       icon: Icons.add,
                       onTap: () => setState(() => weight += 1),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (final unit in ['kg', 'lb'])
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            if (weightUnit == unit) return;
+                            final converted = unit == 'lb'
+                                ? (weight * 2.20462).round().clamp(1, 9999)
+                                : (weight / 2.20462).round().clamp(1, 9999);
+                            weightUnit = unit;
+                            weight = converted;
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 5),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: weightUnit == unit
+                                ? figmaBlue
+                                : Colors.white.withValues(alpha: .10),
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(
+                              color: weightUnit == unit
+                                  ? cyan
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: Text(
+                            unit.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                        ),
+                      ),
+                    const Text(
+                      'Cambia la unidad según la use tu cliente u operación',
+                      style: TextStyle(
+                        color: Color(0xFFB9D4FF),
+                        fontSize: 9.5,
+                        fontFamily: 'Acumin Pro',
+                      ),
                     ),
                   ],
                 ),
@@ -391,9 +447,9 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                 ),
                 const SizedBox(height: 10),
                 for (final (label, cap, icon, maxKg) in [
-                  ('Moto', 'Hasta 20 kg', Icons.two_wheeler, 20),
-                  ('Vehículo', 'Hasta 300 kg', Icons.directions_car_filled, 300),
-                  ('Camión', 'Hasta 1,500 kg', Icons.local_shipping_outlined, 1500),
+                  ('Moto', 'Hasta 20 kg · 44 lb', Icons.two_wheeler, 20),
+                  ('Vehículo', 'Hasta 300 kg · 661 lb', Icons.directions_car_filled, 300),
+                  ('Camión', 'Hasta 1,500 kg · 3,307 lb', Icons.local_shipping_outlined, 1500),
                 ])
                   Padding(
                     padding: const EdgeInsets.only(bottom: 9),
@@ -409,17 +465,17 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                       price: _priceFor(label),
                       selected: transport == label,
                       recommended: _recommended == label,
-                      blocked: weight > maxKg,
-                      blockedNote: weight > maxKg
-                          ? 'Tu carga de $weight kg supera la capacidad de $label'
+                      blocked: _weightKg > maxKg,
+                      blockedNote: _weightKg > maxKg
+                          ? 'Tu carga de $weight $weightUnit supera la capacidad de $label'
                           : null,
-                      onTap: weight > maxKg
+                      onTap: _weightKg > maxKg
                           ? () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   behavior: SnackBarBehavior.floating,
                                   content: Text(
-                                    '$label no soporta $weight kg. Cambia el peso o usa otro vehículo.',
+                                    '$label no soporta $weight $weightUnit. Cambia el peso o usa otro vehículo.',
                                     style: const TextStyle(fontFamily: 'Acumin Pro'),
                                   ),
                                 ),
@@ -450,6 +506,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   origin: origin.text.trim(),
                   destination: destination.text.trim(),
                   weight: weight,
+                  weightUnit: weightUnit,
                   bundles: bundles,
                   originPlace: originPlace,
                   destinationPlace: destinationPlace,
@@ -468,9 +525,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   }
 
   Widget _weightChip(int value) {
-    final active = weight == value;
+    final converted = weightUnit == 'lb' ? (value * 2.20462).round() : value;
+    final active = weight == converted;
     return GestureDetector(
-      onTap: () => setState(() => weight = value),
+      onTap: () => setState(() => weight = converted),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         decoration: BoxDecoration(
@@ -483,7 +541,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
           ),
         ),
         child: Text(
-          '$value kg',
+          '$converted $weightUnit',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 12,

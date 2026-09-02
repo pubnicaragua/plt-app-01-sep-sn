@@ -9,6 +9,7 @@ import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../services/location_sync.dart';
 import '../widgets/glass.dart';
+import 'inicio.dart';
 import 'viaje_asignado.dart';
 
 class HomeConductor extends StatefulWidget {
@@ -46,6 +47,37 @@ class _HomeConductorState extends State<HomeConductor> {
     super.dispose();
   }
 
+  Future<void> _forceLogout(String reason) async {
+    await apiClient.clearSession();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF0B1D4D),
+        title: const Text(
+          'Sesión cerrada',
+          style: TextStyle(color: Colors.white, fontFamily: 'Acumin Pro', fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          reason,
+          style: const TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Acumin Pro'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Entendido', style: TextStyle(color: cyan, fontFamily: 'Acumin Pro')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const Inicio()),
+      (route) => false,
+    );
+  }
+
   Future<void> _load() async {
     setState(() {
       loading = true;
@@ -68,6 +100,14 @@ class _HomeConductorState extends State<HomeConductor> {
 
   Future<void> _refresh() async {
     try {
+      final sessionOk = await apiClient.checkSession();
+      if (!mounted) return;
+      if (!sessionOk) {
+        await apiClient.clearSession();
+        if (!mounted) return;
+        await _forceLogout('Tu sesión fue cerrada remotamente desde el panel de administración');
+        return;
+      }
       final data = await apiClient.getTrips(driver: _driverName);
       if (!mounted) return;
       final fresh = data.where((t) => !knownIds.contains(t.id)).toList();

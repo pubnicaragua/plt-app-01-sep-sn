@@ -15,6 +15,7 @@ class CrearEnvio3 extends StatefulWidget {
     required this.origin,
     required this.destination,
     required this.weight,
+    this.weightUnit = 'kg',
     required this.bundles,
     this.originPlace,
     this.destinationPlace,
@@ -32,6 +33,7 @@ class CrearEnvio3 extends StatefulWidget {
   final String origin;
   final String destination;
   final int weight;
+  final String weightUnit;
   final int bundles;
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
@@ -105,7 +107,7 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
         destination: widget.destination,
         packages: widget.bundles,
         description:
-            'Peso ${widget.weight}kg, ${widget.bundles} bulto(s)',
+            'Peso ${widget.weight}${widget.weightUnit}, ${widget.bundles} bulto(s)',
         originLat: originPlace?.latitude,
         originLng: originPlace?.longitude,
         destinationLat: destinationPlace?.latitude,
@@ -124,6 +126,8 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
         scheduledDate: widget.scheduledDate,
         scheduledTime: widget.scheduledTime,
         isScheduled: widget.serviceType == 'Programado',
+        weight: widget.weight.toDouble(),
+        weightUnit: widget.weightUnit == 'lb' ? 'lb' : 'kg',
       );
       await Future<void>.delayed(const Duration(milliseconds: 2200));
       if (!mounted) return;

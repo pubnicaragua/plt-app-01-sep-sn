@@ -1,7 +1,9 @@
 ﻿import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
 import '../core/notifications.dart';
@@ -9,6 +11,7 @@ import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'finalizar_viaje.dart';
+import 'inicio.dart';
 
 class SeguimientoPedido extends StatefulWidget {
   const SeguimientoPedido({super.key, required this.trip, this.closeable = true});
@@ -41,6 +44,20 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
 
   Future<void> _refresh() async {
     try {
+      final sessionOk = await apiClient.checkSession();
+      if (!mounted) return;
+      if (!sessionOk) {
+        poll?.cancel();
+        await apiClient.clearSession();
+        if (!mounted) return;
+        if (context.mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const Inicio()),
+            (route) => false,
+          );
+        }
+        return;
+      }
       final data = await apiClient.getTrip(widget.trip.id);
       if (!mounted) return;
       if (data.status != _prevStatus) {
@@ -79,7 +96,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     try {
       final data = await apiClient.getTracking(widget.trip.id);
       final url = data.shareUrl ??
-          'https://plt-web-01-sep-sn.vercel.app/track/${Uri.encodeComponent(widget.trip.id)}';
+          'https://plt-webadmin23-testing.vercel.app/track/${Uri.encodeComponent(widget.trip.id)}';
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -105,6 +122,46 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
               'No se pudo generar el enlace.',
               style: TextStyle(fontFamily: 'Acumin Pro'),
             ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareWhatsApp() async {
+    try {
+      final data = await apiClient.getTracking(widget.trip.id);
+      final url = data.shareUrl ??
+          'https://plt-webadmin23-testing.vercel.app/track/${Uri.encodeComponent(widget.trip.id)}';
+      final phone = (widget.trip.contactPhone ?? '').replaceAll(RegExp(r'\D'), '');
+      final message = 'Hola, te comparto el seguimiento de mi envío ${widget.trip.id} (${widget.trip.origin} → ${widget.trip.destination}). Ubicación en vivo: $url';
+      final waTarget = phone.isEmpty ? 'https://wa.me/?text=' : 'https://wa.me/${phone.startsWith('505') ? phone : '505$phone'}?text=';
+      if (!kIsWeb && (await launchUrl(Uri.parse('$waTarget${Uri.encodeComponent(message)}')))) {
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF0B1D4D),
+          behavior: SnackBarBehavior.floating,
+          content: SelectableText(
+            'Mensaje de WhatsApp:\n$message',
+            style: const TextStyle(fontFamily: 'Acumin Pro', fontSize: 12.5),
+          ),
+          action: SnackBarAction(
+            label: 'Copiar',
+            textColor: cyan,
+            onPressed: () {},
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text('No se pudo preparar el mensaje.',
+                style: TextStyle(fontFamily: 'Acumin Pro')),
           ),
         );
       }
@@ -456,6 +513,13 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                   _MiniBtn(icon: Icons.content_copy_rounded, label: 'Copiar'),
                   const SizedBox(width: 6),
                   _MiniBtn(icon: Icons.ios_share_rounded, label: 'Compartir', filled: true),
+                  const SizedBox(width: 6),
+                  _MiniBtn(
+                    icon: Icons.chat_rounded,
+                    label: 'WhatsApp',
+                    filled: true,
+                    onTap: () => _shareWhatsApp(),
+                  ),
                 ],
               ),
             ),
@@ -592,15 +656,16 @@ class _CardPill extends StatelessWidget {
 }
 
 class _MiniBtn extends StatelessWidget {
-  const _MiniBtn({required this.icon, required this.label, this.filled = false});
+  const _MiniBtn({required this.icon, required this.label, this.filled = false, this.onTap});
   final IconData icon;
   final String label;
   final bool filled;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
+      onTap: onTap ?? () {},
       borderRadius: BorderRadius.circular(9),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),

@@ -112,6 +112,8 @@ class Trip {
     this.scheduledDate,
     this.scheduledTime,
     this.isScheduled = false,
+    this.weight,
+    this.weightUnit,
   });
 
   final String id;
@@ -139,6 +141,8 @@ class Trip {
   final String? scheduledDate;
   final String? scheduledTime;
   final bool isScheduled;
+  final double? weight;
+  final String? weightUnit;
 
   bool get isPending => status == 'Pendiente';
   bool get isAssigned => status == 'Asignado';
@@ -191,6 +195,8 @@ class Trip {
       scheduledDate: json['scheduledDate']?.toString(),
       scheduledTime: json['scheduledTime']?.toString(),
       isScheduled: json['isScheduled']?.toString() == 'true',
+      weight: (json['weight'] as num?)?.toDouble(),
+      weightUnit: json['weightUnit']?.toString(),
     );
   }
 }

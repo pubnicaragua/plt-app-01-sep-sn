@@ -35,6 +35,25 @@ class ApiClient {
     return response;
   }
 
+  Future<bool> checkSession() async {
+    final token = accessToken;
+    if (token == null || token.isEmpty) return false;
+    try {
+      final json = (await _send(
+        'GET',
+        '/auth/session/$token',
+      )) as Map<String, dynamic>;
+      return json['valid'] == true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> clearSession() async {
+    accessToken = null;
+    currentUser = null;
+  }
+
   Future<LoginResponse> register({
     required String name,
     required String companyName,
@@ -124,6 +143,8 @@ class ApiClient {
     String? scheduledDate,
     String? scheduledTime,
     bool isScheduled = false,
+    double? weight,
+    String? weightUnit = 'kg',
   }) async {
     final json = (await _send(
       'POST',
@@ -150,6 +171,8 @@ class ApiClient {
         'scheduledDate': scheduledDate,
         'scheduledTime': scheduledTime,
         'isScheduled': isScheduled,
+        'weight': weight,
+        'weightUnit': weightUnit,
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);
