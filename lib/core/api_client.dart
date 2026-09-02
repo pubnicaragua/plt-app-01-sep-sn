@@ -201,6 +201,29 @@ class ApiClient {
     );
   }
 
+  Future<void> reportDriverLocation({
+    required String driver,
+    required double latitude,
+    required double longitude,
+    double? accuracy,
+    double? speedKmh,
+  }) async {
+    try {
+      await _send(
+        'POST',
+        '/drivers/location',
+        body: {
+          'driver': driver,
+          'latitude': latitude,
+          'longitude': longitude,
+          'accuracy': accuracy,
+          'speedKmh': speedKmh,
+          'source': 'app',
+        },
+      );
+    } catch (_) {}
+  }
+
   Future<Map<String, dynamic>> reportIncident({
     required String type,
     required String client,

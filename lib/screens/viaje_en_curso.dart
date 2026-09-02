@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/location_service.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/incident_sheet.dart';
@@ -22,17 +23,45 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
   bool updating = false;
   double progress = 0.35;
   Timer? sim;
+  CurrentLocation? livePosition;
 
   @override
   void initState() {
     super.initState();
-    sim = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (!mounted) return;
-      setState(() {
-        progress = math.min(1, progress + 0.04);
+    _startLive();
+  }
+
+  Future<void> _startLive() async {
+    await requestAppPermissions();
+    // Mientras el conductor está en esta pantalla reporta su GPS real a la API
+    // y actualiza el pin según su posición real.
+    if (widget.trip.status == 'En camino') {
+      Future<void> report() async {
+        final loc = await requestCurrentLocation();
+        if (!mounted || loc == null) return;
+        setState(() => livePosition = loc);
+        try {
+          await apiClient.reportDriverLocation(
+            driver: apiClient.currentUser?.displayName ?? widget.trip.driver,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+          );
+        } catch (_) {}
+      }
+
+      report();
+      sim = Timer.periodic(const Duration(seconds: 5), (_) {
+        progress = math.min(1, progress + 0.03);
+        report();
       });
-      if (progress >= 1) sim?.cancel();
-    });
+    } else {
+      // Viaje ya en entrega o inactivo: solo avance visual suave sin reporte
+      sim = Timer.periodic(const Duration(seconds: 2), (_) {
+        if (!mounted) return;
+        setState(() => progress = math.min(1, progress + 0.04));
+        if (progress >= 1) sim?.cancel();
+      });
+    }
   }
 
   @override
@@ -160,7 +189,11 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
               children: [
                 Positioned.fill(
                   child: CustomPaint(
-                    painter: _RouteMapPainter(progress: progress),
+                    painter: _RouteMapPainter(
+                      progress: progress,
+                      liveLat: livePosition?.latitude,
+                      liveLng: livePosition?.longitude,
+                    ),
                   ),
                 ),
                 Positioned(
@@ -550,9 +583,11 @@ class _DeliverySheet extends StatelessWidget {
 }
 
 class _RouteMapPainter extends CustomPainter {
-  const _RouteMapPainter({required this.progress});
+  const _RouteMapPainter({required this.progress, this.liveLat, this.liveLng});
 
   final double progress;
+  final double? liveLat;
+  final double? liveLng;
 
   List<Offset> get _routePoints => const [
         Offset(.115, .76),
@@ -622,8 +657,13 @@ class _RouteMapPainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round,
     );
 
-    // Posición del conductor: interpolación sobre la polilínea
-    final position = _pointAlong(points, progress.clamp(0, 1));
+    // Posición del conductor: GPS real proyectada, o interpolación de respaldo
+    Offset position;
+    if (liveLat != null && liveLng != null) {
+      position = _projectLive(liveLat!, liveLng!, size, points);
+    } else {
+      position = _pointAlong(points, progress.clamp(0, 1));
+    }
 
     // Halo del conductor
     final halo = Paint()
@@ -688,7 +728,18 @@ class _RouteMapPainter extends CustomPainter {
     return total;
   }
 
+  // Proyecta lat/lng real a coordenadas del lienzo usando la esquina SW/NE de la ruta
+  Offset _projectLive(double lat, double lng, Size size, List<Offset> points) {
+    final minLat = 12.06, maxLat = 12.16;
+    final minLng = -86.30, maxLng = -86.17;
+    final x = ((lng - minLng) / (maxLng - minLng)).clamp(0.0, 1.0);
+    final y = (1 - (lat - minLat) / (maxLat - minLat)).clamp(0.0, 1.0);
+    return Offset(x * size.width, y * size.height);
+  }
+
   @override
   bool shouldRepaint(covariant _RouteMapPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      oldDelegate.progress != progress ||
+      oldDelegate.liveLat != liveLat ||
+      oldDelegate.liveLng != liveLng;
 }

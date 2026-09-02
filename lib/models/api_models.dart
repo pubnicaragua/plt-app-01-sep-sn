@@ -229,6 +229,32 @@ class TrackingPoint {
   }
 }
 
+class DriverLive {
+  const DriverLive({
+    required this.latitude,
+    required this.longitude,
+    this.speedKmh,
+    this.accuracy,
+    this.updatedAt,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double? speedKmh;
+  final double? accuracy;
+  final int? updatedAt;
+
+  factory DriverLive.fromJson(Map<String, dynamic> json) {
+    return DriverLive(
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      speedKmh: (json['speedKmh'] as num?)?.toDouble(),
+      accuracy: (json['accuracy'] as num?)?.toDouble(),
+      updatedAt: (json['updatedAt'] as num?)?.toInt(),
+    );
+  }
+}
+
 class TrackingData {
   const TrackingData({
     required this.tripId,
@@ -236,6 +262,8 @@ class TrackingData {
     required this.driver,
     required this.lastUpdate,
     required this.route,
+    this.driverLocation,
+    this.shareUrl,
   });
 
   final String tripId;
@@ -243,18 +271,25 @@ class TrackingData {
   final String driver;
   final String lastUpdate;
   final List<TrackingPoint> route;
+  final DriverLive? driverLocation;
+  final String? shareUrl;
 
   factory TrackingData.fromJson(Map<String, dynamic> json) {
     final points = (json['route'] as List? ?? const [])
         .whereType<Map>()
         .map((point) => TrackingPoint.fromJson(point.cast<String, dynamic>()))
         .toList();
+    final location = json['driverLocation'];
     return TrackingData(
       tripId: json['tripId']?.toString() ?? '',
       status: json['status']?.toString() ?? 'Pendiente',
       driver: json['driver']?.toString() ?? 'Sin asignar',
       lastUpdate: json['lastUpdate']?.toString() ?? '',
       route: points,
+      driverLocation: location is Map
+          ? DriverLive.fromJson(location.cast<String, dynamic>())
+          : null,
+      shareUrl: json['shareUrl']?.toString(),
     );
   }
 }

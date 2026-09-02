@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/location_service.dart';
+import '../core/notifications.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../services/location_sync.dart';
@@ -76,6 +77,11 @@ class _HomeConductorState extends State<HomeConductor> {
         }
         setState(() => unread = news.length);
         if (mounted && fresh.any((t) => t.status == 'Asignado')) {
+          pushNotification(
+            title: 'Nuevo viaje asignado ${fresh.first.id}',
+            body: '${fresh.first.origin} → ${fresh.first.destination}',
+            id: fresh.first.id.hashCode,
+          );
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: const Color(0xFF0B1D4D),

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'core/notifications.dart';
 import 'core/theme.dart';
 import 'screens/onboarding_recoleccion.dart';
 
-void main() => runApp(const IncoexApp());
+void main() {
+  initNotifications();
+  runApp(const IncoexApp());
+}
 
 class IncoexApp extends StatelessWidget {
   const IncoexApp({super.key});

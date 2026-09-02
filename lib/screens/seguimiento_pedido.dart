@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/notifications.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
@@ -47,6 +48,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           _prevStatus = data.status;
           tracking = apiClient.getTracking(widget.trip.id);
         });
+        pushNotification(
+          title: 'Estado del envío ${data.id}',
+          body: 'Ahora está: ${data.status}',
+          id: data.id.hashCode,
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF0B1D4D),
@@ -67,6 +73,42 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         );
       }
     } catch (_) {}
+  }
+
+  Future<void> _shareTracking() async {
+    try {
+      final data = await apiClient.getTracking(widget.trip.id);
+      final url = data.shareUrl ??
+          'https://plt-web-01-sep-sn.vercel.app/track/${Uri.encodeComponent(widget.trip.id)}';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF0B1D4D),
+          behavior: SnackBarBehavior.floating,
+          content: SelectableText(
+            'Enlace de seguimiento:\n$url',
+            style: const TextStyle(fontFamily: 'Acumin Pro', fontSize: 12.5),
+          ),
+          action: SnackBarAction(
+            label: 'Copiar',
+            textColor: cyan,
+            onPressed: () {},
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'No se pudo generar el enlace.',
+              style: TextStyle(fontFamily: 'Acumin Pro'),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -170,11 +212,14 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                       ),
                     ),
                     const SizedBox(width: 7),
-                    _Pill(onTap: () {}, child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.ios_share_rounded, color: Colors.white, size: 13),
-                      SizedBox(width: 5),
-                      Text('Compartir', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
-                    ])),
+                    _Pill(
+                      onTap: () => _shareTracking(),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.ios_share_rounded, color: Colors.white, size: 13),
+                        SizedBox(width: 5),
+                        Text('Compartir', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
+                      ]),
+                    ),
                     const SizedBox(width: 7),
                     _Pill(onTap: () {}, child: const Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 13),
@@ -260,7 +305,12 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 child: Stack(
                   children: [
                     CustomPaint(
-                      painter: _LiveMapPainter(progress: (1 - 0.35).clamp(0, 1)),
+                      painter: _LiveMapPainter(
+                        progress: (1 - 0.35).clamp(0, 1),
+                        driverLat: snapshot.data?.driverLocation?.latitude,
+                        driverLng: snapshot.data?.driverLocation?.longitude,
+                        live: snapshot.data?.driverLocation != null,
+                      ),
                       size: Size.infinite,
                     ),
                     Positioned(
@@ -678,8 +728,17 @@ class _StepsRow extends StatelessWidget {
 }
 
 class _LiveMapPainter extends CustomPainter {
-  const _LiveMapPainter({required this.progress});
+  const _LiveMapPainter({
+    required this.progress,
+    this.driverLat,
+    this.driverLng,
+    this.live = false,
+  });
+
   final double progress;
+  final double? driverLat;
+  final double? driverLng;
+  final bool live;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -707,8 +766,15 @@ class _LiveMapPainter extends CustomPainter {
     for (final p in points.skip(1)) path.lineTo(p.dx, p.dy);
     canvas.drawPath(path, Paint()..color = const Color(0xFF1D5CFF)..style = PaintingStyle.stroke..strokeWidth = 6..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
 
-    // Conductor avanzando
-    final pos = points[1 + ((progress * 4).round().clamp(0, 4))];
+    // Conductor: posición real del GPS reportado, o animación de respaldo
+    Offset pos;
+    if (live && driverLat != null && driverLng != null) {
+      final x = ((driverLng! + 86.30) / 0.13).clamp(0.0, 1.0);
+      final y = (1 - (driverLat! - 12.06) / 0.10).clamp(0.0, 1.0);
+      pos = Offset(x * size.width, y * size.height);
+    } else {
+      pos = points[1 + ((progress * 4).round().clamp(0, 4))];
+    }
     canvas.drawCircle(pos, 26, Paint()..color = const Color(0xFF1D5CFF).withValues(alpha: .16));
     canvas.drawCircle(pos, 14, Paint()..color = const Color(0xFF1D5CFF));
     canvas.drawCircle(pos, 14, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 3);
@@ -727,5 +793,9 @@ class _LiveMapPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _LiveMapPainter oldDelegate) => oldDelegate.progress != progress;
+  bool shouldRepaint(covariant _LiveMapPainter oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.driverLat != driverLat ||
+      oldDelegate.driverLng != driverLng ||
+      oldDelegate.live != live;
 }
