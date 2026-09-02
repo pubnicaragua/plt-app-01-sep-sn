@@ -1,7 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
-import '../core/theme.dart';
 import '../widgets/glass.dart';
 import 'home_cliente.dart';
 import 'home_conductor.dart';
@@ -15,7 +14,6 @@ class Inicio extends StatefulWidget {
 }
 
 class _InicioState extends State<Inicio> {
-  String role = 'company';
   final email =
       TextEditingController(text: 'mario.martinez@incoex.com.ni');
   final password = TextEditingController(text: 'demo.incoex');
@@ -30,16 +28,15 @@ class _InicioState extends State<Inicio> {
     super.dispose();
   }
 
-  void _switchRole(String next) {
-    setState(() {
-      role = next;
-      errorMessage = null;
-      if (next == 'driver') {
-        email.text = 'carlos.diaz@incoex.com.ni';
-      } else {
-        email.text = 'mario.martinez@incoex.com.ni';
-      }
-    });
+  String _detectRole(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.contains('carlos') ||
+        normalized.contains('jose') ||
+        normalized.contains('conductor') ||
+        normalized.contains('driver')) {
+      return 'driver';
+    }
+    return 'company';
   }
 
   Future<void> _login() async {
@@ -51,6 +48,7 @@ class _InicioState extends State<Inicio> {
       loading = true;
       errorMessage = null;
     });
+    final role = _detectRole(email.text);
     try {
       await apiClient.login(
         email: email.text.trim(),
@@ -60,7 +58,8 @@ class _InicioState extends State<Inicio> {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => role == 'driver' ? const HomeConductor() : const HomeCliente(),
+          builder: (_) =>
+              role == 'driver' ? const HomeConductor() : const HomeCliente(),
         ),
       );
     } on ApiException catch (error) {
@@ -180,42 +179,6 @@ class _InicioState extends State<Inicio> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      for (final (value, label) in [
-                        ('company', 'Empresa'),
-                        ('driver', 'Conductor'),
-                      ])
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => _switchRole(value),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(vertical: 11),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              decoration: BoxDecoration(
-                                color: role == value
-                                    ? Colors.white.withValues(alpha: .44)
-                                    : Colors.white.withValues(alpha: .10),
-                                borderRadius: BorderRadius.circular(45),
-                                border: Border.all(color: glassBorder),
-                              ),
-                              child: Text(
-                                label,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  fontFamily: 'Acumin Pro',
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
                   GlassField(
                     label: 'Usuario/Correo electrónico',
                     icon: Icons.person_outline_rounded,
