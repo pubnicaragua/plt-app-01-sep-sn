@@ -572,17 +572,12 @@ class _EditableRouteCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 7),
-          GlassField(
+          PlaceAutocompleteField(
             label: 'Desde',
             hint: 'Busca un lugar de Managua…',
             icon: Icons.radio_button_checked,
             controller: origin,
-            readOnly: true,
-            suffix: IconButton(
-              onPressed: () => origin.clear(),
-              icon: const Icon(Icons.close_rounded,
-                  color: Colors.white70, size: 18),
-            ),
+            onSelected: onOriginSelected,
           ),
           const SizedBox(height: 15),
           const Text(

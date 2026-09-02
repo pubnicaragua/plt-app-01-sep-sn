@@ -40,7 +40,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
   }
 
   void _onChanged(String value) {
-    if (value.trim().length < 2) {
+    if (value.trim().isEmpty) {
       setState(() {
         results = const [];
         open = false;
@@ -49,15 +49,11 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
     }
     debounce?.cancel();
     final currentRequest = ++requestId;
-    debounce = Timer(const Duration(milliseconds: 350), () async {
+    debounce = Timer(const Duration(milliseconds: 300), () async {
       try {
         final found = await apiClient.searchPlaces(value);
         if (!mounted || currentRequest != requestId) return;
         if (found.isEmpty) {
-          setState(() {
-            results = const [];
-            open = false;
-          });
           return;
         }
         setState(() {
