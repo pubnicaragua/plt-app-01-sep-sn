@@ -14,9 +14,10 @@ class Inicio extends StatefulWidget {
 }
 
 class _InicioState extends State<Inicio> {
+  // Cuenta de prueba corporativa creada por la API local.
   final email =
-      TextEditingController(text: 'mario.martinez@incoex.com.ni');
-  final password = TextEditingController(text: 'demo.incoex');
+      TextEditingController(text: 'contacto@logisticanica.com.ni');
+  final password = TextEditingController(text: 'Admin@2026');
   bool obscure = true;
   bool loading = false;
   String? errorMessage;
@@ -50,7 +51,7 @@ class _InicioState extends State<Inicio> {
     });
     final role = _detectRole(email.text);
     try {
-      await apiClient.login(
+      final response = await apiClient.login(
         email: email.text.trim(),
         password: password.text,
         role: role,
@@ -59,7 +60,9 @@ class _InicioState extends State<Inicio> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) =>
-              role == 'driver' ? const HomeConductor() : const HomeCliente(),
+              response.user.role == 'driver'
+                  ? const HomeConductor()
+                  : const HomeCliente(),
         ),
       );
     } on ApiException catch (error) {
@@ -187,10 +190,11 @@ class _InicioState extends State<Inicio> {
                   ),
                   const SizedBox(height: 18),
                   GlassField(
+                    key: ValueKey(obscure),
                     label: 'Contraseña',
                     icon: Icons.lock_outline_rounded,
                     controller: password,
-                    obscure: true,
+                    obscure: obscure,
                     suffix: IconButton(
                       onPressed: () => setState(() => obscure = !obscure),
                       icon: Icon(

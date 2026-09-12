@@ -124,10 +124,11 @@ class _RegistroState extends State<Registro> {
               ),
               const SizedBox(height: 11),
               GlassField(
+                key: ValueKey(obscure),
                 label: 'Contraseña',
                 icon: Icons.lock_outline_rounded,
                 controller: password,
-                obscure: true,
+                obscure: obscure,
                 suffix: IconButton(
                   onPressed: () => setState(() => obscure = !obscure),
                   icon: Icon(
