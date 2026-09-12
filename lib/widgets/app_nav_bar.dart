@@ -29,20 +29,27 @@ class AppNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.fromLTRB(14, 8, 14, 8 + bottom),
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 10 + bottom),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF0C1B3E), Color(0xFF080F26)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0135A7), Color(0xFF111230)],
           ),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: const Color(0x2EFFFFFF)),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: const Color(0x4DFFFFFF), width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: .35),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
+              color: Colors.black.withValues(alpha: .45),
+              blurRadius: 26,
+              offset: const Offset(0, 12),
+            ),
+            BoxShadow(
+              color: const Color(0xFF0106A7).withValues(alpha: .35),
+              blurRadius: 18,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -53,11 +60,12 @@ class AppNavBar extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: SizedBox(
-                width: 50,
-                height: 32,
+                width: 54,
+                height: 54,
                 child: Image.asset(
                   'assets/img/brand-x.png',
                   fit: BoxFit.contain,
+                  semanticLabel: 'INCOEX',
                 ),
               ),
             ),

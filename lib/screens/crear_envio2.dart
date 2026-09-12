@@ -1,5 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 
+import 'dart:typed_data';
+
+import 'package:image_picker/image_picker.dart';
+
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
@@ -21,6 +25,9 @@ class CrearEnvio2 extends StatefulWidget {
     this.destinationRefs = '',
     this.recipientName = '',
     this.recipientPhone = '',
+    this.startScheduled = false,
+    this.startDate,
+    this.startTime,
   });
 
   final String origin;
@@ -35,6 +42,9 @@ class CrearEnvio2 extends StatefulWidget {
   final String destinationRefs;
   final String recipientName;
   final String recipientPhone;
+  final bool startScheduled;
+  final String? startDate;
+  final String? startTime;
 
   @override
   State<CrearEnvio2> createState() => _CrearEnvio2State();
@@ -45,7 +55,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   late final TextEditingController recipient;
   late final TextEditingController phone;
   bool fragile = true;
-  bool priority = true;
+  final productPhotos = <Uint8List>[];
+  Uint8List? invoicePhoto;
+  late bool priority;
   DateTime? scheduledDate;
   TimeOfDay? scheduledTime;
 
@@ -54,6 +66,26 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     super.initState();
     recipient = TextEditingController(text: widget.recipientName);
     phone = TextEditingController(text: widget.recipientPhone);
+    priority = !widget.startScheduled;
+    final date = widget.startDate;
+    final time = widget.startTime;
+    if (date != null && date.trim().isNotEmpty) {
+      final parts = date.split('-');
+      if (parts.length == 3) {
+        final parsed = DateTime(int.parse(parts[0]), int.parse(parts[1]),
+            int.parse(parts[2]));
+        if (mounted) scheduledDate = parsed;
+      }
+    }
+    if (time != null && time.trim().isNotEmpty) {
+      final parts = time.split(':');
+      if (parts.length >= 2) {
+        scheduledTime = TimeOfDay(
+          hour: int.parse(parts[0]),
+          minute: int.parse(parts[1]),
+        );
+      }
+    }
   }
 
   @override
@@ -62,6 +94,51 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     recipient.dispose();
     phone.dispose();
     super.dispose();
+  }
+
+  Future<void> _takePhoto({required bool invoice}) async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 78,
+        maxWidth: 1400,
+      );
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        if (invoice) {
+          invoicePhoto = bytes;
+        } else if (productPhotos.length < 5) {
+          productPhotos.add(bytes);
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir la cámara.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickInvoiceFromGallery() async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 78,
+        maxWidth: 1400,
+      );
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      if (mounted) setState(() => invoicePhoto = bytes);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo seleccionar la imagen.')),
+        );
+      }
+    }
   }
 
   String _fmtDate(DateTime value) {
@@ -269,7 +346,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                Container(
+                GestureDetector(
+                  onTap: () => _takePhoto(invoice: false),
+                  child: Container(
                   height: 92,
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: .08),
@@ -301,15 +380,22 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       ),
                     ],
                   ),
+                  ),
                 ),
                 const SizedBox(height: 11),
                 Row(
                   children: [
-                    _thumb(Icons.checkroom),
-                    const SizedBox(width: 9),
-                    _thumb(Icons.card_giftcard),
-                    const SizedBox(width: 9),
-                    Container(
+                    for (final photo in productPhotos)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 9),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: Image.memory(photo, width: 62, height: 62, fit: BoxFit.cover),
+                        ),
+                      ),
+                    GestureDetector(
+                      onTap: productPhotos.length >= 5 ? null : () => _takePhoto(invoice: false),
+                      child: Container(
                       width: 62,
                       height: 62,
                       decoration: BoxDecoration(
@@ -319,6 +405,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       ),
                       child: const Icon(Icons.add_rounded,
                           color: Colors.white),
+                      ),
                     ),
                   ],
                 ),
@@ -342,30 +429,34 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                Container(
+                GestureDetector(
+                  onTap: () => _takePhoto(invoice: true),
+                  child: Container(
                   height: 104,
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: .08),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: glassBorder),
                   ),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        const Icon(Icons.picture_as_pdf_outlined,
-                            color: Colors.white70, size: 26),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Adjuntar factura (PDF)',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'Acumin Pro',
+                  child: invoicePhoto == null
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.photo_camera_outlined, color: cyan, size: 26),
+                              SizedBox(height: 6),
+                              Text('Toca para tomar foto de la factura', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
+                        )
+                      : ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(invoicePhoto!, width: double.infinity, height: 104, fit: BoxFit.cover)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton(
+                    onPressed: _pickInvoiceFromGallery,
+                    child: const Text('Seleccionar de galería', style: TextStyle(color: cyan, decoration: TextDecoration.underline, fontWeight: FontWeight.w700)),
                   ),
                 ),
                 const SizedBox(height: 15),

@@ -9,6 +9,17 @@ const Color mint = Color(0xFF21C88A);
 const Color mist = Color(0xFFFAF8FF);
 const Color glassBorder = Color(0x26FFFFFF);
 const Color glassFill = Color(0x0FFFFFFF);
+const Color surfaceBlue = Color(0xFF003EC7);
+const Color glowBlue = Color(0xFF0047FF);
+const Color accentBlue = Color(0xFF0A57FF);
+
+final ValueNotifier<bool> appDarkMode = ValueNotifier<bool>(false);
+
+const LinearGradient fondoGradient = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [Color(0xFF0135A7), Color(0xFF111230)],
+);
 
 const LinearGradient bgGradient = LinearGradient(
   begin: Alignment.topCenter,

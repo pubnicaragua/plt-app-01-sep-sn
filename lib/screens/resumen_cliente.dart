@@ -3,9 +3,7 @@
 import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
-import '../widgets/app_nav_bar.dart';
 import '../widgets/glass.dart';
-import 'home_cliente.dart';
 
 class ResumenCliente extends StatefulWidget {
   const ResumenCliente({super.key});
@@ -369,18 +367,10 @@ class _ResumenClienteState extends State<ResumenCliente> {
                   },
                 ),
               ),
-              AppNavBar(current: 2, onChanged: _nav),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  void _nav(int index) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => HomeCliente()),
-      (route) => false,
     );
   }
 

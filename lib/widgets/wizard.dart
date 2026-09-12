@@ -52,21 +52,46 @@ class WizardScaffold extends StatelessWidget {
             children: [
               Row(
                 children: List.generate(
-                  3,
+                  2,
                   (index) => Expanded(
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       height: 5,
-                      margin: EdgeInsets.only(right: index == 2 ? 0 : 6),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(4),
-                        color: index <= step
+                        margin: EdgeInsets.only(right: index == 1 ? 0 : 6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          color: index <= step.clamp(0, 1)
                             ? cyan
                             : Colors.white.withValues(alpha: .16),
                       ),
                     ),
                   ),
                 ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Paso ${step.clamp(0, 1) + 1} de 2',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
+                  Text(
+                    step.clamp(0, 1) == 0
+                        ? 'Información del envío'
+                        : 'Confirmación del envío',
+                    style: const TextStyle(
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 10.5,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 22),
               Text(

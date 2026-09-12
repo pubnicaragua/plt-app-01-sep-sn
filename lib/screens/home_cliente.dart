@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -85,6 +87,8 @@ class _HomeTabState extends State<_HomeTab> {
   bool programado = true;
   String transport = 'Moto';
   AppSettings? settings;
+  DateTime? agendaDate;
+  TimeOfDay? agendaTime;
   final origin = TextEditingController();
   final destination = TextEditingController();
   final refOrigin = TextEditingController();
@@ -138,11 +142,93 @@ class _HomeTabState extends State<_HomeTab> {
     return rate.baseFeeCs + km * rate.farePerKmCs;
   }
 
+  static const _dayOptions = ['Hoy', 'Mañana'];
+  static const _hourOptions = ['09:00', '12:00', '15:00', '18:00'];
+
+  DateTime _slot(int dayIndex, String hour) {
+    final now = DateTime.now();
+    final parts = hour.split(':');
+    final base = DateTime(now.year, now.month, now.day)
+        .add(Duration(days: dayIndex));
+    return DateTime(
+        base.year, base.month, base.day,
+        int.parse(parts[0]), int.parse(parts[1]));
+  }
+
+  void _pickSlot(int dayIndex, String hour) {
+    final now = DateTime.now();
+    final candidate = _slot(dayIndex, hour);
+    if (candidate.isBefore(now)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Esa hora ya pasó. Elige otra hora o elige Mañana.',
+            style: TextStyle(fontFamily: 'Acumin Pro'),
+          ),
+        ),
+      );
+      return;
+    }
+    if (candidate.isAfter(now.add(const Duration(hours: 24)))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Solo se puede programar dentro de las próximas 24 horas.',
+            style: TextStyle(fontFamily: 'Acumin Pro'),
+          ),
+        ),
+      );
+      return;
+    }
+    final parts = hour.split(':');
+    setState(() {
+      agendaDate = candidate;
+      agendaTime =
+          TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    });
+  }
+
+  void _autoAgenda() {
+    final now = DateTime.now().add(const Duration(minutes: 30));
+    final today = DateTime(now.year, now.month, now.day);
+    for (final hour in _hourOptions) {
+      final parts = hour.split(':');
+      final candidate = DateTime(today.year, today.month, today.day,
+          int.parse(parts[0]), int.parse(parts[1]));
+      if (candidate.isAfter(now)) {
+        setState(() {
+          agendaDate = candidate;
+          agendaTime =
+              TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+        });
+        return;
+      }
+    }
+    agendaDate = today.add(const Duration(days: 1));
+    agendaTime = const TimeOfDay(hour: 9, minute: 0);
+  }
+
+  String? get _agendaDateString {
+    final date = agendaDate;
+    if (date == null) return null;
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String? get _agendaTimeString {
+    final time = agendaTime;
+    if (time == null) return null;
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = apiClient.currentUser;
+    final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 24.0;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 22),
       children: [
         Row(
           children: [
@@ -154,8 +240,9 @@ class _HomeTabState extends State<_HomeTab> {
                     'Hola, ${user?.displayName ?? 'Mario Belfort'}',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 19,
+                      fontSize: 20.5,
                       fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
                       fontFamily: 'Acumin Pro',
                     ),
                   ),
@@ -163,7 +250,7 @@ class _HomeTabState extends State<_HomeTab> {
                     '¿Qué vas a enviar hoy?',
                     style: TextStyle(
                       color: Color(0xFFB9D4FF),
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontFamily: 'Acumin Pro',
                     ),
                   ),
@@ -178,8 +265,8 @@ class _HomeTabState extends State<_HomeTab> {
               ),
             ),
             Container(
-              width: 42,
-              height: 42,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: .16),
@@ -190,7 +277,7 @@ class _HomeTabState extends State<_HomeTab> {
                   initials(user?.displayName ?? 'Incoex'),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w800,
                     fontFamily: 'Acumin Pro',
                   ),
@@ -199,82 +286,20 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ],
         ),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0D4DCC), Color(0xFF0034A6)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: glassBorder),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0034A6).withValues(alpha: .45),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Envía hoy en Managua',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Acumin Pro',
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Crea tu envío en 3 pasos y mira el precio\nantes de confirmar.',
-                      style: TextStyle(
-                        color: Color(0xFFC9DCFF),
-                        fontSize: 11.5,
-                        height: 1.4,
-                        fontFamily: 'Acumin Pro',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: .14),
-                  border: Border.all(color: glassBorder),
-                ),
-                child: const Icon(
-                  Icons.rocket_launch_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
         const _StepBanner(),
-        const SizedBox(height: 22),
+        const SizedBox(height: 24),
         const Text(
           'Selecciona el transporte',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 19,
+            fontSize: 20.5,
             fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
             fontFamily: 'Acumin Pro',
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 13),
         Row(
           children: [
             Expanded(
@@ -287,7 +312,7 @@ class _HomeTabState extends State<_HomeTab> {
                 onTap: () => setState(() => transport = 'Moto'),
               ),
             ),
-            const SizedBox(width: 9),
+            const SizedBox(width: 10),
             Expanded(
               child: _TransportTile(
                 icon: Icons.directions_car_filled,
@@ -298,7 +323,7 @@ class _HomeTabState extends State<_HomeTab> {
                 onTap: () => setState(() => transport = 'Vehículo'),
               ),
             ),
-            const SizedBox(width: 9),
+            const SizedBox(width: 10),
             Expanded(
               child: _TransportTile(
                 icon: Icons.local_shipping_outlined,
@@ -311,7 +336,7 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
         _EditableRouteCard(
           origin: origin,
           destination: destination,
@@ -319,7 +344,7 @@ class _HomeTabState extends State<_HomeTab> {
           onDestinationSelected: (place) =>
               setState(() => destinationPlace = place),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         _FareCard(
           km: _km,
           fare: _fareFor(transport),
@@ -327,12 +352,12 @@ class _HomeTabState extends State<_HomeTab> {
           rate: settings?.rateFor(transport),
           usdRate: settings?.dollarRate ?? 36.5,
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         _ReferencesCard(
           originController: refOrigin,
           destinationController: refDestination,
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -356,11 +381,22 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
         _PriorityBar(
           programado: programado,
-          onChanged: (value) => setState(() => programado = value),
+          onChanged: (value) {
+            setState(() => programado = value);
+            if (value && agendaDate == null) _autoAgenda();
+          },
         ),
+        if (programado) ...[
+          const SizedBox(height: 12),
+          _ScheduleCard(
+            selectedDate: agendaDate,
+            selectedTime: agendaTime,
+            onPick: _pickSlot,
+          ),
+        ],
         const SizedBox(height: 18),
         GlassButton(
           label: 'Solicitar nuevo envío',
@@ -378,6 +414,9 @@ class _HomeTabState extends State<_HomeTab> {
                 startDestinationRefs: refDestination.text.trim(),
                 startRecipientName: recipientName.text.trim(),
                 startRecipientPhone: recipientPhone.text.trim(),
+                startScheduled: programado,
+                startDate: _agendaDateString,
+                startTime: _agendaTimeString,
               ),
             ),
           ),
@@ -392,49 +431,55 @@ class _StepBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .10),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: glassBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(15, 14, 15, 15),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .13),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: glassBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Paso 1 de 2',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Acumin Pro',
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Paso 1 de 2',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
+                  const Text(
+                    'Información del envío',
+                    style: TextStyle(
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 10.5,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
+                ],
               ),
-              const Text(
-                'Información del envío',
-                style: TextStyle(
-                  color: Color(0xFFB9D4FF),
-                  fontSize: 10,
-                  fontFamily: 'Acumin Pro',
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: .5,
+                  minHeight: 5,
+                  backgroundColor: Colors.white.withValues(alpha: .18),
+                  color: cyan,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 9),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: .5,
-              minHeight: 5,
-              backgroundColor: Colors.white.withValues(alpha: .16),
-              color: cyan,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -463,15 +508,15 @@ class _TransportTile extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.fromLTRB(11, 12, 11, 10),
+        padding: const EdgeInsets.fromLTRB(13, 13, 13, 11),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF0D4DCC).withValues(alpha: .65)
+              ? Colors.white.withValues(alpha: .18)
               : Colors.white.withValues(alpha: .10),
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? figmaBlue : glassBorder,
-            width: selected ? 1.4 : 1,
+            color: selected ? cyan.withValues(alpha: .75) : glassBorder,
+            width: selected ? 1.2 : 1,
           ),
         ),
         child: Column(
@@ -481,32 +526,24 @@ class _TransportTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(9),
                   decoration: BoxDecoration(
                     color: selected
-                        ? Colors.white.withValues(alpha: .22)
-                        : const Color(0xFF0D4DCC),
-                    borderRadius: BorderRadius.circular(11),
+                        ? Colors.white.withValues(alpha: .24)
+                        : accentBlue,
+                    borderRadius: BorderRadius.circular(13),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 20),
+                  child: Icon(icon, color: Colors.white, size: 21),
                 ),
-                Icon(
-                  selected
-                      ? Icons.check_circle_rounded
-                      : Icons.circle_outlined,
-                  color: selected
-                      ? cyan
-                      : Colors.white.withValues(alpha: .55),
-                  size: 15,
-                ),
+                _RadioDot(selected: selected),
               ],
             ),
-            const SizedBox(height: 9),
+            const SizedBox(height: 10),
             Text(
               label,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 14.5,
+                fontSize: 15,
                 fontWeight: FontWeight.w800,
                 fontFamily: 'Acumin Pro',
               ),
@@ -516,15 +553,15 @@ class _TransportTile extends StatelessWidget {
               eta,
               style: const TextStyle(
                 color: Color(0xFFB9D4FF),
-                fontSize: 10,
+                fontSize: 10.5,
                 fontFamily: 'Acumin Pro',
               ),
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 9),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
-                color: figmaBlue,
+                color: accentBlue,
                 borderRadius: BorderRadius.circular(7),
               ),
               child: Text(
@@ -533,11 +570,45 @@ class _TransportTile extends StatelessWidget {
                   color: Colors.white,
                   fontSize: 8.5,
                   fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
                   fontFamily: 'Acumin Pro',
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RadioDot extends StatelessWidget {
+  const _RadioDot({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: selected ? cyan : Colors.white.withValues(alpha: .45),
+          width: 1.6,
+        ),
+      ),
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: selected ? cyan : Colors.transparent,
+          ),
         ),
       ),
     );
@@ -564,79 +635,87 @@ class _FareCard extends StatelessWidget {
     final distance = km;
     final price = fare;
     final valid = distance != null && price != null && rate != null;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: valid
-              ? [Color(0xFF0E5B3E), Color(0xFF07472F)]
-              : [Color(0xFF101F45).withValues(alpha: .9), Color(0xFF0A1330)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: glassBorder),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.payments_outlined, color: cyan, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Tarifa estimada · $transportLabel',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  valid
-                      ? '${distance.toStringAsFixed(1)} km · base '
-                          'C\$ ${rate!.baseFeeCs.toStringAsFixed(0)} + '
-                          '${distance.toStringAsFixed(1)} × C\$ '
-                          '${rate!.farePerKmCs.toStringAsFixed(2)}'
-                      : 'Selecciona ambos lugares para cotizar tu envío',
-                  style: const TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 10.5,
-                    height: 1.35,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-              ],
-            ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .13),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: glassBorder),
           ),
-          if (valid)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  'C\$ ${price.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Acumin Pro',
-                  ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accentBlue,
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                Text(
-                  '≈ US\$ ${(price / usdRate).toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 10,
-                    fontFamily: 'Acumin Pro',
-                  ),
+                child: const Icon(Icons.payments_outlined,
+                    color: Colors.white, size: 19),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Tarifa estimada · $transportLabel',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Acumin Pro',
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      valid
+                          ? '${distance.toStringAsFixed(1)} km · base '
+                              'C\$ ${rate!.baseFeeCs.toStringAsFixed(0)} + '
+                              '${distance.toStringAsFixed(1)} × C\$ '
+                              '${rate!.farePerKmCs.toStringAsFixed(2)}'
+                          : 'Selecciona ambos lugares para cotizar tu envío',
+                      style: const TextStyle(
+                        color: Color(0xFFB9D4FF),
+                        fontSize: 10.5,
+                        height: 1.35,
+                        fontFamily: 'Acumin Pro',
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-        ],
+              ),
+              if (valid)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'C\$ ${price.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        fontFamily: 'Acumin Pro',
+                      ),
+                    ),
+                    Text(
+                      '≈ US\$ ${(price / usdRate).toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: Color(0xFFB9D4FF),
+                        fontSize: 10,
+                        fontFamily: 'Acumin Pro',
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -657,57 +736,135 @@ class _EditableRouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 13, 12, 13),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .10),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: glassBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'DESDE',
-            style: TextStyle(
-              color: Color(0xFFB9D4FF),
-              fontSize: 9,
-              letterSpacing: 1,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Acumin Pro',
-            ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 15, 16, 15),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .13),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: glassBorder),
           ),
-          const SizedBox(height: 7),
-          PlaceAutocompleteField(
-            label: 'Desde',
-            hint: 'Busca un lugar de Managua…',
-            icon: Icons.radio_button_checked,
-            controller: origin,
-            onSelected: onOriginSelected,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: [
+                  const _RouteMark(icon: Icons.radio_button_checked, size: 24),
+                  SizedBox(
+                    height: 34,
+                    width: 2,
+                    child: CustomPaint(
+                      painter: _DottedLinePainter(
+                          color: Colors.white.withValues(alpha: .40)),
+                    ),
+                  ),
+                  const _RouteMark(icon: Icons.place_rounded, size: 24),
+                ],
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    PlaceAutocompleteField(
+                      bare: true,
+                      label: 'Desde',
+                      hint: 'Mi ubicación actual',
+                      controller: origin,
+                      onSelected: onOriginSelected,
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 2),
+                      child: CustomPaint(
+                        painter: _DottedLinePainter(
+                            color: Colors.white.withValues(alpha: .28),
+                            horizontal: true),
+                      ),
+                    ),
+                    PlaceAutocompleteField(
+                      bare: true,
+                      label: 'Hacia',
+                      hint: 'Oficinas Incoex, Edificio Pellas',
+                      controller: destination,
+                      onSelected: onDestinationSelected,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 15),
-          const Text(
-            'HACIA',
-            style: TextStyle(
-              color: Color(0xFFB9D4FF),
-              fontSize: 9,
-              letterSpacing: 1,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Acumin Pro',
-            ),
-          ),
-          const SizedBox(height: 7),
-          PlaceAutocompleteField(
-            label: 'Hacia',
-            hint: 'Busca un lugar de Managua…',
-            icon: Icons.place_rounded,
-            controller: destination,
-            onSelected: onDestinationSelected,
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+class _RouteMark extends StatelessWidget {
+  const _RouteMark({required this.icon, required this.size});
+
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Center(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: accentBlue,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: .55), width: 1.4),
+          ),
+          child: Icon(icon, color: Colors.white, size: size * .52),
+        ),
+      ),
+    );
+  }
+}
+
+class _DottedLinePainter extends CustomPainter {
+  const _DottedLinePainter({required this.color, this.horizontal = false});
+
+  final Color color;
+  final bool horizontal;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    const dash = 4.0;
+    const gap = 4.0;
+    if (horizontal) {
+      var x = 0.0;
+      while (x < size.width) {
+        canvas.drawLine(Offset(x, size.height / 2),
+            Offset(x + dash, size.height / 2), paint);
+        x += dash + gap;
+      }
+    } else {
+      var y = 0.0;
+      while (y < size.height) {
+        canvas.drawLine(Offset(size.width / 2, y),
+            Offset(size.width / 2, y + dash), paint);
+        y += dash + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DottedLinePainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _ReferencesCard extends StatelessWidget {
@@ -721,29 +878,35 @@ class _ReferencesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 13, 12, 13),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .10),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: glassBorder),
-      ),
-      child: Column(
-        children: [
-          GlassField(
-            label: 'Referencia de la recogida',
-            hint: 'Ej: portón azul después del semáforo',
-            icon: Icons.edit_location_alt_outlined,
-            controller: originController,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .13),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: glassBorder),
           ),
-          const SizedBox(height: 10),
-          GlassField(
-            label: 'Referencia de la entrega',
-            hint: 'Ej: recepción del tercer nivel',
-            icon: Icons.edit_location_alt_outlined,
-            controller: destinationController,
+          child: Column(
+            children: [
+              GlassField(
+                label: 'Referencia de la recogida',
+                hint: 'Ej: portón azul después del semáforo',
+                icon: Icons.edit_location_alt_outlined,
+                controller: originController,
+              ),
+              const SizedBox(height: 10),
+              GlassField(
+                label: 'Referencia de la entrega',
+                hint: 'Ej: recepción del tercer nivel',
+                icon: Icons.edit_location_alt_outlined,
+                controller: destinationController,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -757,18 +920,24 @@ class _PriorityBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .09),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: glassBorder),
-      ),
-      child: Row(
-        children: [
-          _option('Prioritario', !programado, () => onChanged(false)),
-          _option('Programado', programado, () => onChanged(true)),
-        ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(17),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .11),
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(color: glassBorder),
+          ),
+          child: Row(
+            children: [
+              _option('Prioritario', !programado, () => onChanged(false)),
+              _option('Programado', programado, () => onChanged(true)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -779,20 +948,194 @@ class _PriorityBar extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 11),
+          padding: const EdgeInsets.symmetric(vertical: 13),
           decoration: BoxDecoration(
-            color: active ? figmaBlue : Colors.transparent,
-            borderRadius: BorderRadius.circular(11),
+            color: active ? accentBlue : Colors.transparent,
+            borderRadius: BorderRadius.circular(12.5),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: accentBlue.withValues(alpha: .38),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
           child: Text(
             label,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
               fontFamily: 'Acumin Pro',
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScheduleCard extends StatelessWidget {
+  const _ScheduleCard({
+    required this.selectedDate,
+    required this.selectedTime,
+    required this.onPick,
+  });
+
+  final DateTime? selectedDate;
+  final TimeOfDay? selectedTime;
+  final void Function(int dayIndex, String hour) onPick;
+
+  String _fmt(DateTime date) {
+    const months = [
+      'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+      'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+    ];
+    return '${date.day} ${months[date.month - 1]}';
+  }
+
+  int _dayIndex(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(date.year, date.month, date.day);
+    return day.isAfter(today) ? 1 : 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final time = selectedTime;
+    final hourLabel = time == null
+        ? null
+        : '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .13),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: glassBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.schedule_rounded, color: cyan, size: 18),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Agenda tu envío',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Acumin Pro',
+                      ),
+                    ),
+                  ),
+                  if (selectedDate != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: cyan.withValues(alpha: .16),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${_fmt(selectedDate!)} · $hourLabel',
+                        style: const TextStyle(
+                          color: cyan,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Acumin Pro',
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              const Text(
+                'Solo se permite programar dentro de las próximas 24 horas. Fechas pasadas quedan bloqueadas.',
+                style: TextStyle(
+                  color: Color(0xFFB9D4FF),
+                  fontSize: 10.5,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  for (final (i, day) in _HomeTabState._dayOptions.indexed)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => onPick(i, hourLabel ?? '09:00'),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: selectedDate != null &&
+                                    _dayIndex(selectedDate!) == i
+                                ? accentBlue
+                                : Colors.white.withValues(alpha: .10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            day,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final hour in _HomeTabState._hourOptions)
+                    GestureDetector(
+                      onTap: () => onPick(_dayIndex(selectedDate ?? DateTime.now()), hour),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: hourLabel == hour
+                              ? accentBlue
+                              : Colors.white.withValues(alpha: .10),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: hourLabel == hour
+                                ? cyan.withValues(alpha: .5)
+                                : Colors.transparent,
+                          ),
+                        ),
+                        child: Text(
+                          hour,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Acumin Pro',
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

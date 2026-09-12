@@ -28,21 +28,141 @@ class AppBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: appDarkMode,
+      builder: (context, dark, _) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (dark)
+              const _DarkBase()
+            else
+              const _LightBase(),
+            if (dark) Container(color: Colors.black.withValues(alpha: darken)),
+            child,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LightBase extends StatelessWidget {
+  const _LightBase();
+
+  @override
+  Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(
-          'assets/img/fondoapps.png',
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            decoration: const BoxDecoration(gradient: bgGradient),
+        const DecoratedBox(
+          decoration: BoxDecoration(gradient: fondoGradient),
+        ),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(-0.42, -0.52),
+              radius: 1.05,
+              colors: [Color(0x380047FF), Color(0x000047FF)],
+            ),
           ),
         ),
-        Container(color: Colors.black.withValues(alpha: darken)),
-        child,
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(1.15, 0.85),
+              radius: 0.95,
+              colors: [Color(0x240047FF), Color(0x000047FF)],
+            ),
+          ),
+        ),
+        const CustomPaint(painter: _GeometricBackdropPainter()),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(0.35, -1.05),
+              end: Alignment(0.1, 0.55),
+              colors: [Color(0x2EFFFFFF), Color(0x00FFFFFF)],
+            ),
+          ),
+        ),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(-0.55, 1.25),
+              radius: 1.05,
+              colors: [Color(0x243EC8F4), Color(0x003EC8F4)],
+            ),
+          ),
+        ),
       ],
     );
   }
+}
+
+class _DarkBase extends StatelessWidget {
+  const _DarkBase();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: const [
+        DecoratedBox(decoration: BoxDecoration(gradient: fondoGradient)),
+        CustomPaint(painter: _GeometricBackdropPainter()),
+      ],
+    );
+  }
+}
+
+/// Geometría de fondo abstracta: mantiene la composición diagonal de Figma
+/// sin repetir el logotipo. El único logo visible en la navegación es el X
+/// central de [AppNavBar].
+class _GeometricBackdropPainter extends CustomPainter {
+  const _GeometricBackdropPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    paint.color = const Color(0x2DFFFFFF);
+    canvas.drawPath(
+      Path()
+        ..moveTo(-w * .08, h * .50)
+        ..lineTo(w * .48, -h * .04)
+        ..lineTo(w * .62, -h * .04)
+        ..lineTo(w * .02, h * .68)
+        ..close(),
+      paint,
+    );
+
+    paint.color = const Color(0x1CFFFFFF);
+    canvas.drawPath(
+      Path()
+        ..moveTo(w * .36, h * 1.04)
+        ..lineTo(w * .89, -h * .04)
+        ..lineTo(w * 1.08, -h * .04)
+        ..lineTo(w * .57, h * 1.04)
+        ..close(),
+      paint,
+    );
+
+    paint.color = const Color(0x17000000);
+    canvas.drawPath(
+      Path()
+        ..moveTo(w * .70, h * 1.04)
+        ..lineTo(w * 1.08, h * .35)
+        ..lineTo(w * 1.08, h * .76)
+        ..lineTo(w * .86, h * 1.04)
+        ..close(),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class GlassCard extends StatelessWidget {
@@ -72,14 +192,14 @@ class GlassCard extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: color ?? Colors.white.withValues(alpha: .08),
+            color: color ?? Colors.white.withValues(alpha: .13),
             borderRadius: BorderRadius.circular(borderRadius),
             border: Border.all(color: glassBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: .18),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
+                color: Colors.black.withValues(alpha: .14),
+                blurRadius: 26,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
@@ -128,9 +248,11 @@ class GlassButton extends StatelessWidget {
               filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
               child: Container(
                 decoration: BoxDecoration(
-                  color: filled ? figmaBlue : Colors.white.withValues(alpha: .14),
+                  color: filled ? accentBlue : Colors.white.withValues(alpha: .16),
                   borderRadius: BorderRadius.circular(45),
-                  border: Border.all(color: glassBorder),
+                  border: Border.all(
+                    color: filled ? const Color(0x40FFFFFF) : glassBorder,
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -138,7 +260,7 @@ class GlassButton extends StatelessWidget {
                     if (icon != null) ...[
                       Icon(
                         icon,
-                        color: filled ? Colors.white : textColor ?? ink,
+                        color: Colors.white,
                         size: 20,
                       ),
                       const SizedBox(width: 9),
@@ -146,8 +268,8 @@ class GlassButton extends StatelessWidget {
                     Text(
                       label,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: filled ? Colors.white : textColor ?? ink,
+                      style: const TextStyle(
+                        color: Colors.white,
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
                         fontFamily: 'Acumin Pro',
@@ -220,7 +342,7 @@ class _GlassFieldState extends State<GlassField> {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: glassBorder),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 9),
           child: Row(
             children: [
               if (widget.icon != null) ...[
@@ -238,7 +360,7 @@ class _GlassFieldState extends State<GlassField> {
                   minLines: widget.maxLines == 1 ? null : 2,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16.5,
+                    fontSize: 17,
                     fontFamily: 'Acumin Pro',
                     fontWeight: FontWeight.w600,
                   ),
@@ -246,18 +368,20 @@ class _GlassFieldState extends State<GlassField> {
                     labelText: widget.label,
                     labelStyle: const TextStyle(
                       color: Color(0xFFE8F0FF),
-                      fontSize: 13,
+                      fontSize: 12.5,
                       fontFamily: 'Acumin Pro',
+                      fontWeight: FontWeight.w600,
                     ),
                     hintText: widget.hint,
                     hintStyle: const TextStyle(
-                      color: Color(0x99FFFFFF),
-                      fontSize: 13,
+                      color: Color(0x8CFFFFFF),
+                      fontSize: 14.5,
+                      fontFamily: 'Acumin Pro',
                     ),
                     helperText: widget.helper,
                     helperStyle: const TextStyle(
                       color: Color(0xAAB9D4FF),
-                      fontSize: 10,
+                      fontSize: 10.5,
                     ),
                     floatingLabelBehavior: FloatingLabelBehavior.always,
                     border: InputBorder.none,
