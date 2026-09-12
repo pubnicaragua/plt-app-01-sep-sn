@@ -58,40 +58,13 @@ class _LightBase extends StatelessWidget {
         const DecoratedBox(
           decoration: BoxDecoration(gradient: fondoGradient),
         ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(-0.42, -0.52),
-              radius: 1.05,
-              colors: [Color(0x380047FF), Color(0x000047FF)],
-            ),
-          ),
-        ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(1.15, 0.85),
-              radius: 0.95,
-              colors: [Color(0x240047FF), Color(0x000047FF)],
-            ),
-          ),
-        ),
         const CustomPaint(painter: _GeometricBackdropPainter()),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment(0.35, -1.05),
-              end: Alignment(0.1, 0.55),
-              colors: [Color(0x2EFFFFFF), Color(0x00FFFFFF)],
-            ),
-          ),
-        ),
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: RadialGradient(
               center: Alignment(-0.55, 1.25),
               radius: 1.05,
-              colors: [Color(0x243EC8F4), Color(0x003EC8F4)],
+              colors: [Color(0x143EC8F4), Color(0x003EC8F4)],
             ),
           ),
         ),
@@ -360,7 +333,7 @@ class _GlassFieldState extends State<GlassField> {
                   minLines: widget.maxLines == 1 ? null : 2,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 17,
+                    fontSize: 15.5,
                     fontFamily: 'Acumin Pro',
                     fontWeight: FontWeight.w600,
                   ),
@@ -368,14 +341,14 @@ class _GlassFieldState extends State<GlassField> {
                     labelText: widget.label,
                     labelStyle: const TextStyle(
                       color: Color(0xFFE8F0FF),
-                      fontSize: 12.5,
+                      fontSize: 12,
                       fontFamily: 'Acumin Pro',
                       fontWeight: FontWeight.w600,
                     ),
                     hintText: widget.hint,
                     hintStyle: const TextStyle(
                       color: Color(0x8CFFFFFF),
-                      fontSize: 14.5,
+                      fontSize: 13,
                       fontFamily: 'Acumin Pro',
                     ),
                     helperText: widget.helper,

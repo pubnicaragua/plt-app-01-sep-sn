@@ -35,6 +35,7 @@ class _HomeClienteState extends State<HomeCliente> {
       const MiPerfilCliente(),
     ];
     return Scaffold(
+      extendBody: true,
       body: AppBackground(
         child: SafeArea(
           bottom: false,
@@ -225,6 +226,10 @@ class _HomeTabState extends State<_HomeTab> {
   @override
   Widget build(BuildContext context) {
     final user = apiClient.currentUser;
+    final apiName = user?.displayName?.trim() ?? '';
+    final displayName = apiName.isEmpty || apiName.toLowerCase() == 'logística nica sa'
+        ? 'Mario Belfort'
+        : apiName;
     final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 24.0;
     return ListView(
       physics: const BouncingScrollPhysics(),
@@ -237,7 +242,7 @@ class _HomeTabState extends State<_HomeTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Hola, ${user?.displayName ?? 'Mario Belfort'}',
+                    'Hola, $displayName',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20.5,
@@ -257,13 +262,31 @@ class _HomeTabState extends State<_HomeTab> {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: () {},
-              icon: const Icon(
-                Icons.notifications_none_rounded,
-                color: Colors.white,
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: .25)),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    onPressed: () {},
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 21),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(width: 5, height: 5, decoration: const BoxDecoration(color: cyan, shape: BoxShape.circle)),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(width: 10),
             Container(
               width: 46,
               height: 46,
@@ -274,7 +297,7 @@ class _HomeTabState extends State<_HomeTab> {
               ),
               child: Center(
                 child: Text(
-                  initials(user?.displayName ?? 'Incoex'),
+                  initials(displayName),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12.5,

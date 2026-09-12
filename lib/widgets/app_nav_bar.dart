@@ -88,7 +88,7 @@ class AppNavBar extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: active ? Colors.white : const Color(0xFF8FA0C4),
+              color: active ? cyan : const Color(0xFF8FA0C4),
               size: 21,
             ),
             const SizedBox(height: 3),
