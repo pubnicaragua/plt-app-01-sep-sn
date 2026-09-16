@@ -6,7 +6,9 @@ import '../widgets/glass.dart';
 import 'inicio.dart';
 
 class MiPerfilCliente extends StatefulWidget {
-  const MiPerfilCliente({super.key});
+  const MiPerfilCliente({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<MiPerfilCliente> createState() => _MiPerfilClienteState();
@@ -16,8 +18,7 @@ class _MiPerfilClienteState extends State<MiPerfilCliente> {
   @override
   Widget build(BuildContext context) {
     final name = apiClient.currentUser?.displayName ?? 'Incoex Logistics';
-    return AppBackground(
-      child: SafeArea(
+    final content = SafeArea(
         bottom: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(22, 14, 22, 24),
@@ -134,6 +135,66 @@ class _MiPerfilClienteState extends State<MiPerfilCliente> {
             const SizedBox(height: 16),
             GlassCard(
               padding: const EdgeInsets.all(16),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: appDarkMode,
+                builder: (context, dark, _) => Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        dark
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: cyan,
+                        size: 19,
+                      ),
+                    ),
+                    const SizedBox(width: 11),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Modo Oscuro',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                          Text(
+                            'Cambiar la apariencia visual de la app',
+                            style: TextStyle(
+                              color: Color(0xFFB9D4FF),
+                              fontSize: 11,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Transform.scale(
+                      scale: .85,
+                      child: Switch(
+                        value: dark,
+                        activeTrackColor: accentBlue,
+                        thumbColor: const WidgetStatePropertyAll(Colors.white),
+                        onChanged: (value) => appDarkMode.value = value,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            GlassCard(
+              padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
                   const Icon(Icons.support_agent_rounded,
@@ -191,8 +252,8 @@ class _MiPerfilClienteState extends State<MiPerfilCliente> {
             ),
           ],
         ),
-      ),
-    );
+      );
+    return widget.embedded ? content : AppBackground(child: content);
   }
 
   Widget _step({

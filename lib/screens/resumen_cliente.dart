@@ -6,7 +6,9 @@ import '../models/api_models.dart';
 import '../widgets/glass.dart';
 
 class ResumenCliente extends StatefulWidget {
-  const ResumenCliente({super.key});
+  const ResumenCliente({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<ResumenCliente> createState() => _ResumenClienteState();
@@ -19,14 +21,16 @@ class _ResumenClienteState extends State<ResumenCliente> {
   @override
   void initState() {
     super.initState();
-    trips = apiClient.getTrips();
+    final user = apiClient.currentUser;
+    final client = user != null && (user.role == 'corporate' || user.role == 'company')
+        ? user.displayName.trim()
+        : null;
+    trips = apiClient.getTrips(client: client);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: AppBackground(
-        child: SafeArea(
+    final content = SafeArea(
           bottom: false,
           child: Column(
             children: [
@@ -369,9 +373,9 @@ class _ResumenClienteState extends State<ResumenCliente> {
               ),
             ],
           ),
-        ),
-      ),
-    );
+        );
+    if (widget.embedded) return content;
+    return Scaffold(body: AppBackground(child: content));
   }
 
   String _thousand(num value) {

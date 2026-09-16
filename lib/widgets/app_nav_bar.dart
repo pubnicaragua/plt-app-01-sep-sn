@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
@@ -28,50 +30,58 @@ class AppNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final navWidth = screenWidth > 384 ? 360.0 : screenWidth - 24;
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 8, 16, 10 + bottom),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0135A7), Color(0xFF111230)],
-          ),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: const Color(0x4DFFFFFF), width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: .45),
-              blurRadius: 26,
-              offset: const Offset(0, 12),
+      padding: EdgeInsets.only(top: 8, bottom: 10 + bottom),
+      child: Center(
+        child: SizedBox(
+          width: navWidth,
+          height: 76,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(38),
+              boxShadow: const [
+                BoxShadow(color: Color(0x66000000), blurRadius: 32, offset: Offset(0, 16)),
+                BoxShadow(color: Color(0x120066FF), blurRadius: 24, offset: Offset(0, 8)),
+              ],
             ),
-            BoxShadow(
-              color: const Color(0xFF0106A7).withValues(alpha: .35),
-              blurRadius: 18,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            _item(0, items[0].icon, items[0].label),
-            _item(1, items[1].icon, items[1].label),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: SizedBox(
-                width: 54,
-                height: 54,
-                child: Image.asset(
-                  'assets/img/brand-x.png',
-                  fit: BoxFit.contain,
-                  semanticLabel: 'INCOEX',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(38),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xB2141A2A),
+                    borderRadius: BorderRadius.circular(38),
+                    border: const Border(
+                      top: BorderSide(color: Color(0x66FFFFFF), width: 1.5),
+                      right: BorderSide(color: Color(0x33FFFFFF), width: 1),
+                      bottom: BorderSide(color: Color(0x1FFFFFFF), width: .5),
+                      left: BorderSide(color: Color(0x33FFFFFF), width: 1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _item(0, items[0].icon, items[0].label),
+                      _item(1, items[1].icon, items[1].label),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: SizedBox(
+                          width: 54,
+                          height: 58,
+                          child: Image.asset('assets/img/brand-x.png', fit: BoxFit.contain, semanticLabel: 'INCOEX'),
+                        ),
+                      ),
+                      _item(2, items[2].icon, items[2].label),
+                      _item(3, items[3].icon, items[3].label),
+                    ],
+                  ),
                 ),
               ),
             ),
-            _item(2, items[2].icon, items[2].label),
-            _item(3, items[3].icon, items[3].label),
-          ],
+          ),
         ),
       ),
     );
@@ -89,7 +99,7 @@ class AppNavBar extends StatelessWidget {
             Icon(
               icon,
               color: active ? cyan : const Color(0xFF8FA0C4),
-              size: 21,
+              size: 20,
             ),
             const SizedBox(height: 3),
             Text(

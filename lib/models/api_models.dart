@@ -149,7 +149,7 @@ class Trip {
   bool get isOnWay => status == 'En camino';
   bool get isDelivering => status == 'En entrega';
   bool get isCompleted => status == 'Completado';
-  bool get isActive => !{'Completado', 'Cancelado'}.contains(status);
+  bool get isActive => !{'Completado', 'Cancelado', 'Anulado'}.contains(status);
 
   String get statusLabel {
     switch (status) {
@@ -270,6 +270,10 @@ class TrackingData {
     required this.route,
     this.driverLocation,
     this.shareUrl,
+    this.driverVehicle,
+    this.driverPlate,
+    this.driverPhone,
+    this.currentLocationLabel,
   });
 
   final String tripId;
@@ -279,6 +283,10 @@ class TrackingData {
   final List<TrackingPoint> route;
   final DriverLive? driverLocation;
   final String? shareUrl;
+  final String? driverVehicle;
+  final String? driverPlate;
+  final String? driverPhone;
+  final String? currentLocationLabel;
 
   factory TrackingData.fromJson(Map<String, dynamic> json) {
     final points = (json['route'] as List? ?? const [])
@@ -296,6 +304,10 @@ class TrackingData {
           ? DriverLive.fromJson(location.cast<String, dynamic>())
           : null,
       shareUrl: json['shareUrl']?.toString(),
+      driverVehicle: json['driverVehicle']?.toString(),
+      driverPlate: json['driverPlate']?.toString(),
+      driverPhone: json['driverPhone']?.toString(),
+      currentLocationLabel: json['currentLocationLabel']?.toString(),
     );
   }
 }
@@ -360,20 +372,26 @@ class AppSettings {
   final double scheduledSurchargePct;
 
   VehicleRate rateFor(String vehicle) =>
-      vehicleRates[vehicle] ?? vehicleRates['Vehículo'] ?? const VehicleRate(baseFeeCs: 80, farePerKmCs: 8.5);
+      vehicleRates[vehicle] ??
+      vehicleRates['Vehículo'] ??
+      const VehicleRate(baseFeeCs: 80, farePerKmCs: 8.5);
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
-    final rates = (json['vehicleRates'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
+    final rates = (json['vehicleRates'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
     return AppSettings(
       dollarRate: (json['dollarRate'] as num?)?.toDouble() ?? 36.5,
       vehicleRates: rates.map(
         (key, value) => MapEntry(
           key,
-          VehicleRate.fromJson((value as Map?)?.cast<String, dynamic>() ?? const {}),
+          VehicleRate.fromJson(
+              (value as Map?)?.cast<String, dynamic>() ?? const {}),
         ),
       ),
-      prioritySurchargePct: (json['prioritySurchargePct'] as num?)?.toDouble() ?? 25,
-      scheduledSurchargePct: (json['scheduledSurchargePct'] as num?)?.toDouble() ?? 0,
+      prioritySurchargePct:
+          (json['prioritySurchargePct'] as num?)?.toDouble() ?? 25,
+      scheduledSurchargePct:
+          (json['scheduledSurchargePct'] as num?)?.toDouble() ?? 0,
     );
   }
 }
@@ -391,17 +409,21 @@ double haversineKm(double lat1, double lng1, double lat2, double lng2) {
 
 double? distanceKm(PlaceSuggestion? from, PlaceSuggestion? to) {
   if (from == null || to == null) return null;
-  if (from.latitude == null ||
-      from.longitude == null ||
-      to.latitude == null ||
-      to.longitude == null) {
+  final fromLatitude = from.latitude;
+  final fromLongitude = from.longitude;
+  final toLatitude = to.latitude;
+  final toLongitude = to.longitude;
+  if (fromLatitude == null ||
+      fromLongitude == null ||
+      toLatitude == null ||
+      toLongitude == null) {
     return null;
   }
   return haversineKm(
-    from.latitude!,
-    from.longitude!,
-    to.latitude!,
-    to.longitude!,
+    fromLatitude,
+    fromLongitude,
+    toLatitude,
+    toLongitude,
   );
 }
 

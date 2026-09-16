@@ -58,7 +58,7 @@ class _LightBase extends StatelessWidget {
         const DecoratedBox(
           decoration: BoxDecoration(gradient: fondoGradient),
         ),
-        const CustomPaint(painter: _GeometricBackdropPainter()),
+        const _BackgroundLogo(),
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: RadialGradient(
@@ -80,62 +80,43 @@ class _DarkBase extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
-      children: const [
-        DecoratedBox(decoration: BoxDecoration(gradient: fondoGradient)),
-        CustomPaint(painter: _GeometricBackdropPainter()),
+      children: [
+        const DecoratedBox(decoration: BoxDecoration(gradient: fondoGradient)),
+        const _BackgroundLogo(),
       ],
     );
   }
 }
 
-/// Geometría de fondo abstracta: mantiene la composición diagonal de Figma
-/// sin repetir el logotipo. El único logo visible en la navegación es el X
-/// central de [AppNavBar].
-class _GeometricBackdropPainter extends CustomPainter {
-  const _GeometricBackdropPainter();
+class _BackgroundLogo extends StatelessWidget {
+  const _BackgroundLogo();
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final paint = Paint()..style = PaintingStyle.fill;
-
-    paint.color = const Color(0x2DFFFFFF);
-    canvas.drawPath(
-      Path()
-        ..moveTo(-w * .08, h * .50)
-        ..lineTo(w * .48, -h * .04)
-        ..lineTo(w * .62, -h * .04)
-        ..lineTo(w * .02, h * .68)
-        ..close(),
-      paint,
-    );
-
-    paint.color = const Color(0x1CFFFFFF);
-    canvas.drawPath(
-      Path()
-        ..moveTo(w * .36, h * 1.04)
-        ..lineTo(w * .89, -h * .04)
-        ..lineTo(w * 1.08, -h * .04)
-        ..lineTo(w * .57, h * 1.04)
-        ..close(),
-      paint,
-    );
-
-    paint.color = const Color(0x17000000);
-    canvas.drawPath(
-      Path()
-        ..moveTo(w * .70, h * 1.04)
-        ..lineTo(w * 1.08, h * .35)
-        ..lineTo(w * 1.08, h * .76)
-        ..lineTo(w * .86, h * 1.04)
-        ..close(),
-      paint,
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.clamp(0.0, 390.0).toDouble();
+        final height = width * 793 / 390;
+        return Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: Opacity(
+              opacity: .53,
+              child: ColorFiltered(
+                colorFilter: const ColorFilter.mode(
+                  Color(0xFF9BA8C5),
+                  BlendMode.srcIn,
+                ),
+                child: Image.asset('assets/img/fondoapps.png', fit: BoxFit.fill),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class GlassCard extends StatelessWidget {
@@ -276,6 +257,7 @@ class GlassField extends StatefulWidget {
     this.helper,
     this.readOnly = false,
     this.maxLines = 1,
+    this.showFloatingLabel = true,
   });
 
   final String label;
@@ -289,6 +271,7 @@ class GlassField extends StatefulWidget {
   final String? helper;
   final bool readOnly;
   final int maxLines;
+  final bool showFloatingLabel;
 
   @override
   State<GlassField> createState() => _GlassFieldState();
@@ -305,6 +288,7 @@ class _GlassFieldState extends State<GlassField> {
 
   @override
   Widget build(BuildContext context) {
+    final suffixWidget = widget.suffix;
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
@@ -338,7 +322,7 @@ class _GlassFieldState extends State<GlassField> {
                     fontWeight: FontWeight.w600,
                   ),
                   decoration: InputDecoration(
-                    labelText: widget.label,
+                    labelText: widget.showFloatingLabel ? widget.label : null,
                     labelStyle: const TextStyle(
                       color: Color(0xFFE8F0FF),
                       fontSize: 12,
@@ -356,7 +340,9 @@ class _GlassFieldState extends State<GlassField> {
                       color: Color(0xAAB9D4FF),
                       fontSize: 10.5,
                     ),
-                    floatingLabelBehavior: FloatingLabelBehavior.always,
+                    floatingLabelBehavior: widget.showFloatingLabel
+                        ? FloatingLabelBehavior.always
+                        : FloatingLabelBehavior.never,
                     border: InputBorder.none,
                     focusedBorder: InputBorder.none,
                     enabledBorder: InputBorder.none,
@@ -364,7 +350,7 @@ class _GlassFieldState extends State<GlassField> {
                   ),
                 ),
               ),
-              if (widget.suffix != null) widget.suffix!,
+              if (suffixWidget != null) suffixWidget,
             ],
           ),
         ),

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
@@ -97,22 +98,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       final data = await apiClient.getTracking(widget.trip.id);
       final url = data.shareUrl ??
           'https://plt-webadmin23-testing.vercel.app/track/${Uri.encodeComponent(widget.trip.id)}';
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF0B1D4D),
-          behavior: SnackBarBehavior.floating,
-          content: SelectableText(
-            'Enlace de seguimiento:\n$url',
-            style: const TextStyle(fontFamily: 'Acumin Pro', fontSize: 12.5),
-          ),
-          action: SnackBarAction(
-            label: 'Copiar',
-            textColor: cyan,
-            onPressed: () {},
-          ),
-        ),
-      );
+      await _copyText(url, 'Enlace de seguimiento copiado');
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -126,6 +112,18 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         );
       }
     }
+  }
+
+  Future<void> _copyText(String value, String confirmation) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF0B1D4D),
+        behavior: SnackBarBehavior.floating,
+        content: Text(confirmation, style: const TextStyle(fontFamily: 'Acumin Pro')),
+      ),
+    );
   }
 
   Future<void> _shareWhatsApp() async {
@@ -151,7 +149,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           action: SnackBarAction(
             label: 'Copiar',
             textColor: cyan,
-            onPressed: () {},
+            onPressed: () => _copyText(message, 'Mensaje copiado'),
           ),
         ),
       );
@@ -168,12 +166,34 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     }
   }
 
+  Future<void> _callDriver(String? phone) async {
+    final digits = (phone ?? '').replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) {
+      _showActionMessage('El conductor todavía no tiene teléfono registrado.');
+      return;
+    }
+    final target = Uri(scheme: 'tel', path: digits);
+    if (await launchUrl(target)) return;
+    _showActionMessage('No se pudo abrir la llamada en este dispositivo.');
+  }
+
+  void _showActionMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(message, style: const TextStyle(fontFamily: 'Acumin Pro')),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final trip = widget.trip;
     final distance = trip.distanceKm ?? 4.2;
     final eta = math.max(4, (distance * 2.4).round());
-    final active = ['Asignado', 'En camino', 'En entrega'].contains(trip.status);
+    final active = trip.isActive;
+    final statusColor = active ? mint : Colors.white54;
     return Scaffold(
       body: AppBackground(
         child: SafeArea(
@@ -217,9 +237,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: mint.withValues(alpha: .16),
+                        color: statusColor.withValues(alpha: .16),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: mint.withValues(alpha: .5)),
+                        border: Border.all(color: statusColor.withValues(alpha: .5)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -228,15 +248,15 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                             width: 7,
                             height: 7,
                             decoration: BoxDecoration(
-                              color: mint,
+                              color: statusColor,
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 5),
-                          const Text(
-                            'Activo',
+                          Text(
+                            active ? 'Activo' : trip.status,
                             style: TextStyle(
-                              color: mint,
+                              color: statusColor,
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'Acumin Pro',
@@ -278,7 +298,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                       ]),
                     ),
                     const SizedBox(width: 7),
-                    _Pill(onTap: () {}, child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    _Pill(onTap: () => _shareWhatsApp(), child: const Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 13),
                       SizedBox(width: 5),
                       Text('Chat', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
@@ -297,7 +317,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: glassBorder),
                   ),
-                  child: _buildBody(active, distance, eta),
+                  child: _buildBody(distance, eta),
                 ),
               ),
             ],
@@ -307,11 +327,21 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     );
   }
 
-  Widget _buildBody(bool active, double distance, int eta) {
+  Widget _buildBody(double distance, int eta) {
     final trip = widget.trip;
     return FutureBuilder<TrackingData>(
       future: tracking,
       builder: (context, snapshot) {
+        final liveData = snapshot.data;
+        final currentStatus = liveData?.status ?? trip.status;
+        final routeProgress = _progressFor(currentStatus);
+        final isActive = ['Asignado', 'En camino', 'En entrega'].contains(currentStatus);
+        final driverName = liveData?.driver ?? trip.driver;
+        final driverVehicle = liveData?.driverVehicle ?? 'Vehículo asignado';
+        final driverPlate = liveData?.driverPlate ?? 'Placa pendiente';
+        final speed = liveData?.driverLocation?.speedKmh;
+        final currentLocation = liveData?.currentLocationLabel ?? trip.destination;
+        final speedLabel = speed != null && speed > 0 ? '${speed.toStringAsFixed(0)} km/h' : 'GPS activo';
         return ListView(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
           children: [
@@ -363,10 +393,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                   children: [
                     CustomPaint(
                       painter: _LiveMapPainter(
-                        progress: (1 - 0.35).clamp(0, 1),
-                        driverLat: snapshot.data?.driverLocation?.latitude,
-                        driverLng: snapshot.data?.driverLocation?.longitude,
-                        live: snapshot.data?.driverLocation != null,
+                        progress: routeProgress,
+                        route: liveData?.route ?? const [],
+                        driverLat: liveData?.driverLocation?.latitude,
+                        driverLng: liveData?.driverLocation?.longitude,
+                        live: liveData?.driverLocation != null,
                       ),
                       size: Size.infinite,
                     ),
@@ -380,8 +411,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                           borderRadius: BorderRadius.circular(9),
                           boxShadow: const [BoxShadow(color: Color(0x33071B53), blurRadius: 10, offset: Offset(0, 3))],
                         ),
-                        child: const Text(
-                          'Rotonda El Güegüense',
+                        child: Text(
+                          currentLocation,
                           style: TextStyle(color: Color(0xFF17396E), fontSize: 10, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro'),
                         ),
                       ),
@@ -395,8 +426,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                           color: const Color(0xFF0D1F52),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text(
-                          'M 149-281 · 32 km/h',
+                        child: Text(
+                          speed != null && speed > 0
+                              ? '$driverPlate · ${speed.toStringAsFixed(0)} km/h'
+                              : driverPlate,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 10.5,
@@ -420,10 +453,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                   decoration: const BoxDecoration(color: mint, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 7),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'EN CAMINO A ENTREGA',
-                    style: TextStyle(
+                    currentStatus.toUpperCase(),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
                       letterSpacing: .7,
@@ -434,7 +467,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 ),
                 _CardPill(text: 'Asegurado', color: mint),
                 const SizedBox(width: 6),
-                _CardPill(text: '32 km/h', color: cyan),
+                _CardPill(text: speedLabel, color: cyan),
               ],
             ),
             const SizedBox(height: 11),
@@ -463,14 +496,14 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
               ],
             ),
             const SizedBox(height: 3),
-            const Row(
+            Row(
               children: [
-                Icon(Icons.location_on_outlined, color: Color(0xFFB9D4FF), size: 13),
+                const Icon(Icons.location_on_outlined, color: Color(0xFFB9D4FF), size: 13),
                 SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Aproximándose a Rotonda El Güegüense',
-                    style: TextStyle(
+                    currentLocation,
+                    style: const TextStyle(
                       color: Color(0xFFB9D4FF),
                       fontSize: 11.5,
                       fontFamily: 'Acumin Pro',
@@ -500,19 +533,23 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
               ),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Código de Seguimiento', style: TextStyle(color: Color(0xFF8FA0C4), fontSize: 9.5, letterSpacing: .6, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
                         SizedBox(height: 3),
-                        Text('Guía: ${'INC-13096'}', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+                        Text('Guía: ${trip.id}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
                       ],
                     ),
                   ),
-                  _MiniBtn(icon: Icons.content_copy_rounded, label: 'Copiar'),
+                  _MiniBtn(
+                    icon: Icons.content_copy_rounded,
+                    label: 'Copiar',
+                    onTap: () => _copyText(trip.id, 'Código de seguimiento copiado'),
+                  ),
                   const SizedBox(width: 6),
-                  _MiniBtn(icon: Icons.ios_share_rounded, label: 'Compartir', filled: true),
+                  _MiniBtn(icon: Icons.ios_share_rounded, label: 'Compartir', filled: true, onTap: () => _shareTracking()),
                   const SizedBox(width: 6),
                   _MiniBtn(
                     icon: Icons.chat_rounded,
@@ -543,7 +580,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                       gradient: const LinearGradient(colors: [Color(0xFF0D47D9), Color(0xFF083EC0)]),
                     ),
                     child: Text(
-                      initials(trip.driver),
+                      initials(driverName),
                       style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
                     ),
                   ),
@@ -552,11 +589,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          trip.driver,
+                      Text(
+                          driverName,
                           style: const TextStyle(color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
                         ),
-                        const Text('Yamaha FZ 150cc (Azul)', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 10.5, fontFamily: 'Acumin Pro')),
+                        Text(driverVehicle, style: const TextStyle(color: Color(0xFFB9D4FF), fontSize: 10.5, fontFamily: 'Acumin Pro')),
                         Container(
                           margin: const EdgeInsets.only(top: 3),
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -565,23 +602,23 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: glassBorder),
                           ),
-                          child: const Text('M 149-281', style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+                          child: Text(driverPlate, style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
                         ),
                       ],
                     ),
                   ),
-                  RoundBtn(icon: Icons.call_rounded, onTap: () {}),
+                  RoundBtn(icon: Icons.call_rounded, onTap: () => _callDriver(liveData?.driverPhone ?? trip.contactPhone)),
                   const SizedBox(width: 7),
-                  RoundBtn(icon: Icons.chat_bubble_rounded, onTap: () {}, badge: true),
+                  RoundBtn(icon: Icons.chat_bubble_rounded, onTap: () => _shareWhatsApp(), badge: true),
                 ],
               ),
             ),
             const SizedBox(height: 14),
             const Text('ESTADO DE ENVÍO', style: TextStyle(color: Color(0xFF8FA0C4), fontSize: 10, letterSpacing: .8, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
             const SizedBox(height: 9),
-            _StepsRow(status: trip.status),
+            _StepsRow(status: currentStatus),
             const SizedBox(height: 16),
-            if (active)
+            if (isActive)
               SizedBox(
                 height: 50,
                 child: Material(
@@ -608,6 +645,21 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   }
 
   int _secondsAgo() => 5 - (DateTime.now().second % 4);
+
+  double _progressFor(String status) {
+    switch (status) {
+      case 'Asignado':
+        return .18;
+      case 'En camino':
+        return .45;
+      case 'En entrega':
+        return .78;
+      case 'Completado':
+        return 1;
+      default:
+        return 0;
+    }
+  }
 }
 
 class _Pill extends StatelessWidget {
@@ -795,12 +847,14 @@ class _StepsRow extends StatelessWidget {
 class _LiveMapPainter extends CustomPainter {
   const _LiveMapPainter({
     required this.progress,
+    this.route = const [],
     this.driverLat,
     this.driverLng,
     this.live = false,
   });
 
   final double progress;
+  final List<TrackingPoint> route;
   final double? driverLat;
   final double? driverLng;
   final bool live;
@@ -819,14 +873,16 @@ class _LiveMapPainter extends CustomPainter {
     for (final (from, to) in grid) canvas.drawLine(from, to, streetThin);
     canvas.drawLine(Offset(-20, size.height * .86), Offset(size.width * .8, size.height * .82), streetThin);
 
-    final points = [
-      Offset(size.width * .18, size.height * .78),
-      Offset(size.width * .18, size.height * .55),
-      Offset(size.width * .36, size.height * .48),
-      Offset(size.width * .50, size.height * .40),
-      Offset(size.width * .62, size.height * .30),
-      Offset(size.width * .72, size.height * .26),
-    ];
+    final points = route.length >= 2
+        ? _projectRoute(route, size)
+        : [
+            Offset(size.width * .18, size.height * .78),
+            Offset(size.width * .18, size.height * .55),
+            Offset(size.width * .36, size.height * .48),
+            Offset(size.width * .50, size.height * .40),
+            Offset(size.width * .62, size.height * .30),
+            Offset(size.width * .72, size.height * .26),
+          ];
     final path = Path()..moveTo(points.first.dx, points.first.dy);
     for (final p in points.skip(1)) path.lineTo(p.dx, p.dy);
     canvas.drawPath(path, Paint()..color = const Color(0xFF1D5CFF)..style = PaintingStyle.stroke..strokeWidth = 6..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
@@ -834,9 +890,13 @@ class _LiveMapPainter extends CustomPainter {
     // Conductor: posición real del GPS reportado, o animación de respaldo
     Offset pos;
     if (live && driverLat != null && driverLng != null) {
-      final x = ((driverLng! + 86.30) / 0.13).clamp(0.0, 1.0);
-      final y = (1 - (driverLat! - 12.06) / 0.10).clamp(0.0, 1.0);
-      pos = Offset(x * size.width, y * size.height);
+      if (route.length >= 2) {
+        pos = _projectRoutePoint(route, driverLat!, driverLng!, size);
+      } else {
+        final x = ((driverLng! + 86.30) / 0.13).clamp(0.0, 1.0);
+        final y = (1 - (driverLat! - 12.06) / 0.10).clamp(0.0, 1.0);
+        pos = Offset(x * size.width, y * size.height);
+      }
     } else {
       pos = points[1 + ((progress * 4).round().clamp(0, 4))];
     }
@@ -860,7 +920,26 @@ class _LiveMapPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _LiveMapPainter oldDelegate) =>
       oldDelegate.progress != progress ||
+      oldDelegate.route != route ||
       oldDelegate.driverLat != driverLat ||
       oldDelegate.driverLng != driverLng ||
       oldDelegate.live != live;
+
+  List<Offset> _projectRoute(List<TrackingPoint> points, Size size) {
+    return points.map((point) => _projectRoutePoint(points, point.latitude, point.longitude, size)).toList();
+  }
+
+  Offset _projectRoutePoint(List<TrackingPoint> points, double latitude, double longitude, Size size) {
+    final latitudes = points.map((point) => point.latitude).toList();
+    final longitudes = points.map((point) => point.longitude).toList();
+    final minLat = latitudes.reduce(math.min);
+    final maxLat = latitudes.reduce(math.max);
+    final minLng = longitudes.reduce(math.min);
+    final maxLng = longitudes.reduce(math.max);
+    final latSpan = math.max(maxLat - minLat, .01).toDouble();
+    final lngSpan = math.max(maxLng - minLng, .01).toDouble();
+    final x = ((longitude - minLng) / lngSpan).clamp(.12, .88).toDouble();
+    final y = (1 - (latitude - minLat) / latSpan).clamp(.15, .85).toDouble();
+    return Offset(x * size.width, y * size.height);
+  }
 }

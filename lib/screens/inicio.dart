@@ -17,7 +17,7 @@ class _InicioState extends State<Inicio> {
   // Cuenta de prueba corporativa creada por la API local.
   final email =
       TextEditingController(text: 'contacto@logisticanica.com.ni');
-  final password = TextEditingController(text: 'Admin@2026');
+  final password = TextEditingController();
   bool obscure = true;
   bool loading = false;
   String? errorMessage;
@@ -126,7 +126,7 @@ class _InicioState extends State<Inicio> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Color(0xFF003EC7),
+                      Color(0xFF0135A7),
                       Color(0xFF111230),
                     ],
                   ),
@@ -183,18 +183,22 @@ class _InicioState extends State<Inicio> {
                   ),
                   const SizedBox(height: 14),
                   GlassField(
-                    label: 'Usuario/Correo electrónico',
+                    label: 'Correo',
+                    hint: 'Correo',
                     icon: Icons.person_outline_rounded,
                     controller: email,
                     keyboardType: TextInputType.emailAddress,
+                    showFloatingLabel: false,
                   ),
                   const SizedBox(height: 18),
                   GlassField(
                     key: ValueKey(obscure),
                     label: 'Contraseña',
+                    hint: 'Contraseña',
                     icon: Icons.lock_outline_rounded,
                     controller: password,
                     obscure: obscure,
+                    showFloatingLabel: false,
                     suffix: IconButton(
                       onPressed: () => setState(() => obscure = !obscure),
                       icon: Icon(
@@ -218,7 +222,13 @@ class _InicioState extends State<Inicio> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 15),
+                  GlassButton(
+                    label: loading ? 'Accediendo…' : 'Iniciar sesión',
+                    filled: true,
+                    textColor: Colors.white,
+                    onPressed: loading ? () {} : _login,
+                  ),
+                  const SizedBox(height: 10),
                   TextButton(
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(
@@ -229,20 +239,13 @@ class _InicioState extends State<Inicio> {
                       '¿No tienes cuenta? Regístrate aquí',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 14.5,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w700,
                         fontFamily: 'Acumin Pro',
                       ),
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  GlassButton(
-                    label: loading ? 'Accediendo…' : 'Acceder',
-                    filled: true,
-                    textColor: Colors.white,
-                    onPressed: loading ? () {} : _login,
-                  ),
-                  const SizedBox(height: 34),
+                  const SizedBox(height: 14),
                   const Center(
                     child: Text(
                       'Uso de Términos y Condiciónes',

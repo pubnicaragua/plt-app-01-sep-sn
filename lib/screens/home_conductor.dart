@@ -9,6 +9,7 @@ import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../services/location_sync.dart';
 import '../widgets/glass.dart';
+import '../widgets/fuel_sheet.dart';
 import 'inicio.dart';
 import 'viaje_asignado.dart';
 
@@ -321,6 +322,47 @@ class _HomeConductorState extends State<HomeConductor> {
                     color: Color(0xFFB9D4FF),
                     fontSize: 13.5,
                     fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                const SizedBox(height: 24),
+                InkWell(
+                  onTap: () async {
+                    final saved = await showFuelSheet(
+                      context,
+                      driverName: _driverName,
+                      initialPlate: apiClient.currentUser?.plate,
+                    );
+                    if (saved == true && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Recarga enviada para validación.')),
+                      );
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .11),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: glassBorder),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.local_gas_station_rounded, color: cyan, size: 24),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Registrar combustible', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+                              SizedBox(height: 3),
+                              Text('Toma foto del odómetro y de la factura', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 12, fontFamily: 'Acumin Pro')),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded, color: Colors.white),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),

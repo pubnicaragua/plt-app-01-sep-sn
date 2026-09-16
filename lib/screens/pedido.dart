@@ -5,36 +5,46 @@ import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'crear_envio1.dart';
+import 'crear_envio2.dart';
 import 'seguimiento_pedido.dart';
 import 'resumen_cliente.dart';
 
-class Pedido extends StatefulWidget {
-  const Pedido({super.key, this.onRefresh});
+class MisEnvios extends StatefulWidget {
+  const MisEnvios({super.key, this.onRefresh, this.embedded = false});
 
   final VoidCallback? onRefresh;
+  final bool embedded;
 
   @override
-  State<Pedido> createState() => _PedidoState();
+  State<MisEnvios> createState() => _MisEnviosState();
 }
 
-class _PedidoState extends State<Pedido> {
+class _MisEnviosState extends State<MisEnvios> {
   late Future<List<Trip>> trips;
+  String filter = 'Todos';
 
   @override
   void initState() {
     super.initState();
-    trips = apiClient.getTrips();
+    trips = _loadTrips();
   }
 
   void _reload() {
-    setState(() => trips = apiClient.getTrips());
+    setState(() => trips = _loadTrips());
     widget.onRefresh?.call();
+  }
+
+  Future<List<Trip>> _loadTrips() {
+    final user = apiClient.currentUser;
+    final client = user != null && (user.role == 'corporate' || user.role == 'company')
+        ? user.displayName.trim()
+        : null;
+    return apiClient.getTrips(client: client);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AppBackground(
-      child: SafeArea(
+    final content = SafeArea(
         bottom: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(22, 14, 22, 20),
@@ -43,7 +53,7 @@ class _PedidoState extends State<Pedido> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Mis Pedidos',
+                  'Mis envíos',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
@@ -68,6 +78,21 @@ class _PedidoState extends State<Pedido> {
               ],
             ),
             const SizedBox(height: 18),
+            Row(
+              children: [
+                for (final option in ['Todos', 'Activos', 'Completados']) ...[
+                  Expanded(
+                    child: _OrderFilter(
+                      label: option,
+                      selected: filter == option,
+                      onTap: () => setState(() => filter = option),
+                    ),
+                  ),
+                  if (option != 'Completados') const SizedBox(width: 8),
+                ],
+              ],
+            ),
+            const SizedBox(height: 14),
             FutureBuilder<List<Trip>>(
               future: trips,
               builder: (context, snapshot) {
@@ -122,11 +147,18 @@ class _PedidoState extends State<Pedido> {
                   );
                 }
                 final items = snapshot.data ?? const <Trip>[];
-                if (items.isEmpty) {
-                  return const GlassCard(
+                final visibleItems = switch (filter) {
+                  'Activos' => items.where((trip) => trip.isActive).toList(),
+                  'Completados' => items.where((trip) => trip.isCompleted).toList(),
+                  _ => items,
+                };
+                if (visibleItems.isEmpty) {
+                  return GlassCard(
                     child: Center(
                       child: Text(
-                        'Aún no tienes pedidos.\nSolicita tu primer envío.',
+                        items.isEmpty
+                            ? 'Aún no tienes envíos.\nSolicita tu primer envío.'
+                            : 'No hay envíos en este filtro.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white70,
@@ -139,7 +171,7 @@ class _PedidoState extends State<Pedido> {
                 }
                 return Column(
                   children: [
-                    for (final trip in items) ...[
+                    for (final trip in visibleItems) ...[
                       _TripCard(trip: trip),
                       const SizedBox(height: 12),
                     ],
@@ -158,8 +190,8 @@ class _PedidoState extends State<Pedido> {
             ),
           ],
         ),
-      ),
-    );
+      );
+    return widget.embedded ? content : AppBackground(child: content);
   }
 }
 
@@ -227,6 +259,98 @@ class _TripCard extends StatelessWidget {
           StatusPill(text: note, color: color),
         ],
       ),
+    );
+  }
+}
+
+class _OrderFilter extends StatelessWidget {
+  const _OrderFilter({required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? figmaBlue : Colors.white.withValues(alpha: .08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: selected ? cyan.withValues(alpha: .75) : glassBorder),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              fontFamily: 'Acumin Pro',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Paso 2 del flujo de creación. Se mantiene con este nombre porque es la
+/// vista que consume la navegación del cliente; el listado vive en MisEnvios.
+class Pedido extends StatelessWidget {
+  const Pedido({
+    super.key,
+    required this.origin,
+    required this.destination,
+    this.originPlace,
+    this.destinationPlace,
+    this.transport = 'Moto',
+    this.estimatedShipping,
+    this.originRefs = '',
+    this.destinationRefs = '',
+    this.recipientName = '',
+    this.recipientPhone = '',
+    this.startScheduled = false,
+    this.startDate,
+    this.startTime,
+  });
+
+  final String origin;
+  final String destination;
+  final PlaceSuggestion? originPlace;
+  final PlaceSuggestion? destinationPlace;
+  final String transport;
+  final double? estimatedShipping;
+  final String originRefs;
+  final String destinationRefs;
+  final String recipientName;
+  final String recipientPhone;
+  final bool startScheduled;
+  final String? startDate;
+  final String? startTime;
+
+  @override
+  Widget build(BuildContext context) {
+    return CrearEnvio2(
+      origin: origin,
+      destination: destination,
+      originPlace: originPlace,
+      destinationPlace: destinationPlace,
+      transport: transport,
+      estimatedShipping: estimatedShipping,
+      originRefs: originRefs,
+      destinationRefs: destinationRefs,
+      recipientName: recipientName,
+      recipientPhone: recipientPhone,
+      startScheduled: startScheduled,
+      startDate: startDate,
+      startTime: startTime,
     );
   }
 }

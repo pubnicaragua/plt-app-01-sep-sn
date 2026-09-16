@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/api_models.dart';
@@ -10,14 +11,20 @@ class ApiClient {
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
   static const _configuredBaseUrl = String.fromEnvironment('INCOEX_API_URL');
-  static const defaultBaseUrl = 'http://10.0.2.2:3000/api';
 
   final http.Client _client;
   String? accessToken;
   SessionUser? currentUser;
 
+  static String get _defaultBaseUrl {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:3000/api';
+    }
+    return 'http://localhost:3000/api';
+  }
+
   String get baseUrl =>
-      _configuredBaseUrl.isEmpty ? defaultBaseUrl : _configuredBaseUrl;
+      _configuredBaseUrl.isEmpty ? _defaultBaseUrl : _configuredBaseUrl;
 
   Future<LoginResponse> login({
     required String email,
@@ -84,10 +91,15 @@ class ApiClient {
     );
   }
 
-  Future<List<Trip>> getTrips({String? status, String? driver}) async {
+  Future<List<Trip>> getTrips({
+    String? status,
+    String? driver,
+    String? client,
+  }) async {
     final query = <String, String>{
       if (status != null) 'status': status,
       if (driver != null) 'driver': driver,
+      if (client != null) 'client': client,
     };
     final params = query.isEmpty
         ? ''
@@ -173,6 +185,25 @@ class ApiClient {
         'isScheduled': isScheduled,
         'weight': weight,
         'weightUnit': weightUnit,
+      },
+    )) as Map<String, dynamic>;
+    return Trip.fromJson(json);
+  }
+
+  Future<Trip> updateTripPayment({
+    required String id,
+    required String method,
+    required double amount,
+    String? ref,
+  }) async {
+    final json = (await _send(
+      'PATCH',
+      '/trips/${Uri.encodeComponent(id)}/payment',
+      body: {
+        'method': method,
+        'amount': amount,
+        'ref': ref,
+        'date': DateTime.now().toIso8601String(),
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);
@@ -274,6 +305,33 @@ class ApiClient {
       },
     );
     return json as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> addFuelRecord({
+    required String plate,
+    required double liters,
+    double? pricePerLiterCs,
+    double? odometerKm,
+    String? note,
+    required String evidence,
+    String? driver,
+    String source = 'app',
+  }) async {
+    final json = await _send(
+      'POST',
+      '/fuel',
+      body: {
+        'plate': plate,
+        'liters': liters,
+        'pricePerLiterCs': pricePerLiterCs,
+        'odometerKm': odometerKm,
+        'note': note,
+        'evidence': evidence,
+        'driver': driver,
+        'source': source,
+      },
+    );
+    return (json as Map).cast<String, dynamic>();
   }
 
   Future<Map<String, dynamic>> uploadEvidence(

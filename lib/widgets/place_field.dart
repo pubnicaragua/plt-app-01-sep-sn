@@ -15,6 +15,7 @@ class PlaceAutocompleteField extends StatefulWidget {
     this.hint,
     this.icon,
     this.onSelected,
+    this.bare = false,
   });
 
   final TextEditingController controller;
@@ -22,6 +23,7 @@ class PlaceAutocompleteField extends StatefulWidget {
   final String? hint;
   final IconData? icon;
   final ValueChanged<PlaceSuggestion>? onSelected;
+  final bool bare;
 
   @override
   State<PlaceAutocompleteField> createState() => _PlaceAutocompleteFieldState();
@@ -54,6 +56,10 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
         final found = await apiClient.searchPlaces(value);
         if (!mounted || currentRequest != requestId) return;
         if (found.isEmpty) {
+          setState(() {
+            results = const [];
+            open = false;
+          });
           return;
         }
         setState(() {
@@ -69,14 +75,34 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        GlassField(
-          label: widget.label,
-          hint: widget.hint,
-          icon: widget.icon,
-          controller: widget.controller,
-          onChanged: _onChanged,
-          helper: results.isEmpty ? null : 'Sugerencias en tiempo real',
-        ),
+        if (widget.bare)
+          _BareRouteField(
+            label: widget.label,
+            hint: widget.hint,
+            controller: widget.controller,
+            onChanged: _onChanged,
+          )
+        else
+          GlassField(
+            label: widget.label,
+            hint: widget.hint,
+            icon: widget.icon,
+            controller: widget.controller,
+            onChanged: _onChanged,
+            helper: results.isEmpty ? null : 'Sugerencias en tiempo real',
+          ),
+        if (widget.bare && results.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 3),
+            child: Text(
+              'Sugerencias en tiempo real',
+              style: TextStyle(
+                color: Color(0xFFB9D4FF),
+                fontSize: 10,
+                fontFamily: 'Acumin Pro',
+              ),
+            ),
+          ),
         if (open && results.isNotEmpty) ...[
           const SizedBox(height: 7),
           LimitOverlay(
@@ -188,6 +214,64 @@ class LimitOverlay extends StatelessWidget {
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight ?? 240),
       child: child,
+    );
+  }
+}
+
+class _BareRouteField extends StatelessWidget {
+  const _BareRouteField({
+    required this.label,
+    required this.hint,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String? hint;
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: Color(0xFFB9D4FF),
+            fontSize: 9,
+            letterSpacing: 1.1,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'Acumin Pro',
+          ),
+        ),
+        const SizedBox(height: 3),
+        TextField(
+          controller: controller,
+          onChanged: onChanged,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16.5,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'Acumin Pro',
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              color: Color(0x8CFFFFFF),
+              fontSize: 15.5,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Acumin Pro',
+            ),
+            border: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+          ),
+        ),
+      ],
     );
   }
 }

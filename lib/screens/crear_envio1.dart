@@ -1,5 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 
+import 'dart:typed_data';
+
+import 'package:image_picker/image_picker.dart';
+
 import '../core/api_client.dart';
 import '../core/location_service.dart';
 import '../core/theme.dart';
@@ -7,7 +11,7 @@ import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/place_field.dart';
 import '../widgets/wizard.dart';
-import 'crear_envio2.dart';
+import 'confirmar_pedido.dart';
 
 class CrearEnvio1 extends StatefulWidget {
   const CrearEnvio1({
@@ -21,6 +25,9 @@ class CrearEnvio1 extends StatefulWidget {
     this.startDestinationRefs = '',
     this.startRecipientName = '',
     this.startRecipientPhone = '',
+    this.startScheduled = false,
+    this.startDate,
+    this.startTime,
   });
 
   final String startOrigin;
@@ -32,6 +39,9 @@ class CrearEnvio1 extends StatefulWidget {
   final String startDestinationRefs;
   final String startRecipientName;
   final String startRecipientPhone;
+  final bool startScheduled;
+  final String? startDate;
+  final String? startTime;
 
   @override
   State<CrearEnvio1> createState() => _CrearEnvio1State();
@@ -47,6 +57,17 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   late PlaceSuggestion? originPlace;
   late PlaceSuggestion? destinationPlace;
   AppSettings? settings;
+  final description = TextEditingController();
+  final invoicePrice = TextEditingController(text: '0,00');
+  final invoiceNumber = TextEditingController(text: 'FAC-1003');
+  late final TextEditingController recipient;
+  late final TextEditingController phone;
+  bool fragile = true;
+  String currency = 'C\$';
+  String paymentStatus = 'Pendiente';
+  String paymentMethod = 'Efectivo';
+  final productPhotos = <Uint8List>[];
+  Uint8List? invoicePhoto;
 
   @override
   void initState() {
@@ -54,6 +75,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     transport = widget.startTransport;
     origin = TextEditingController(text: widget.startOrigin);
     destination = TextEditingController(text: widget.startDestination);
+    recipient = TextEditingController(text: widget.startRecipientName);
+    phone = TextEditingController(text: widget.startRecipientPhone);
     originPlace = widget.startOriginPlace;
     destinationPlace = widget.startDestinationPlace;
     if (origin.text.isEmpty && widget.startOriginPlace == null) {
@@ -80,20 +103,97 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   void dispose() {
     origin.dispose();
     destination.dispose();
+    description.dispose();
+    invoicePrice.dispose();
+    invoiceNumber.dispose();
+    recipient.dispose();
+    phone.dispose();
     super.dispose();
   }
+
+  Future<void> _takePhoto({required bool invoice}) async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 78,
+        maxWidth: 1400,
+      );
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        if (invoice) {
+          invoicePhoto = bytes;
+        } else if (productPhotos.length < 5) {
+          productPhotos.add(bytes);
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir la cámara.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImageFromGallery({required bool invoice}) async {
+    if (!invoice && productPhotos.length >= 5) return;
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 78,
+        maxWidth: 1400,
+      );
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        if (invoice) {
+          invoicePhoto = bytes;
+        } else {
+          productPhotos.add(bytes);
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo seleccionar la imagen.')),
+        );
+      }
+    }
+  }
+
+  double get _invoiceAmount {
+    final normalized = invoicePrice.text
+        .replaceAll(RegExp(r'[^0-9,.]'), '')
+        .replaceAll(',', '.');
+    return double.tryParse(normalized) ?? 0;
+  }
+
+  double get _invoiceAmountCs =>
+      _invoiceAmount * (currency == 'USD' ? settings?.dollarRate ?? 36.5 : 1);
 
   double? get _distanceKm {
     final from = originPlace;
     final to = destinationPlace;
     if (from == null || to == null) return null;
-    if (from.latitude == null ||
-        from.longitude == null ||
-        to.latitude == null ||
-        to.longitude == null) {
+    final fromLatitude = from.latitude;
+    final fromLongitude = from.longitude;
+    final toLatitude = to.latitude;
+    final toLongitude = to.longitude;
+    if (fromLatitude == null ||
+        fromLongitude == null ||
+        toLatitude == null ||
+        toLongitude == null) {
       return null;
     }
-    return haversineKm(from.latitude!, from.longitude!, to.latitude!, to.longitude!);
+    return haversineKm(
+      fromLatitude,
+      fromLongitude,
+      toLatitude,
+      toLongitude,
+    );
   }
 
   double get _weightKg =>
@@ -117,6 +217,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   Widget build(BuildContext context) {
     final distance = _distanceKm;
     final price = _priceFor(transport);
+    final selectedInvoicePhoto = invoicePhoto;
     return WizardScaffold(
       title: 'Detalles de carga',
       subtitle: '¿Qué tipo de carga enviarás?',
@@ -135,14 +236,20 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Peso y dimensiones',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Acumin Pro',
-                      ),
+                    const Row(
+                      children: [
+                        Icon(Icons.inventory_2_outlined, color: cyan, size: 19),
+                        SizedBox(width: 8),
+                        Text(
+                          'Peso y dimensiones',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Acumin Pro',
+                          ),
+                        ),
+                      ],
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -242,15 +349,19 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                           ),
                         ),
                       ),
-                    const Text(
-                      'Cambia la unidad según la use tu cliente u operación',
-                      style: TextStyle(
-                        color: Color(0xFFB9D4FF),
-                        fontSize: 9.5,
-                        fontFamily: 'Acumin Pro',
-                      ),
-                    ),
                   ],
+                ),
+                const SizedBox(height: 5),
+                const Center(
+                  child: Text(
+                    'Cambia la unidad según la use tu cliente u operación',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 9.5,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 13),
                 const Text(
@@ -269,15 +380,9 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                       _weightChip(value),
                   ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          GlassCard(
-            padding: const EdgeInsets.all(15),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+                const SizedBox(height: 18),
+                Divider(color: Colors.white.withValues(alpha: .14), height: 1),
+                const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -291,8 +396,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                       ),
                     ),
                     Container(
-                      width: 42,
-                      height: 42,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: cyan.withValues(alpha: .16),
                         shape: BoxShape.circle,
@@ -302,7 +407,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                           '$bundles',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 15,
+                            fontSize: 14,
                             fontWeight: FontWeight.w800,
                             fontFamily: 'Acumin Pro',
                           ),
@@ -311,7 +416,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -348,6 +453,411 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: cyan,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(Icons.shopping_bag_outlined,
+                          color: Colors.white, size: 18),
+                    ),
+                    const SizedBox(width: 9),
+                    const Expanded(
+                      child: Text(
+                        'Información del paquete',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Acumin Pro',
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: cyan,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: const Text(
+                        'Paso 2',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Acumin Pro',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'DESCRIPCIÓN DEL PAQUETE',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 9.5,
+                    letterSpacing: .8,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                GlassField(
+                  label: 'Descripción',
+                  hint: 'Ej. Electrónicos, ropa, documentos…',
+                  controller: description,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: GlassField(
+                        label: 'Precio de factura',
+                        hint: '0,00',
+                        controller: invoicePrice,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _CurrencyChoice(
+                      value: currency,
+                      onChanged: (value) => setState(() => currency = value),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                GlassField(
+                  label: 'Número de factura',
+                  hint: 'FAC-1003',
+                  controller: invoiceNumber,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GlassField(
+                        label: 'Destinatario',
+                        hint: 'Nombre completo',
+                        controller: recipient,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: GlassField(
+                        label: 'Teléfono',
+                        hint: '+505 …',
+                        controller: phone,
+                        keyboardType: TextInputType.phone,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .08),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: glassBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded,
+                          color: Color(0xFFFF5C63), size: 21),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '¿Carga frágil?',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Acumin Pro',
+                              ),
+                            ),
+                            Text(
+                              'Requiere manejo especial',
+                              style: TextStyle(
+                                color: Color(0xFFB9D4FF),
+                                fontSize: 10,
+                                fontFamily: 'Acumin Pro',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        fragile ? 'SÍ' : 'NO',
+                        style: const TextStyle(
+                          color: cyan,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Acumin Pro',
+                        ),
+                      ),
+                      Switch.adaptive(
+                        value: fragile,
+                        onChanged: (value) => setState(() => fragile = value),
+                        activeThumbColor: cyan,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          GlassCard(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'EVIDENCIAS DEL PRODUCTO',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 9.5,
+                    letterSpacing: .8,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () => _takePhoto(invoice: false),
+                  child: Container(
+                    height: 92,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: glassBorder),
+                    ),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.photo_camera_outlined,
+                            color: cyan, size: 25),
+                        SizedBox(height: 5),
+                        Text(
+                          'Tomar foto del producto',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Acumin Pro',
+                          ),
+                        ),
+                        Text(
+                          'JPG, PNG · máximo 5 MB por archivo',
+                          style: TextStyle(
+                            color: Color(0xFFB9D4FF),
+                            fontSize: 9.5,
+                            fontFamily: 'Acumin Pro',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 9,
+                  runSpacing: 9,
+                  children: [
+                    for (final photo in productPhotos)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.memory(photo,
+                            width: 62, height: 62, fit: BoxFit.cover),
+                      ),
+                    GestureDetector(
+                      onTap: productPhotos.length >= 5
+                          ? null
+                          : () => _pickImageFromGallery(invoice: false),
+                      child: Container(
+                        width: 62,
+                        height: 62,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: glassBorder),
+                        ),
+                        child: const Icon(Icons.add_rounded,
+                            color: Colors.white70),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          GlassCard(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'FACTURA DEL PRODUCTO',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 9.5,
+                    letterSpacing: .8,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () => _takePhoto(invoice: true),
+                  child: Container(
+                    height: 104,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: glassBorder),
+                    ),
+                    child: selectedInvoicePhoto == null
+                        ? const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.photo_camera_outlined,
+                                    color: cyan, size: 26),
+                                SizedBox(height: 6),
+                                Text(
+                                  'Toca para tomar foto de la factura',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    fontFamily: 'Acumin Pro',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.memory(selectedInvoicePhoto,
+                                width: double.infinity,
+                                height: 104,
+                                fit: BoxFit.cover),
+                          ),
+                  ),
+                ),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => _pickImageFromGallery(invoice: true),
+                    icon: const Icon(Icons.photo_library_outlined,
+                        color: cyan, size: 16),
+                    label: const Text(
+                      'Seleccionar de galería',
+                      style: TextStyle(
+                        color: cyan,
+                        fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.underline,
+                        fontFamily: 'Acumin Pro',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          GlassCard(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'ESTADO DEL PAGO',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PaymentChoice(
+                        label: 'Pendiente',
+                        selected: paymentStatus == 'Pendiente',
+                        onTap: () => setState(
+                            () => paymentStatus = 'Pendiente'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _PaymentChoice(
+                        label: 'Pagado',
+                        selected: paymentStatus == 'Pagado',
+                        onTap: () => setState(() => paymentStatus = 'Pagado'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'MÉTODO DE PAGO',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 9.5,
+                    letterSpacing: .8,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PaymentChoice(
+                        label: 'Efectivo',
+                        icon: Icons.payments_outlined,
+                        selected: paymentMethod == 'Efectivo',
+                        onTap: () => setState(() => paymentMethod = 'Efectivo'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _PaymentChoice(
+                        label: 'Transferencia',
+                        icon: Icons.account_balance_outlined,
+                        selected: paymentMethod == 'Transferencia',
+                        onTap: () => setState(
+                            () => paymentMethod = 'Transferencia'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          GlassCard(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 const Text(
                   'Itinerario',
                   style: TextStyle(
@@ -365,7 +875,6 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   controller: origin,
                   onSelected: (place) => setState(() {
                     originPlace = place;
-                    destinationPlace = destinationPlace;
                   }),
                 ),
                 const SizedBox(height: 11),
@@ -446,50 +955,51 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                for (final (label, cap, icon, maxKg) in [
-                  ('Moto', 'Hasta 20 kg · 44 lb', Icons.two_wheeler, 20),
-                  ('Vehículo', 'Hasta 300 kg · 661 lb', Icons.directions_car_filled, 300),
-                  ('Camión', 'Hasta 1,500 kg · 3,307 lb', Icons.local_shipping_outlined, 1500),
-                ])
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 9),
-                    child: _VehicleRateTile(
-                      icon: icon,
-                      label: label,
-                      capacity: cap,
-                      subtitle: label == 'Moto'
-                          ? 'Para cargas pequeñas y livianas'
-                          : label == 'Vehículo'
-                              ? 'Para cargas medianas'
-                              : 'Para cargas grandes y pesadas',
-                      price: _priceFor(label),
-                      selected: transport == label,
-                      recommended: _recommended == label,
-                      blocked: _weightKg > maxKg,
-                      blockedNote: _weightKg > maxKg
-                          ? 'Tu carga de $weight $weightUnit supera la capacidad de $label'
-                          : null,
-                      onTap: _weightKg > maxKg
-                          ? () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  behavior: SnackBarBehavior.floating,
-                                  content: Text(
-                                    '$label no soporta $weight $weightUnit. Cambia el peso o usa otro vehículo.',
-                                    style: const TextStyle(fontFamily: 'Acumin Pro'),
-                                  ),
-                                ),
-                              );
-                            }
-                          : () => setState(() => transport = label),
-                    ),
-                  ),
+                Row(
+                  children: [
+                    for (final (label, cap, icon, maxKg) in [
+                      ('Moto', 'Hasta 20 kg', Icons.two_wheeler, 20),
+                      ('Vehículo', 'Hasta 300 kg', Icons.directions_car_filled, 300),
+                      ('Camión', 'Hasta 1,500 kg', Icons.local_shipping_outlined, 1500),
+                    ])
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 7),
+                          child: _CompactVehicleTile(
+                            icon: icon,
+                            label: label,
+                            capacity: cap,
+                            price: _priceFor(label),
+                            selected: transport == label,
+                            recommended: _recommended == label,
+                            blocked: _weightKg > maxKg,
+                            onTap: _weightKg > maxKg
+                                ? () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        behavior: SnackBarBehavior.floating,
+                                        content: Text(
+                                          '$label no soporta $weight $weightUnit. Cambia el peso o usa otro vehículo.',
+                                          style: const TextStyle(fontFamily: 'Acumin Pro'),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                : () => setState(() => transport = label),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
                 if (price != null) ...[
                   const SizedBox(height: 8),
                   _PriceBreakdown(
                     transport: transport,
                     price: price,
                     recommended: _recommended == transport,
+                    productValue: _invoiceAmountCs,
+                    currency: currency,
+                    exchangeRate: settings?.dollarRate ?? 36.5,
                   ),
                 ],
               ],
@@ -497,12 +1007,12 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
           ),
           const SizedBox(height: 24),
           GlassButton(
-            label: 'Confirmar envío',
+            label: 'Solicitar nuevo envío',
             filled: true,
             textColor: Colors.white,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => CrearEnvio2(
+                builder: (_) => Confirmarpedido(
                   origin: origin.text.trim(),
                   destination: destination.text.trim(),
                   weight: weight,
@@ -511,10 +1021,23 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   originPlace: originPlace,
                   destinationPlace: destinationPlace,
                   transport: transport,
+                  estimatedShipping: price,
+                  description: description.text.trim(),
+                  fragile: fragile,
+                  invoiceNumber: invoiceNumber.text.trim(),
+                  invoiceAmount: _invoiceAmountCs,
+                  paymentStatus: paymentStatus,
+                  paymentMethod: paymentMethod,
+                  productPhotos: productPhotos,
+                  invoicePhoto: invoicePhoto,
                   originRefs: widget.startOriginRefs,
                   destinationRefs: widget.startDestinationRefs,
-                  recipientName: widget.startRecipientName,
-                  recipientPhone: widget.startRecipientPhone,
+                  recipientName: recipient.text.trim(),
+                  recipientPhone: phone.text.trim(),
+                  serviceType: widget.startScheduled ? 'Programado' : 'Express',
+                  scheduledDate: widget.startDate,
+                  scheduledTime: widget.startTime,
+                  isScheduled: widget.startScheduled,
                 ),
               ),
             ),
@@ -548,6 +1071,234 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             fontWeight: FontWeight.w700,
             fontFamily: 'Acumin Pro',
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactVehicleTile extends StatelessWidget {
+  const _CompactVehicleTile({
+    required this.icon,
+    required this.label,
+    required this.capacity,
+    required this.price,
+    required this.selected,
+    required this.recommended,
+    required this.blocked,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String capacity;
+  final double? price;
+  final bool selected;
+  final bool recommended;
+  final bool blocked;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = price;
+    final borderColor = blocked
+        ? const Color(0xFFE5484D).withValues(alpha: .45)
+        : selected
+            ? cyan
+            : glassBorder;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        height: 126,
+        padding: const EdgeInsets.fromLTRB(9, 9, 8, 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? Colors.white.withValues(alpha: .17)
+              : Colors.white.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: selected ? 1.4 : 1),
+        ),
+        child: Opacity(
+          opacity: blocked ? .55 : 1,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: selected ? figmaBlue : Colors.white.withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 17),
+                  ),
+                  Icon(
+                    selected && !blocked
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: selected && !blocked ? cyan : Colors.white54,
+                    size: 18,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 7),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                capacity,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFFB9D4FF),
+                  fontSize: 9.5,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+              const Spacer(),
+              if (recommended)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: mint.withValues(alpha: .18),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'RECOMENDADO',
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: TextStyle(
+                      color: mint,
+                      fontSize: 7,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  amount == null ? 'C\$ —' : 'C\$${amount.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    color: cyan,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrencyChoice extends StatelessWidget {
+  const _CurrencyChoice({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: glassBorder),
+      ),
+      child: Row(
+        children: [
+          _item('C\$', value == 'C\$'),
+          _item('USD', value == 'USD'),
+        ],
+      ),
+    );
+  }
+
+  Widget _item(String label, bool selected) {
+    return GestureDetector(
+      onTap: () => onChanged(label),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? cyan : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : const Color(0xFFB9D4FF),
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Acumin Pro',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PaymentChoice extends StatelessWidget {
+  const _PaymentChoice({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? cyan : Colors.white.withValues(alpha: .09),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: selected ? cyan : glassBorder),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: Colors.white, size: 17),
+              const SizedBox(height: 3),
+            ],
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Acumin Pro',
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -744,11 +1495,23 @@ class _PriceBreakdown extends StatelessWidget {
     required this.transport,
     required this.price,
     required this.recommended,
+    required this.productValue,
+    required this.currency,
+    required this.exchangeRate,
   });
 
   final String transport;
   final double price;
   final bool recommended;
+  final double productValue;
+  final String currency;
+  final double exchangeRate;
+
+  String _money(double valueCs) {
+    final value = currency == 'USD' ? valueCs / exchangeRate : valueCs;
+    final symbol = currency == 'USD' ? 'USD' : 'C\$';
+    return '$symbol ${value.toStringAsFixed(2)}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -796,7 +1559,7 @@ class _PriceBreakdown extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'C\$${price.toStringAsFixed(2)}',
+            _money(price),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 27,
@@ -844,7 +1607,7 @@ class _PriceBreakdown extends StatelessWidget {
           const SizedBox(height: 12),
           Divider(color: glassBorder, height: 1),
           const SizedBox(height: 12),
-          const Row(
+          Row(
             children: [
               Expanded(
                 child: Text(
@@ -890,7 +1653,7 @@ class _PriceBreakdown extends StatelessWidget {
             ],
           ),
           SizedBox(height: 7),
-          const Row(
+          Row(
             children: [
               Expanded(
                 child: Text(
@@ -903,7 +1666,7 @@ class _PriceBreakdown extends StatelessWidget {
                 ),
               ),
               Text(
-                'C\$ 450',
+                _money(productValue),
                 style: TextStyle(
                   color: mint,
                   fontSize: 11.5,
@@ -920,7 +1683,7 @@ class _PriceBreakdown extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Envío C\$${(price * 0.20).toStringAsFixed(0)}',
+                  'Envío ${_money(price * 0.20)}',
                   style: const TextStyle(
                     color: Color(0xFF8FA0C4),
                     fontSize: 10.5,
@@ -930,7 +1693,7 @@ class _PriceBreakdown extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  'Total a pagar por el cliente\nC\$${(price + 450).toStringAsFixed(2)}',
+                  'Total a pagar por el cliente\n${_money(price + productValue)}',
                   textAlign: TextAlign.right,
                   style: const TextStyle(
                     color: Colors.white,

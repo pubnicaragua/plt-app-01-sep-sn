@@ -14,18 +14,18 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const IncoexApp());
 
-    expect(find.text('Gestiona la recolección'), findsOneWidget);
+    expect(find.textContaining('Gestiona la recolección'), findsOneWidget);
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
-    expect(find.text('Monitorea cada pedido'), findsOneWidget);
+    expect(find.textContaining('Monitorea cada pedido'), findsOneWidget);
 
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
-    expect(find.text('Disfruta de entregas express'), findsOneWidget);
+    expect(find.textContaining('Disfruta de entregas express'), findsOneWidget);
 
-    await tester.tap(find.text('Comenzar'));
+    await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
-    expect(find.text('Inicia sesión'), findsOneWidget);
-    expect(find.text('Acceder'), findsOneWidget);
+    expect(find.text('Inicia Sesión'), findsOneWidget);
+    expect(find.text('Iniciar sesión'), findsOneWidget);
   });
 }

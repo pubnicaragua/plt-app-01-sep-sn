@@ -11,6 +11,7 @@ class WizardScaffold extends StatelessWidget {
     required this.description,
     required this.step,
     required this.body,
+    this.totalSteps = 3,
     this.footer,
     this.onClose,
   });
@@ -20,11 +21,18 @@ class WizardScaffold extends StatelessWidget {
   final String description;
   final int step;
   final Widget body;
+  final int totalSteps;
   final Widget? footer;
   final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
+    final footerWidget = footer;
+    final safeTotalSteps = totalSteps.clamp(2, 5).toInt();
+    final safeStep = step.clamp(0, safeTotalSteps - 1).toInt();
+    final sectionLabels = safeTotalSteps == 3
+        ? const ['Información del envío', 'Detalles de la carga', 'Confirmación del envío']
+        : const ['Información del envío', 'Confirmación del envío'];
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -33,7 +41,7 @@ class WizardScaffold extends StatelessWidget {
         leading: onClose == null
             ? null
             : IconButton(
-                icon: const Icon(Icons.close),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 21),
                 onPressed: onClose,
               ),
         title: Text(
@@ -43,6 +51,32 @@ class WizardScaffold extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: .18)),
+              ),
+              child: Image.asset(
+                'assets/img/notificacion-de-campana-en-redes-sociales.png',
+                width: 22,
+                height: 22,
+                fit: BoxFit.contain,
+                semanticLabel: 'Notificaciones',
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.notifications_none_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       extendBodyBehindAppBar: true,
       body: AppBackground(
@@ -52,15 +86,17 @@ class WizardScaffold extends StatelessWidget {
             children: [
               Row(
                 children: List.generate(
-                  2,
+                  safeTotalSteps,
                   (index) => Expanded(
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       height: 5,
-                        margin: EdgeInsets.only(right: index == 1 ? 0 : 6),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          color: index <= step.clamp(0, 1)
+                      margin: EdgeInsets.only(
+                        right: index == safeTotalSteps - 1 ? 0 : 6,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        color: index <= safeStep
                             ? cyan
                             : Colors.white.withValues(alpha: .16),
                       ),
@@ -73,7 +109,7 @@ class WizardScaffold extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Paso ${step.clamp(0, 1) + 1} de 2',
+                    'Paso ${safeStep + 1} de $safeTotalSteps',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11.5,
@@ -82,9 +118,7 @@ class WizardScaffold extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    step.clamp(0, 1) == 0
-                        ? 'Información del envío'
-                        : 'Confirmación del envío',
+                    sectionLabels[safeStep],
                     style: const TextStyle(
                       color: Color(0xFFB9D4FF),
                       fontSize: 10.5,
@@ -115,9 +149,9 @@ class WizardScaffold extends StatelessWidget {
               ),
               const SizedBox(height: 22),
               body,
-              if (footer != null) ...[
+              if (footerWidget != null) ...[
                 const SizedBox(height: 22),
-                footer!,
+                footerWidget,
               ],
             ],
           ),

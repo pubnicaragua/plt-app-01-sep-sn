@@ -10,7 +10,6 @@ import '../widgets/app_nav_bar.dart';
 import '../widgets/corte_banner.dart';
 import '../widgets/glass.dart';
 import '../widgets/place_field.dart';
-import 'crear_envio1.dart';
 import 'inicio.dart';
 import 'pedido.dart';
 import 'mi_perfil_cliente.dart';
@@ -30,9 +29,9 @@ class _HomeClienteState extends State<HomeCliente> {
   Widget build(BuildContext context) {
     final views = <Widget>[
       const _HomeTab(),
-      Pedido(),
-      const ResumenCliente(),
-      const MiPerfilCliente(),
+      const MisEnvios(embedded: true),
+      const ResumenCliente(embedded: true),
+      const MiPerfilCliente(embedded: true),
     ];
     return Scaffold(
       extendBody: true,
@@ -226,14 +225,14 @@ class _HomeTabState extends State<_HomeTab> {
   @override
   Widget build(BuildContext context) {
     final user = apiClient.currentUser;
-    final apiName = user?.displayName?.trim() ?? '';
+    final apiName = user?.displayName.trim() ?? '';
     final displayName = apiName.isEmpty || apiName.toLowerCase() == 'logística nica sa'
         ? 'Mario Belfort'
         : apiName;
     final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 24.0;
     return ListView(
       physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 22),
+      padding: EdgeInsets.fromLTRB(horizontal, 24, horizontal, 22),
       children: [
         Row(
           children: [
@@ -262,21 +261,33 @@ class _HomeTabState extends State<_HomeTab> {
                 ],
               ),
             ),
-            Container(
-              width: 42,
-              height: 42,
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {},
+                customBorder: const CircleBorder(),
+                child: Container(
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(14),
+                shape: BoxShape.circle,
                 border: Border.all(color: Colors.white.withValues(alpha: .25)),
               ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  IconButton(
-                    onPressed: () {},
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 21),
+                  Image.asset(
+                    'assets/img/notificacion-de-campana-en-redes-sociales.png',
+                    width: 24,
+                    height: 24,
+                    fit: BoxFit.contain,
+                    semanticLabel: 'Notificaciones',
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.notifications_none_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                   Positioned(
                     top: 8,
@@ -284,6 +295,8 @@ class _HomeTabState extends State<_HomeTab> {
                     child: Container(width: 5, height: 5, decoration: const BoxDecoration(color: cyan, shape: BoxShape.circle)),
                   ),
                 ],
+              ),
+            ),
               ),
             ),
             const SizedBox(width: 10),
@@ -339,7 +352,7 @@ class _HomeTabState extends State<_HomeTab> {
             Expanded(
               child: _TransportTile(
                 icon: Icons.directions_car_filled,
-                label: 'Vehículo',
+                label: 'Carro',
                 eta: '1-2 hrs',
                 badge: 'Versátil',
                 selected: transport == 'Vehículo',
@@ -427,16 +440,17 @@ class _HomeTabState extends State<_HomeTab> {
           textColor: Colors.white,
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => CrearEnvio1(
-                startOrigin: origin.text.trim(),
-                startDestination: destination.text.trim(),
-                startOriginPlace: originPlace,
-                startDestinationPlace: destinationPlace,
-                startTransport: transport,
-                startOriginRefs: refOrigin.text.trim(),
-                startDestinationRefs: refDestination.text.trim(),
-                startRecipientName: recipientName.text.trim(),
-                startRecipientPhone: recipientPhone.text.trim(),
+              builder: (_) => Pedido(
+                origin: origin.text.trim(),
+                destination: destination.text.trim(),
+                originPlace: originPlace,
+                destinationPlace: destinationPlace,
+                transport: transport,
+                estimatedShipping: _fareFor(transport),
+                originRefs: refOrigin.text.trim(),
+                destinationRefs: refDestination.text.trim(),
+                recipientName: recipientName.text.trim(),
+                recipientPhone: recipientPhone.text.trim(),
                 startScheduled: programado,
                 startDate: _agendaDateString,
                 startTime: _agendaTimeString,
@@ -531,7 +545,7 @@ class _TransportTile extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.fromLTRB(13, 13, 13, 11),
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
         decoration: BoxDecoration(
           color: selected
               ? Colors.white.withValues(alpha: .18)
@@ -556,17 +570,17 @@ class _TransportTile extends StatelessWidget {
                         : accentBlue,
                     borderRadius: BorderRadius.circular(13),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 21),
+                  child: Icon(icon, color: Colors.white, size: 19),
                 ),
                 _RadioDot(selected: selected),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
               label,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w800,
                 fontFamily: 'Acumin Pro',
               ),
@@ -580,7 +594,7 @@ class _TransportTile extends StatelessWidget {
                 fontFamily: 'Acumin Pro',
               ),
             ),
-            const SizedBox(height: 9),
+            const SizedBox(height: 7),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
@@ -657,7 +671,19 @@ class _FareCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final distance = km;
     final price = fare;
-    final valid = distance != null && price != null && rate != null;
+    final rateValue = rate;
+    final valid = distance != null && price != null && rateValue != null;
+    final distanceValue = distance;
+    final priceValue = price;
+    final fareDescription = rateValue == null || distanceValue == null
+        ? 'Selecciona ambos lugares para cotizar tu envío'
+        : '${distanceValue.toStringAsFixed(1)} km · base '
+            'C\$ ${rateValue.baseFeeCs.toStringAsFixed(0)} + '
+            '${distanceValue.toStringAsFixed(1)} × C\$ '
+            '${rateValue.farePerKmCs.toStringAsFixed(2)}';
+    final priceLabel = priceValue == null
+        ? 'C\$ —'
+        : 'C\$ ${priceValue.toStringAsFixed(2)}';
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
@@ -696,12 +722,7 @@ class _FareCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      valid
-                          ? '${distance.toStringAsFixed(1)} km · base '
-                              'C\$ ${rate!.baseFeeCs.toStringAsFixed(0)} + '
-                              '${distance.toStringAsFixed(1)} × C\$ '
-                              '${rate!.farePerKmCs.toStringAsFixed(2)}'
-                          : 'Selecciona ambos lugares para cotizar tu envío',
+                      fareDescription,
                       style: const TextStyle(
                         color: Color(0xFFB9D4FF),
                         fontSize: 10.5,
@@ -717,7 +738,7 @@ class _FareCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'C\$ ${price.toStringAsFixed(2)}',
+                      priceLabel,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 19,
@@ -1029,10 +1050,12 @@ class _ScheduleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final date = selectedDate;
     final time = selectedTime;
     final hourLabel = time == null
         ? null
         : '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    final selectedDay = date == null ? null : _dayIndex(date);
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
@@ -1062,7 +1085,7 @@ class _ScheduleCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (selectedDate != null)
+                  if (date != null)
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 5),
@@ -1071,7 +1094,7 @@ class _ScheduleCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '${_fmt(selectedDate!)} · $hourLabel',
+                        '${_fmt(date)} · $hourLabel',
                         style: const TextStyle(
                           color: cyan,
                           fontSize: 10.5,
@@ -1102,8 +1125,7 @@ class _ScheduleCard extends StatelessWidget {
                           margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: selectedDate != null &&
-                                    _dayIndex(selectedDate!) == i
+                            color: selectedDay == i
                                 ? accentBlue
                                 : Colors.white.withValues(alpha: .10),
                             borderRadius: BorderRadius.circular(12),

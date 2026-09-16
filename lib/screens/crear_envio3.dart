@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
@@ -20,6 +21,14 @@ class CrearEnvio3 extends StatefulWidget {
     this.originPlace,
     this.destinationPlace,
     this.transport = 'Vehículo',
+    this.description = '',
+    this.fragile = false,
+    this.invoiceNumber = '',
+    this.invoiceAmount = 0,
+    this.paymentStatus = 'Pendiente',
+    this.paymentMethod = 'Efectivo',
+    this.productPhotos = const [],
+    this.invoicePhoto,
     this.originRefs = '',
     this.destinationRefs = '',
     this.recipientName = '',
@@ -38,6 +47,14 @@ class CrearEnvio3 extends StatefulWidget {
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
   final String transport;
+  final String description;
+  final bool fragile;
+  final String invoiceNumber;
+  final double invoiceAmount;
+  final String paymentStatus;
+  final String paymentMethod;
+  final List<Uint8List> productPhotos;
+  final Uint8List? invoicePhoto;
   final String originRefs;
   final String destinationRefs;
   final String recipientName;
@@ -97,8 +114,30 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
     _create();
   }
 
+  Future<List<String>> _uploadShipmentEvidence() async {
+    final stored = <String>[];
+    for (var index = 0; index < widget.productPhotos.length; index++) {
+      final result = await apiClient.uploadEvidence(
+        widget.productPhotos[index],
+        'paquete-${index + 1}.jpg',
+      );
+      stored.add(
+        result['evidence']?.toString() ?? result['url']?.toString() ?? '',
+      );
+    }
+    final invoice = widget.invoicePhoto;
+    if (invoice != null) {
+      final result = await apiClient.uploadEvidence(invoice, 'factura.jpg');
+      stored.add(
+        result['evidence']?.toString() ?? result['url']?.toString() ?? '',
+      );
+    }
+    return stored.where((item) => item.isNotEmpty).toList();
+  }
+
   Future<void> _create() async {
     try {
+      final evidence = await _uploadShipmentEvidence();
       final originPlace = widget.originPlace;
       final destinationPlace = widget.destinationPlace;
       final created = await apiClient.createTrip(
@@ -106,8 +145,13 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
         origin: widget.origin,
         destination: widget.destination,
         packages: widget.bundles,
-        description:
-            'Peso ${widget.weight}${widget.weightUnit}, ${widget.bundles} bulto(s)',
+        description: [
+          if (widget.description.trim().isNotEmpty) widget.description.trim(),
+          'Peso ${widget.weight}${widget.weightUnit}, ${widget.bundles} bulto(s)',
+          if (widget.invoiceNumber.trim().isNotEmpty)
+            'Factura ${widget.invoiceNumber.trim()} por C\$${widget.invoiceAmount.toStringAsFixed(2)}',
+          if (evidence.isNotEmpty) 'Evidencias: ${evidence.join(', ')}',
+        ].join(' · '),
         originLat: originPlace?.latitude,
         originLng: originPlace?.longitude,
         destinationLat: destinationPlace?.latitude,
@@ -129,6 +173,15 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
         weight: widget.weight.toDouble(),
         weightUnit: widget.weightUnit == 'lb' ? 'lb' : 'kg',
       );
+      if (widget.paymentStatus == 'Pagado' || widget.paymentMethod.isNotEmpty) {
+        await apiClient.updateTripPayment(
+          id: created.id,
+          method: widget.paymentMethod,
+          amount: widget.paymentStatus == 'Pagado'
+              ? (created.estimatedCostCs ?? 0)
+              : 0,
+        );
+      }
       await Future<void>.delayed(const Duration(milliseconds: 2200));
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
