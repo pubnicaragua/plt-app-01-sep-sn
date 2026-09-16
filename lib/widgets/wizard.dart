@@ -63,7 +63,7 @@ class WizardScaffold extends StatelessWidget {
                 border: Border.all(color: Colors.white.withValues(alpha: .18)),
               ),
               child: Image.asset(
-                'assets/img/notificacion-de-campana-en-redes-sociales.png',
+                'assets/img/HomeCliente/notificaciones.png',
                 width: 22,
                 height: 22,
                 fit: BoxFit.contain,

@@ -18,7 +18,7 @@ final ValueNotifier<bool> appDarkMode = ValueNotifier<bool>(false);
 const LinearGradient fondoGradient = LinearGradient(
   begin: Alignment.topCenter,
   end: Alignment.bottomCenter,
-  colors: [Color(0xFF0135A7), Color(0xFF111230)],
+  colors: [Color(0xFF0C1C53), Color(0xFF1E439F)],
 );
 
 const LinearGradient bgGradient = LinearGradient(

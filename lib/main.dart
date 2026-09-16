@@ -20,6 +20,9 @@ class IncoexApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Acumin Pro',
+        textTheme: ThemeData.light()
+            .textTheme
+            .apply(fontFamily: 'Acumin Pro'),
         scaffoldBackgroundColor: navy,
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,

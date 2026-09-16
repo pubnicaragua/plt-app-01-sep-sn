@@ -59,15 +59,6 @@ class _LightBase extends StatelessWidget {
           decoration: BoxDecoration(gradient: fondoGradient),
         ),
         const _BackgroundLogo(),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(-0.55, 1.25),
-              radius: 1.05,
-              colors: [Color(0x143EC8F4), Color(0x003EC8F4)],
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -109,7 +100,12 @@ class _BackgroundLogo extends StatelessWidget {
                   Color(0xFF9BA8C5),
                   BlendMode.srcIn,
                 ),
-                child: Image.asset('assets/img/fondoapps.png', fit: BoxFit.fill),
+                child: Image.asset(
+                  'assets/img/fondoapps.png',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.bottomCenter,
+                  filterQuality: FilterQuality.high,
+                ),
               ),
             ),
           ),
@@ -125,7 +121,7 @@ class GlassCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.color,
-    this.blur = 18,
+    this.blur = 24,
     this.borderRadius = 24,
     this.onTap,
   });
@@ -146,9 +142,9 @@ class GlassCard extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: color ?? Colors.white.withValues(alpha: .13),
+            color: color ?? Colors.white.withValues(alpha: .16),
             borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: glassBorder),
+            border: Border.all(color: const Color(0x33FFFFFF)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: .14),
@@ -292,12 +288,12 @@ class _GlassFieldState extends State<GlassField> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .12),
+            color: Colors.white.withValues(alpha: .15),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: glassBorder),
+            border: Border.all(color: const Color(0x33FFFFFF)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 9),
           child: Row(

@@ -29,6 +29,7 @@ class Confirmarpedido extends StatefulWidget {
     this.paymentMethod = 'Efectivo',
     this.productPhotos = const [],
     this.invoicePhoto,
+    this.invoiceFileName = 'factura.jpg',
     this.originRefs = '',
     this.destinationRefs = '',
     this.recipientName = '',
@@ -57,6 +58,7 @@ class Confirmarpedido extends StatefulWidget {
   final String paymentMethod;
   final List<Uint8List> productPhotos;
   final Uint8List? invoicePhoto;
+  final String invoiceFileName;
   final String originRefs;
   final String destinationRefs;
   final String recipientName;
@@ -169,7 +171,8 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     }
     final invoice = widget.invoicePhoto;
     if (invoice != null) {
-      final result = await apiClient.uploadEvidence(invoice, 'factura.jpg');
+      final result =
+          await apiClient.uploadEvidence(invoice, widget.invoiceFileName);
       final stored =
           result['evidence']?.toString() ?? result['url']?.toString() ?? '';
       if (stored.isNotEmpty) paths.add(stored);

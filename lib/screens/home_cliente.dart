@@ -33,27 +33,40 @@ class _HomeClienteState extends State<HomeCliente> {
       const ResumenCliente(embedded: true),
       const MiPerfilCliente(embedded: true),
     ];
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
-      extendBody: true,
       body: AppBackground(
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              const CorteBanner(),
-              Expanded(
-                child: IndexedStack(
-                  index: tab,
-                  children: views,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: 110 + safeBottom),
+                child: Column(
+                  children: [
+                    const CorteBanner(),
+                    Expanded(
+                      child: IndexedStack(
+                        index: tab,
+                        children: views,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: safeBottom + 8,
+              child: AppNavBar(
+                current: tab,
+                onChanged: (index) => setState(() => tab = index),
+              ),
+            ),
+          ],
         ),
-      ),
-      bottomNavigationBar: AppNavBar(
-        current: tab,
-        onChanged: (index) => setState(() => tab = index),
       ),
     );
   }
@@ -104,7 +117,21 @@ class _HomeTabState extends State<_HomeTab> {
     apiClient.getSettings().then((data) {
       if (mounted) setState(() => settings = data);
     }).catchError((_) {});
-    requestAppPermissions();
+    requestAppPermissions().then((location) {
+      if (!mounted || location == null || origin.text.isNotEmpty) return;
+      final place = PlaceSuggestion(
+        placeId: 'current',
+        description: location.label,
+        main: location.label,
+        secondary: 'Managua',
+        latitude: location.latitude,
+        longitude: location.longitude,
+      );
+      setState(() {
+        originPlace = place;
+        origin.text = location.label;
+      });
+    });
     _checkRemoteSession();
   }
 
@@ -229,7 +256,7 @@ class _HomeTabState extends State<_HomeTab> {
     final displayName = apiName.isEmpty || apiName.toLowerCase() == 'logística nica sa'
         ? 'Mario Belfort'
         : apiName;
-    final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 24.0;
+    final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 20.0;
     return ListView(
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(horizontal, 24, horizontal, 22),
@@ -278,7 +305,7 @@ class _HomeTabState extends State<_HomeTab> {
                 alignment: Alignment.center,
                 children: [
                   Image.asset(
-                    'assets/img/notificacion-de-campana-en-redes-sociales.png',
+                    'assets/img/HomeCliente/notificaciones.png',
                     width: 24,
                     height: 24,
                     fit: BoxFit.contain,
@@ -340,32 +367,26 @@ class _HomeTabState extends State<_HomeTab> {
           children: [
             Expanded(
               child: _TransportTile(
-                icon: Icons.two_wheeler,
+                iconAsset: 'assets/img/HomeCliente/moto.png',
                 label: 'Moto',
-                eta: '15-30 min',
-                badge: 'Más rápido',
                 selected: transport == 'Moto',
                 onTap: () => setState(() => transport = 'Moto'),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: _TransportTile(
-                icon: Icons.directions_car_filled,
+                iconAsset: 'assets/img/HomeCliente/vehiculo.png',
                 label: 'Carro',
-                eta: '1-2 hrs',
-                badge: 'Versátil',
                 selected: transport == 'Vehículo',
                 onTap: () => setState(() => transport = 'Vehículo'),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: _TransportTile(
-                icon: Icons.local_shipping_outlined,
+                iconAsset: 'assets/img/HomeCliente/camion.png',
                 label: 'Camión',
-                eta: '2-4 hrs',
-                badge: 'Carga grande',
                 selected: transport == 'Camión',
                 onTap: () => setState(() => transport = 'Camión'),
               ),
@@ -381,17 +402,8 @@ class _HomeTabState extends State<_HomeTab> {
               setState(() => destinationPlace = place),
         ),
         const SizedBox(height: 12),
-        _FareCard(
-          km: _km,
-          fare: _fareFor(transport),
-          transportLabel: transport,
-          rate: settings?.rateFor(transport),
-          usdRate: settings?.dollarRate ?? 36.5,
-        ),
-        const SizedBox(height: 12),
         _ReferencesCard(
           originController: refOrigin,
-          destinationController: refDestination,
         ),
         const SizedBox(height: 12),
         Row(
@@ -524,18 +536,14 @@ class _StepBanner extends StatelessWidget {
 
 class _TransportTile extends StatelessWidget {
   const _TransportTile({
-    required this.icon,
+    required this.iconAsset,
     required this.label,
-    required this.eta,
-    required this.badge,
     this.selected = false,
     this.onTap,
   });
 
-  final IconData icon;
+  final String iconAsset;
   final String label;
-  final String eta;
-  final String badge;
   final bool selected;
   final VoidCallback? onTap;
 
@@ -543,76 +551,64 @@ class _TransportTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
-        decoration: BoxDecoration(
-          color: selected
-              ? Colors.white.withValues(alpha: .18)
-              : Colors.white.withValues(alpha: .10),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? cyan.withValues(alpha: .75) : glassBorder,
-            width: selected ? 1.2 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(9),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? Colors.white.withValues(alpha: .24)
-                        : accentBlue,
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 19),
-                ),
-                _RadioDot(selected: selected),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                fontFamily: 'Acumin Pro',
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              eta,
-              style: const TextStyle(
-                color: Color(0xFFB9D4FF),
-                fontSize: 10.5,
-                fontFamily: 'Acumin Pro',
-              ),
-            ),
-            const SizedBox(height: 7),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: SizedBox(
+            height: 94,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
               decoration: BoxDecoration(
-                color: accentBlue,
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: Text(
-                badge,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 8.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
-                  fontFamily: 'Acumin Pro',
+                color: selected
+                    ? const Color(0xB5054CD1)
+                    : const Color(0x351B3677),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: selected ? cyan.withValues(alpha: .75) : glassBorder,
+                  width: selected ? 1.2 : 1,
                 ),
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        iconAsset,
+                        width: 40,
+                        height: 40,
+                        fit: BoxFit.contain,
+                        semanticLabel: label,
+                        errorBuilder: (_, __, ___) => Icon(
+                          label == 'Moto'
+                              ? Icons.two_wheeler
+                              : label == 'Carro'
+                                  ? Icons.directions_car_filled
+                                  : Icons.local_shipping_outlined,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -914,11 +910,9 @@ class _DottedLinePainter extends CustomPainter {
 class _ReferencesCard extends StatelessWidget {
   const _ReferencesCard({
     required this.originController,
-    required this.destinationController,
   });
 
   final TextEditingController originController;
-  final TextEditingController destinationController;
 
   @override
   Widget build(BuildContext context) {
@@ -934,19 +928,42 @@ class _ReferencesCard extends StatelessWidget {
             border: Border.all(color: glassBorder),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GlassField(
-                label: 'Referencia de la recogida',
-                hint: 'Ej: portón azul después del semáforo',
-                icon: Icons.edit_location_alt_outlined,
-                controller: originController,
+              Row(
+                children: [
+                  const Icon(Icons.notes_rounded, color: Colors.white, size: 18),
+                  const SizedBox(width: 9),
+                  const Text(
+                    'Referencias:',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              GlassField(
-                label: 'Referencia de la entrega',
-                hint: 'Ej: recepción del tercer nivel',
-                icon: Icons.edit_location_alt_outlined,
-                controller: destinationController,
+              const SizedBox(height: 8),
+              TextField(
+                controller: originController,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.5,
+                  fontFamily: 'Acumin Pro',
+                ),
+                decoration: const InputDecoration(
+                  hintText: 'Ej. Casa verde frente al parque...',
+                  hintStyle: TextStyle(
+                    color: Color(0xB3FFFFFF),
+                    fontSize: 12.5,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
             ],
           ),

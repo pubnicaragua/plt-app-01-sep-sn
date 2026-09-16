@@ -293,9 +293,7 @@ class _DeliverySheet extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF101E4A),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: .12)),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: .12)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: .3),

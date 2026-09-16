@@ -1,5 +1,7 @@
 import 'dart:typed_data';
+import 'dart:ui';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -7,7 +9,6 @@ import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
-import '../widgets/wizard.dart';
 import 'confirmar_pedido.dart';
 
 class CrearEnvio2 extends StatefulWidget {
@@ -65,6 +66,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   String paymentMethod = 'Efectivo';
   final productPhotos = <Uint8List>[];
   Uint8List? invoicePhoto;
+  String invoiceFileName = 'factura.jpg';
   AppSettings? settings;
 
   @override
@@ -74,8 +76,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     weightUnit = widget.weightUnit == 'lb' ? 'lb' : 'kg';
     bundles = widget.bundles.clamp(1, 99).toInt();
     description = TextEditingController();
-    invoicePrice = TextEditingController(text: '0,00');
-    invoiceNumber = TextEditingController(text: 'FAC-1003');
+    invoicePrice = TextEditingController();
+    invoiceNumber = TextEditingController();
     apiClient.getSettings().then((value) {
       if (mounted) setState(() => settings = value);
     }).catchError((_) {});
@@ -110,12 +112,15 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     });
   }
 
-  Future<void> _pickImage({required bool invoice, required ImageSource source}) async {
+  Future<void> _pickImage({
+    required bool invoice,
+    required ImageSource source,
+  }) async {
     if (!invoice && productPhotos.length >= 5) return;
     try {
       final image = await ImagePicker().pickImage(
         source: source,
-        imageQuality: 82,
+        imageQuality: 84,
         maxWidth: 1400,
       );
       if (image == null) return;
@@ -124,6 +129,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       setState(() {
         if (invoice) {
           invoicePhoto = bytes;
+          invoiceFileName = image.name;
         } else {
           productPhotos.add(bytes);
         }
@@ -132,6 +138,28 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo cargar la imagen.')),
+      );
+    }
+  }
+
+  Future<void> _pickInvoiceFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'],
+        allowMultiple: false,
+        withData: true,
+      );
+      final file = result?.files.single;
+      if (file == null || file.bytes == null || !mounted) return;
+      setState(() {
+        invoicePhoto = file.bytes;
+        invoiceFileName = file.name;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo seleccionar la factura.')),
       );
     }
   }
@@ -163,6 +191,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           paymentMethod: paymentMethod,
           productPhotos: List<Uint8List>.of(productPhotos),
           invoicePhoto: invoicePhoto,
+          invoiceFileName: invoiceFileName,
           originRefs: widget.originRefs,
           destinationRefs: widget.destinationRefs,
           recipientName: widget.recipientName,
@@ -178,157 +207,231 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
 
   @override
   Widget build(BuildContext context) {
-    return WizardScaffold(
-      title: 'Detalles de carga',
-      subtitle: '¿Qué tipo de carga enviarás?',
-      description:
-          'Indica las características de tu carga y te recomendaremos el transporte adecuado.',
-      step: 1,
-      totalSteps: 3,
-      onClose: () => Navigator.of(context).pop(),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _WeightCard(
-            weight: weight,
-            unit: weightUnit,
-            bundles: bundles,
-            onUnitChanged: _setUnit,
-            onWeightChanged: (value) => setState(() => weight = value.clamp(1, 1500).toInt()),
-            onBundlesChanged: (value) => setState(() => bundles = value.clamp(1, 99).toInt()),
+    return Scaffold(
+      backgroundColor: const Color(0xFF0C1C53),
+      body: AppBackground(
+        darken: 0,
+        child: SafeArea(
+          child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+            children: [
+              _PageHeader(onBack: () => Navigator.of(context).pop()),
+              const SizedBox(height: 28),
+              const _PageSectionTitle(
+                title: 'Peso y dimensiones',
+                subtitle: 'Para calcular el transporte adecuado',
+              ),
+              const SizedBox(height: 18),
+              _dimensionBlock(),
+              const SizedBox(height: 27),
+              const _PageSectionTitle(title: 'Detalles de envío'),
+              const SizedBox(height: 14),
+              _detailsBlock(),
+              const SizedBox(height: 28),
+              const _PageSectionTitle(
+                title: '¿Qué tipo de carga enviarás?',
+                subtitle:
+                    'Indica las características de tu carga y te recomendaremos el transporte adecuado.',
+              ),
+              const SizedBox(height: 17),
+              _fragileBlock(),
+              const SizedBox(height: 14),
+              _productPhotosBlock(),
+              const SizedBox(height: 18),
+              _paymentBlock(),
+              const SizedBox(height: 26),
+              GlassButton(
+                label: 'Siguiente',
+                filled: true,
+                textColor: Colors.white,
+                onPressed: _continue,
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          _packageCard(),
-          const SizedBox(height: 14),
-          _productPhotosCard(),
-          const SizedBox(height: 14),
-          _invoiceCard(),
-          const SizedBox(height: 14),
-          _paymentCard(),
-          const SizedBox(height: 24),
-          GlassButton(
-            label: 'Siguiente',
-            filled: true,
-            textColor: Colors.white,
-            onPressed: _continue,
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _packageCard() {
-    return GlassCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _CardHeading(
-            icon: Icons.shopping_bag_outlined,
-            title: 'Información del paquete',
-            badge: 'Paso 2',
-          ),
-          const SizedBox(height: 20),
-          _fieldCaption('DESCRIPCIÓN DEL PAQUETE'),
-          const SizedBox(height: 8),
-          GlassField(
-            label: 'Descripción',
-            hint: 'Ej: Electrónicos, ropa, documentos...',
-            controller: description,
-            showFloatingLabel: false,
-          ),
-          const SizedBox(height: 17),
-          _fieldCaption('PRECIO DE FACTURA'),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: GlassField(
-                  label: 'Precio de factura',
-                  hint: '0,00',
-                  controller: invoicePrice,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  showFloatingLabel: false,
-                  onChanged: (_) => setState(() {}),
-                ),
+  Widget _dimensionBlock() {
+    final weightShortcuts = weightUnit == 'lb'
+        ? const [5, 15, 45, 200]
+        : const [5, 15, 45, 405];
+    final maxWeight = weightUnit == 'lb' ? '3,307 lb' : '1,500 kg';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _labelRow('Peso aproximado de la carga', 'Límite hasta $maxWeight'),
+        const SizedBox(height: 9),
+        _CounterField(
+          value: '$weight ${weightUnit == 'lb' ? 'lbs' : 'kg'}',
+          onMinus: weight > 1
+              ? () => setState(() => weight = weight - 1)
+              : null,
+          onPlus: weight < (weightUnit == 'lb' ? 3307 : 1500)
+              ? () => setState(() => weight = weight + 1)
+              : null,
+        ),
+        const SizedBox(height: 13),
+        Row(
+          children: [
+            const Text(
+              'Unidad:',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Acumin Pro',
               ),
-              const SizedBox(width: 8),
-              _CurrencyToggle(
-                value: currency,
-                onChanged: (value) => setState(() => currency = value),
-              ),
-            ],
-          ),
-          const SizedBox(height: 17),
-          _fieldCaption('NÚMERO DE FACTURA'),
-          const SizedBox(height: 8),
-          GlassField(
-            label: 'Número de factura',
-            hint: 'FAC-1003',
-            controller: invoiceNumber,
-            showFloatingLabel: false,
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: glassBorder),
             ),
-            child: Row(
+            const SizedBox(width: 10),
+            _UnitToggle(value: weightUnit, onChanged: _setUnit),
+          ],
+        ),
+        const SizedBox(height: 13),
+        _shortcutRow(
+          'Atajos:',
+          weightShortcuts,
+          suffix: weightUnit == 'lb' ? 'lbs' : 'kg',
+          selected: weight,
+          onSelected: (value) => setState(() => weight = value),
+        ),
+        const SizedBox(height: 27),
+        const Text(
+          'Cantidad de bultos',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Acumin Pro',
+          ),
+        ),
+        const SizedBox(height: 11),
+        _labelRow(
+          'Peso aproximado de la carga',
+          weightUnit == 'lb' ? 'Límite hasta 1,000 lbs' : 'Límite hasta 1,000 kg',
+        ),
+        const SizedBox(height: 9),
+        _CounterField(
+          value: '$bundles Bulto${bundles == 1 ? '' : 's'}',
+          onMinus: bundles > 1
+              ? () => setState(() => bundles = bundles - 1)
+              : null,
+          onPlus: bundles < 99
+              ? () => setState(() => bundles = bundles + 1)
+              : null,
+        ),
+        const SizedBox(height: 13),
+        _shortcutRow(
+          'Atajos:',
+          const [1, 3, 5, 10, 15, 20, 30, 40],
+          selected: bundles,
+          onSelected: (value) => setState(() => bundles = value),
+        ),
+      ],
+    );
+  }
+
+  Widget _detailsBlock() {
+    return Column(
+      children: [
+        GlassField(
+          label: 'Descripción del paquete',
+          hint: 'Ej: Electrónicos, ropa, documentos...',
+          icon: Icons.description_outlined,
+          controller: description,
+          showFloatingLabel: false,
+        ),
+        const SizedBox(height: 13),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: GlassField(
+                label: 'Precio de factura',
+                hint: '0,00',
+                icon: Icons.description_outlined,
+                controller: invoicePrice,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                showFloatingLabel: false,
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _CurrencyToggle(
+              value: currency,
+              onChanged: (value) => setState(() => currency = value),
+            ),
+          ],
+        ),
+        const SizedBox(height: 13),
+        GlassField(
+          label: 'Número de factura',
+          hint: 'FAC-1003',
+          icon: Icons.description_outlined,
+          controller: invoiceNumber,
+          showFloatingLabel: false,
+        ),
+      ],
+    );
+  }
+
+  Widget _fragileBlock() {
+    return _GlassPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Color(0xFFFF5C63), size: 24),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF5C63), size: 22),
-                const SizedBox(width: 9),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('¿Carga frágil?', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
-                      Text('Requiere manejo especial', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 11, fontFamily: 'Acumin Pro')),
-                    ],
+                Text(
+                  '¿Carga frágil?',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
                   ),
                 ),
-                Text(fragile ? 'SÍ' : 'NO', style: const TextStyle(color: cyan, fontSize: 12, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
-                const SizedBox(width: 4),
-                Switch.adaptive(
-                  value: fragile,
-                  onChanged: (value) => setState(() => fragile = value),
-                  activeTrackColor: cyan,
-                  activeThumbColor: Colors.white,
+                Text(
+                  'Requiere manejo especial',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 11,
+                    fontFamily: 'Acumin Pro',
+                  ),
                 ),
               ],
             ),
           ),
+          _BinaryToggle(
+            value: fragile,
+            first: 'SÍ',
+            second: 'NO',
+            onChanged: (value) => setState(() => fragile = value),
+          ),
         ],
       ),
     );
   }
 
-  Widget _productPhotosCard() {
-    return GlassCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _fieldCaption('FOTOS DEL PAQUETE'),
-          const SizedBox(height: 10),
-          const Text(
-            'Toma una foto clara o sube un archivo',
-            style: TextStyle(
-              color: Color(0xFFB9D4FF),
-              fontSize: 11,
-              fontFamily: 'Acumin Pro',
-            ),
-          ),
-          const SizedBox(height: 8),
-          _UploadTile(
-            icon: Icons.photo_camera_outlined,
-            title: 'Tomar foto',
-            subtitle: 'Formatos soportados: JPG, PNG (Max 5MB)',
-            onTap: () => _pickImage(invoice: false, source: ImageSource.camera),
-          ),
+  Widget _productPhotosBlock() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ActionUploadCard(
+          icon: Icons.photo_library_outlined,
+          title: 'Subir fotos del paquete',
+          subtitle: 'Formatos soportados: JPG, PNG (Max 5MB)',
+          onTap: () => _pickImage(invoice: false, source: ImageSource.camera),
+        ),
+        if (productPhotos.isNotEmpty) ...[
           const SizedBox(height: 12),
           Wrap(
             spacing: 10,
@@ -337,250 +440,392 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
               for (final photo in productPhotos)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: Image.memory(photo, width: 64, height: 64, fit: BoxFit.cover),
+                  child: Image.memory(photo,
+                      width: 66, height: 66, fit: BoxFit.cover),
                 ),
-              GestureDetector(
-                onTap: productPhotos.length >= 5 ? null : _chooseProductSource,
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .10),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: glassBorder),
-                  ),
-                  child: const Icon(Icons.add_rounded, color: Colors.white70),
-                ),
-              ),
+              if (productPhotos.length < 5)
+                _AddPhotoButton(onTap: _chooseProductSource),
             ],
           ),
-          const SizedBox(height: 3),
-          TextButton.icon(
-            onPressed: productPhotos.length >= 5 ? null : _chooseProductSource,
-            icon: const Icon(Icons.photo_library_outlined, color: cyan, size: 17),
-            label: const Text('Seleccionar de galería', style: TextStyle(color: cyan, decoration: TextDecoration.underline, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _invoiceCard() {
-    return GlassCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _fieldCaption('FACTURA DEL PRODUCTO'),
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () => _pickImage(invoice: true, source: ImageSource.camera),
-            child: Container(
-              height: 138,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .08),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: glassBorder),
+        Align(
+          alignment: Alignment.center,
+          child: TextButton.icon(
+            onPressed:
+                productPhotos.length >= 5 ? null : _chooseProductSource,
+            icon: const Icon(Icons.photo_library_outlined,
+                color: Colors.white, size: 18),
+            label: const Text(
+              'Seleccionar de galería',
+              style: TextStyle(
+                color: Colors.white,
+                decoration: TextDecoration.underline,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Acumin Pro',
               ),
-              child: invoicePhoto == null
-                  ? const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.photo_camera_outlined, color: cyan, size: 29),
-                        SizedBox(height: 10),
-                        Text('Toca para tomar foto de la factura', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
-                      ],
-                    )
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.memory(invoicePhoto!, fit: BoxFit.cover),
-                    ),
             ),
           ),
-          Center(
-            child: TextButton(
-              onPressed: _chooseInvoiceSource,
-              child: const Text('Seleccionar de galería', style: TextStyle(color: cyan, decoration: TextDecoration.underline, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _paymentCard() {
-    return GlassCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('ESTADO DEL PAGO', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _PaymentChoice(label: 'Pendiente', selected: paymentStatus == 'Pendiente', onTap: () => setState(() => paymentStatus = 'Pendiente'))),
-              const SizedBox(width: 9),
-              Expanded(child: _PaymentChoice(label: 'Pagado', selected: paymentStatus == 'Pagado', onTap: () => setState(() => paymentStatus = 'Pagado'))),
-            ],
-          ),
-          const SizedBox(height: 19),
-          const Text('Método de pago', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(child: _PaymentChoice(label: 'Efectivo', icon: Icons.payments_outlined, selected: paymentMethod == 'Efectivo', onTap: () => setState(() => paymentMethod = 'Efectivo'))),
-              const SizedBox(width: 9),
-              Expanded(child: _PaymentChoice(label: 'Transferencia', icon: Icons.account_balance_outlined, selected: paymentMethod == 'Transferencia', onTap: () => setState(() => paymentMethod = 'Transferencia'))),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _fieldCaption(String value) {
-    return Text(
-      value,
-      style: const TextStyle(
-        color: Color(0xFFB9D4FF),
-        fontSize: 10.5,
-        letterSpacing: .7,
-        fontWeight: FontWeight.w800,
-        fontFamily: 'Acumin Pro',
-      ),
-    );
-  }
-}
-
-class _CardHeading extends StatelessWidget {
-  const _CardHeading({required this.icon, required this.title, required this.badge});
-
-  final IconData icon;
-  final String title;
-  final String badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
+  Widget _paymentBlock() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(color: cyan, borderRadius: BorderRadius.circular(12)),
-          child: Icon(icon, color: Colors.white, size: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Estado del pago',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Acumin Pro',
+              ),
+            ),
+            _StatusToggle(
+              value: paymentStatus,
+              options: const ['Pagado', 'Pendiente'],
+              onChanged: (value) => setState(() => paymentStatus = value),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _invoiceUploadCard(),
+        const SizedBox(height: 19),
+        const Text(
+          'Método de pago',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Acumin Pro',
+          ),
+        ),
+        const SizedBox(height: 11),
+        Row(
+          children: [
+            Expanded(
+              child: _PaymentMethodCard(
+                label: 'Efectivo',
+                icon: Icons.payments_outlined,
+                selected: paymentMethod == 'Efectivo',
+                onTap: () => setState(() => paymentMethod = 'Efectivo'),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: _PaymentMethodCard(
+                label: 'Transferencia',
+                icon: Icons.account_balance_outlined,
+                selected: paymentMethod == 'Transferencia',
+                onTap: () => setState(() => paymentMethod = 'Transferencia'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _invoiceUploadCard() {
+    final hasFile = invoicePhoto != null;
+    final imageFile = RegExp(r'\.(jpe?g|png)$', caseSensitive: false)
+        .hasMatch(invoiceFileName);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ActionUploadCard(
+          icon: hasFile && !imageFile
+              ? Icons.description_outlined
+              : Icons.attach_file_rounded,
+          title: hasFile ? invoiceFileName : 'Adjuntar factura del producto',
+          subtitle:
+              hasFile ? 'Factura lista para enviar' : 'PDF, Excel, JPG o PNG',
+          onTap: () => _pickImage(invoice: true, source: ImageSource.camera),
+        ),
+        Align(
+          alignment: Alignment.center,
+          child: TextButton.icon(
+            onPressed: _pickInvoiceFile,
+            icon: const Icon(Icons.folder_open_outlined,
+                color: Colors.white, size: 18),
+            label: const Text(
+              'Elegir archivo (PDF, Excel o imagen)',
+              style: TextStyle(
+                color: Colors.white,
+                decoration: TextDecoration.underline,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Acumin Pro',
+              ),
+            ),
+          ),
+        ),
+        if (hasFile && imageFile) ...[
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.center,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.memory(
+                invoicePhoto!,
+                width: 92,
+                height: 72,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _labelRow(String left, String right) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Flexible(
+          child: Text(
+            left,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Acumin Pro',
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            right,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontFamily: 'Acumin Pro',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _shortcutRow(
+    String label,
+    List<int> values, {
+    String? suffix,
+    required int selected,
+    required ValueChanged<int> onSelected,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Acumin Pro',
+          ),
         ),
         const SizedBox(width: 10),
-        Expanded(child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'))),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-          decoration: BoxDecoration(color: cyan, borderRadius: BorderRadius.circular(18)),
-          child: Text(badge, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final value in values) ...[
+                  _Shortcut(
+                    label: '$value${suffix == null ? '' : ' $suffix'}',
+                    selected: selected == value,
+                    onTap: () => onSelected(value),
+                  ),
+                  const SizedBox(width: 7),
+                ],
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-class _WeightCard extends StatelessWidget {
-  const _WeightCard({
-    required this.weight,
-    required this.unit,
-    required this.bundles,
-    required this.onUnitChanged,
-    required this.onWeightChanged,
-    required this.onBundlesChanged,
-  });
+class _PageHeader extends StatelessWidget {
+  const _PageHeader({required this.onBack});
 
-  final int weight;
-  final String unit;
-  final int bundles;
-  final ValueChanged<String> onUnitChanged;
-  final ValueChanged<int> onWeightChanged;
-  final ValueChanged<int> onBundlesChanged;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _CardHeading(icon: Icons.inventory_2_outlined, title: 'Peso y dimensiones', badge: 'Paso 1'),
-          const SizedBox(height: 7),
-          const Text('Para calcular el transporte adecuado', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 12, fontFamily: 'Acumin Pro')),
-          const SizedBox(height: 19),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Peso aproximado de la carga', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
-              Text('Límite hasta 1,500 kg', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 12, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
-            ],
+    return Row(
+      children: [
+        IconButton(
+          onPressed: onBack,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.white, size: 23),
+        ),
+        const SizedBox(width: 5),
+        const Expanded(
+          child: Text(
+            'Detalles de carga',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Acumin Pro',
+            ),
           ),
-          const SizedBox(height: 10),
-          _counter(
-            value: '$weight $unit',
-            onMinus: weight > 1 ? () => onWeightChanged(weight - 1) : null,
-            onPlus: weight < 1500 ? () => onWeightChanged(weight + 1) : null,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Text('Unidad:', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 11, fontFamily: 'Acumin Pro')),
-              const SizedBox(width: 9),
-              for (final option in ['kg', 'lb']) ...[
-                _SmallChoice(label: option.toUpperCase(), selected: unit == option, onTap: () => onUnitChanged(option)),
-                const SizedBox(width: 7),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text('Atajos:', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 11, fontFamily: 'Acumin Pro')),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [5, 15, 45, 405].map((value) {
-              final converted = unit == 'lb' ? (value * 2.20462).round() : value;
-              return _SmallChoice(label: '$converted $unit', selected: weight == converted, onTap: () => onWeightChanged(converted));
-            }).toList(),
-          ),
-          const SizedBox(height: 19),
-          const Text('Cantidad de bultos', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
-          const SizedBox(height: 10),
-          _counter(
-            value: '$bundles Bulto${bundles == 1 ? '' : 's'}',
-            onMinus: bundles > 1 ? () => onBundlesChanged(bundles - 1) : null,
-            onPlus: bundles < 99 ? () => onBundlesChanged(bundles + 1) : null,
-          ),
-        ],
+        ),
+        const _StepPill(text: 'Paso 2'),
+      ],
+    );
+  }
+}
+
+class _StepPill extends StatelessWidget {
+  const _StepPill({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withValues(alpha: .35)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Acumin Pro',
+        ),
       ),
     );
   }
+}
 
-  Widget _counter({required String value, required VoidCallback? onMinus, required VoidCallback? onPlus}) {
-    return Container(
-      height: 76,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: glassBorder),
+class _PageSectionTitle extends StatelessWidget {
+  const _PageSectionTitle({required this.title, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -.2,
+            fontFamily: 'Acumin Pro',
+          ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle!,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              height: 1.2,
+              fontFamily: 'Acumin Pro',
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _GlassPanel extends StatelessWidget {
+  const _GlassPanel({required this.child, this.padding = const EdgeInsets.all(16)});
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .16),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white.withValues(alpha: .30)),
+          ),
+          child: child,
+        ),
       ),
+    );
+  }
+}
+
+class _CounterField extends StatelessWidget {
+  const _CounterField({
+    required this.value,
+    required this.onMinus,
+    required this.onPlus,
+  });
+
+  final String value;
+  final VoidCallback? onMinus;
+  final VoidCallback? onPlus;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _RoundControl(icon: Icons.remove_rounded, onTap: onMinus),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
-          _RoundControl(icon: Icons.add_rounded, onTap: onPlus, filled: true),
+          _CounterButton(icon: Icons.remove_rounded, onTap: onMinus),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Acumin Pro',
+              ),
+            ),
+          ),
+          _CounterButton(icon: Icons.add_rounded, onTap: onPlus, filled: true),
         ],
       ),
     );
   }
 }
 
-class _RoundControl extends StatelessWidget {
-  const _RoundControl({required this.icon, required this.onTap, this.filled = false});
+class _CounterButton extends StatelessWidget {
+  const _CounterButton({
+    required this.icon,
+    required this.onTap,
+    this.filled = false,
+  });
 
   final IconData icon;
   final VoidCallback? onTap;
@@ -589,23 +834,24 @@ class _RoundControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: filled ? cyan : Colors.white.withValues(alpha: .12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: filled ? accentBlue : Colors.white.withValues(alpha: .14),
+      shape: const CircleBorder(),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        customBorder: const CircleBorder(),
         child: SizedBox(
-          width: 52,
-          height: 52,
-          child: Icon(icon, color: Colors.white, size: 27),
+          width: 54,
+          height: 54,
+          child: Icon(icon,
+              color: onTap == null ? Colors.white38 : Colors.white, size: 28),
         ),
       ),
     );
   }
 }
 
-class _SmallChoice extends StatelessWidget {
-  const _SmallChoice({required this.label, required this.selected, required this.onTap});
+class _Shortcut extends StatelessWidget {
+  const _Shortcut({required this.label, required this.selected, required this.onTap});
 
   final String label;
   final bool selected;
@@ -617,47 +863,71 @@ class _SmallChoice extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? figmaBlue : Colors.white.withValues(alpha: .10),
+          color: selected ? accentBlue : Colors.white.withValues(alpha: .15),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: selected ? cyan : glassBorder),
+          border: Border.all(
+              color: selected ? cyan : Colors.white.withValues(alpha: .14)),
         ),
-        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Acumin Pro',
+          ),
+        ),
       ),
     );
   }
 }
 
-class _UploadTile extends StatelessWidget {
-  const _UploadTile({required this.icon, required this.title, required this.subtitle, required this.onTap});
+class _UnitToggle extends StatelessWidget {
+  const _UnitToggle({required this.value, required this.onChanged});
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  final String value;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: .25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _option('kg'),
+          _option('lb'),
+        ],
+      ),
+    );
+  }
+
+  Widget _option(String option) {
+    final selected = value == option;
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 124,
-        width: double.infinity,
+      onTap: () => onChanged(option),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .08),
+          color: selected ? accentBlue : Colors.transparent,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: glassBorder),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: cyan, size: 28),
-            const SizedBox(height: 9),
-            Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
-            const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(color: Color(0xFFB9D4FF), fontSize: 11, fontFamily: 'Acumin Pro')),
-          ],
+        child: Text(
+          option.toUpperCase(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Acumin Pro',
+          ),
         ),
       ),
     );
@@ -676,9 +946,9 @@ class _CurrencyToggle extends StatelessWidget {
       height: 56,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .08),
+        color: Colors.white.withValues(alpha: .16),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: glassBorder),
+        border: Border.all(color: Colors.white.withValues(alpha: .30)),
       ),
       child: Row(
         children: [
@@ -694,21 +964,246 @@ class _CurrencyToggle extends StatelessWidget {
       onTap: () => onChanged(label),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-        decoration: BoxDecoration(color: selected ? cyan : Colors.transparent, borderRadius: BorderRadius.circular(16)),
-        child: Text(label, style: TextStyle(color: selected ? Colors.white : const Color(0xFFB9D4FF), fontSize: 11, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? accentBlue : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Acumin Pro',
+          ),
+        ),
       ),
     );
   }
 }
 
-class _PaymentChoice extends StatelessWidget {
-  const _PaymentChoice({required this.label, required this.selected, required this.onTap, this.icon});
+class _BinaryToggle extends StatelessWidget {
+  const _BinaryToggle({
+    required this.value,
+    required this.first,
+    required this.second,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final String first;
+  final String second;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: .25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segment(first, value, () => onChanged(true)),
+          _segment(second, !value, () => onChanged(false)),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? accentBlue : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Acumin Pro',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionUploadCard extends StatelessWidget {
+  const _ActionUploadCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            height: trailing == null ? 160 : 178,
+            decoration: BoxDecoration(
+              color: figmaBlue.withValues(alpha: .82),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: cyan.withValues(alpha: .48)),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .16),
+                    shape: BoxShape.circle,
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: .38)),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 30),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+                if (trailing != null) trailing!,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddPhotoButton extends StatelessWidget {
+  const _AddPhotoButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 66,
+        height: 66,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: .25)),
+        ),
+        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+      ),
+    );
+  }
+}
+
+class _StatusToggle extends StatelessWidget {
+  const _StatusToggle({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .16),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: .30)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final option in options)
+            GestureDetector(
+              onTap: () => onChanged(option),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: value == option ? accentBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  option,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentMethodCard extends StatelessWidget {
+  const _PaymentMethodCard({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
-  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -716,18 +1211,28 @@ class _PaymentChoice extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        constraints: const BoxConstraints(minHeight: 52),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+        height: 112,
         decoration: BoxDecoration(
-          color: selected ? cyan : Colors.white.withValues(alpha: .09),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? cyan : glassBorder),
+          color: selected ? accentBlue : Colors.white.withValues(alpha: .14),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: selected ? cyan : Colors.white.withValues(alpha: .28),
+          ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (icon != null) ...[Icon(icon, color: Colors.white, size: 19), const SizedBox(height: 3)],
-            Text(label, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
+            Icon(icon, color: Colors.white, size: 38),
+            const SizedBox(height: 7),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Acumin Pro',
+              ),
+            ),
           ],
         ),
       ),

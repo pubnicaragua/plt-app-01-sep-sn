@@ -12,6 +12,7 @@ dependencies:
   http: ^1.3.0
   geolocator: ^13.0.1
   image_picker: ^1.1.2
+  file_picker: ^8.1.7
   permission_handler: ^11.3.1
   flutter_local_notifications: ^17.2.3
   url_launcher: ^6.3.1
@@ -26,6 +27,15 @@ flutter:
   assets:
     - assets/brand/incoex-logo.png
     - assets/img/
+    - assets/img/HomeCliente/
+    - assets/img/HomeCliente/camion.png
+    - assets/img/HomeCliente/EnviosNavbar.png
+    - assets/img/HomeCliente/Frame_LogoNavbar.png
+    - assets/img/HomeCliente/HistorialNavbar.png
+    - assets/img/HomeCliente/HomeNavbar.png
+    - assets/img/HomeCliente/moto.png
+    - assets/img/HomeCliente/notificaciones.png
+    - assets/img/HomeCliente/vehiculo.png
     - assets/img/brand-x.png
     - assets/img/PantallaInicio/
     - assets/img/EstadosCrearEnvio/
