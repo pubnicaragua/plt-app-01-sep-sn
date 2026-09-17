@@ -34,8 +34,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   Timer? poll;
   GoogleMapController? _mapController;
   TrackingData? _mapData;
+  Trip? _latestTrip;
   LatLng? _lastCenteredDriver;
   List<LatLng> _roadRoute = const [];
+  double? _routeDistanceKm;
+  int? _routeDurationSeconds;
   BitmapDescriptor? _driverMarkerIcon;
   String? _markerTransport;
 
@@ -77,6 +80,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       if (data.status != _prevStatus) {
         setState(() {
           _prevStatus = data.status;
+          _latestTrip = data;
           tracking = refreshedTracking;
         });
         pushNotification(
@@ -103,7 +107,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           ),
         );
       } else {
-        setState(() => tracking = refreshedTracking);
+        setState(() {
+          _latestTrip = data;
+          tracking = refreshedTracking;
+        });
       }
     } catch (_) {}
   }
@@ -204,9 +211,27 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
 
   LatLng get _initialMapCenter {
     final trip = widget.trip;
-    final latitude = trip.originLat ?? trip.destinationLat ?? 12.115;
-    final longitude = trip.originLng ?? trip.destinationLng ?? -86.236;
+    final latitude = trip.originLat != null && trip.destinationLat != null
+        ? (trip.originLat! + trip.destinationLat!) / 2
+        : trip.originLat ?? trip.destinationLat ?? 12.115;
+    final longitude = trip.originLng != null && trip.destinationLng != null
+        ? (trip.originLng! + trip.destinationLng!) / 2
+        : trip.originLng ?? trip.destinationLng ?? -86.236;
     return LatLng(latitude, longitude);
+  }
+
+  List<LatLng> _tripBoundsPoints() {
+    final points = <LatLng>[];
+    if (widget.trip.originLat != null && widget.trip.originLng != null) {
+      points.add(LatLng(widget.trip.originLat!, widget.trip.originLng!));
+    }
+    if (widget.trip.destinationLat != null &&
+        widget.trip.destinationLng != null) {
+      points.add(
+        LatLng(widget.trip.destinationLat!, widget.trip.destinationLng!),
+      );
+    }
+    return points;
   }
 
   List<LatLng> _routeCoordinates(TrackingData? data) {
@@ -214,34 +239,52 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     return const [];
   }
 
-  String _transportAsset(String? value) {
-    final normalized = (value ?? '').toLowerCase();
-    if (normalized.contains('moto') ||
-        normalized.contains('scooter') ||
-        normalized.contains('f150')) {
-      return 'assets/img/HomeCliente/moto.png';
-    }
-    if (normalized.contains('camion') || normalized.contains('camión') ||
-        normalized.contains('truck')) {
-      return 'assets/img/HomeCliente/camion.png';
-    }
-    return 'assets/img/HomeCliente/vehiculo.png';
-  }
-
   Future<void> _loadDriverMarkerIcon(String? value) async {
     final transport = (value ?? 'Vehículo').trim().toLowerCase();
     if (_driverMarkerIcon != null && _markerTransport == transport) return;
     _markerTransport = transport;
     try {
-      final icon = await BitmapDescriptor.fromAssetImage(
-        const ImageConfiguration(size: Size(64, 64)),
-        _transportAsset(value),
-      );
+      final icon = await _buildDriverMarkerIcon(value);
       if (!mounted || _markerTransport != transport) return;
       setState(() => _driverMarkerIcon = icon);
     } catch (_) {
-      // El marcador estándar queda como respaldo si el asset no está disponible.
+      // El marcador estándar queda como respaldo si el bitmap no está disponible.
     }
+  }
+
+  Future<BitmapDescriptor> _buildDriverMarkerIcon(String? value) async {
+    final normalized = (value ?? '').toLowerCase();
+    final vehicleIcon = normalized.contains('moto') || normalized.contains('scooter')
+        ? Icons.two_wheeler_rounded
+        : normalized.contains('camion') || normalized.contains('camión') || normalized.contains('truck')
+            ? Icons.local_shipping_rounded
+            : Icons.directions_car_filled_rounded;
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
+    const center = Offset(64, 64);
+    final outer = Path()..addOval(Rect.fromCircle(center: center, radius: 57));
+    canvas.drawShadow(outer, Colors.black.withValues(alpha: .45), 9, true);
+    canvas.drawCircle(center, 57, Paint()..color = const Color(0xF2082B79));
+    canvas.drawCircle(center, 48, Paint()..color = accentBlue);
+    final painter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(vehicleIcon.codePoint),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 39,
+          fontFamily: vehicleIcon.fontFamily,
+          package: vehicleIcon.fontPackage,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, Offset(center.dx - painter.width / 2, center.dy - painter.height / 2));
+    canvas.drawCircle(const Offset(103, 22), 11, Paint()..color = const Color(0xFF21C88A));
+    canvas.drawCircle(const Offset(103, 22), 7, Paint()..color = Colors.white);
+    final image = await recorder.endRecording().toImage(128, 128);
+    final bytes = await image.toByteData(format: ImageByteFormat.png);
+    if (bytes == null) return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+    return BitmapDescriptor.fromBytes(bytes.buffer.asUint8List(), size: const Size(56, 56));
   }
 
   Future<void> _loadRoadRoute() async {
@@ -253,6 +296,37 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       return;
     }
 
+    // El API entrega la geometría vial calculada en servidor cuando la clave
+    // de Google está configurada en Render. Así app y web comparten la misma
+    // ruta y el ETA se actualiza desde la posición viva del conductor.
+    var routingOriginLat = trip.originLat!;
+    var routingOriginLng = trip.originLng!;
+    try {
+      final serverTracking = await tracking;
+      routingOriginLat = serverTracking.driverLocation?.latitude ?? routingOriginLat;
+      routingOriginLng = serverTracking.driverLocation?.longitude ?? routingOriginLng;
+      if (serverTracking.routeProvider == 'google' &&
+          serverTracking.route.length >= 2) {
+        final points = serverTracking.route
+            .map((point) => LatLng(point.latitude, point.longitude))
+            .toList();
+        if (mounted) {
+          setState(() {
+            _roadRoute = points;
+            _routeDistanceKm = serverTracking.routeDistanceKm != null &&
+                    serverTracking.routeDistanceKm! > 0
+                ? serverTracking.routeDistanceKm
+                : trip.distanceKm;
+            _routeDurationSeconds = serverTracking.routeDurationSeconds;
+          });
+          _fitRoute(points);
+        }
+        return;
+      }
+    } catch (_) {
+      // Google directo queda como respaldo si el proxy todavía no está desplegado.
+    }
+
     // Google entrega la geometría de conducción más precisa. OSRM queda como
     // respaldo para que la ruta siga calles aun cuando la clave esté limitada.
     const mapsKey = String.fromEnvironment(
@@ -262,7 +336,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     final requests = <Uri>[];
     if (mapsKey.isNotEmpty) {
       requests.add(Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
-        'origin': '${trip.originLat},${trip.originLng}',
+        'origin': '$routingOriginLat,$routingOriginLng',
         'destination': '${trip.destinationLat},${trip.destinationLng}',
         'mode': 'driving',
         'alternatives': 'false',
@@ -272,7 +346,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     }
     requests.add(Uri.https(
       'router.project-osrm.org',
-      '/route/v1/driving/${trip.originLng},${trip.originLat};${trip.destinationLng},${trip.destinationLat}',
+      '/route/v1/driving/$routingOriginLng,$routingOriginLat;${trip.destinationLng},${trip.destinationLat}',
       {'overview': 'full', 'geometries': 'geojson'},
     ));
 
@@ -287,6 +361,20 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           final routes = payload['routes'];
           if (routes is! List || routes.isEmpty) continue;
           points = _decodeGoogleRoute(routes.first);
+          final route = routes.first;
+          final legs = route is Map ? route['legs'] : null;
+          if (legs is List) {
+            var meters = 0.0;
+            var seconds = 0;
+            for (final leg in legs.whereType<Map>()) {
+              final distance = leg['distance'];
+              final duration = leg['duration_in_traffic'] ?? leg['duration'];
+              meters += (distance is Map ? (distance['value'] as num?)?.toDouble() : null) ?? 0;
+              seconds += (duration is Map ? (duration['value'] as num?)?.toInt() : null) ?? 0;
+            }
+            if (meters > 0) _routeDistanceKm = meters / 1000;
+            if (seconds > 0) _routeDurationSeconds = seconds;
+          }
         } else {
           if (payload is! Map || payload['code'] != 'Ok') continue;
           final routes = payload['routes'];
@@ -303,6 +391,13 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     (pair[0] as num).toDouble(),
                   ))
               .toList();
+          final route = routes is List && routes.isNotEmpty ? routes.first : null;
+          if (route is Map) {
+            _routeDistanceKm = (route['distance'] as num?)?.toDouble() == null
+                ? null
+                : (route['distance'] as num).toDouble() / 1000;
+            _routeDurationSeconds = (route['duration'] as num?)?.toInt();
+          }
         }
         if (!mounted || points.length < 2) continue;
         setState(() => _roadRoute = points);
@@ -443,6 +538,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       final driver = data.driverLocation;
       if (driver == null || _mapController == null) return;
       final position = LatLng(driver.latitude, driver.longitude);
+      if (_lastCenteredDriver == null) {
+        _lastCenteredDriver = position;
+        _fitRoute(_roadRoute.length >= 2 ? _roadRoute : _tripBoundsPoints());
+        return;
+      }
       final previous = _lastCenteredDriver;
       if (previous != null &&
           (previous.latitude - position.latitude).abs() < .00001 &&
@@ -457,8 +557,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   @override
   Widget build(BuildContext context) {
     final trip = widget.trip;
-    final distance = trip.distanceKm ?? 4.2;
-    final eta = math.max(4, (distance * 2.4).round());
+    final distance = _routeDistanceKm ?? trip.distanceKm ?? 4.2;
+    final eta = _routeDurationSeconds != null && _routeDurationSeconds! > 0
+        ? math.max(1, (_routeDurationSeconds! / 60).round())
+        : math.max(4, (distance * 2.4).round());
     return Scaffold(
       body: AppBackground(
         child: Stack(
@@ -514,17 +616,28 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(22),
                   ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                    child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 34, sigmaY: 34),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xB31A356F),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xD91F477F), Color(0xC2173264)],
+                        ),
                         borderRadius: BorderRadius.vertical(
                           top: Radius.circular(22),
                         ),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: .18),
+                          color: Colors.white.withValues(alpha: .28),
                         ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x45000000),
+                            blurRadius: 26,
+                            offset: Offset(0, -8),
+                          ),
+                        ],
                       ),
                       child: _buildBody(distance, eta, scrollController),
                     ),
@@ -539,8 +652,12 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   }
 
   Widget _buildGoogleMap() {
+    final height = MediaQuery.sizeOf(context).height;
     return GoogleMap(
       initialCameraPosition: CameraPosition(target: _initialMapCenter, zoom: 12.8),
+      // La hoja inferior ocupa la parte baja del mapa. Este padding hace que
+      // la ruta quede centrada en el área visible y no detrás del glass.
+      padding: EdgeInsets.only(top: 116, bottom: height * .59),
       markers: _mapMarkers(_mapData),
       polylines: _mapPolylines(_mapData),
       mapType: MapType.normal,
@@ -552,14 +669,14 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       tiltGesturesEnabled: false,
       onMapCreated: (controller) {
         _mapController = controller;
-        _fitRoute(_roadRoute);
+        _fitRoute(_roadRoute.length >= 2 ? _roadRoute : _tripBoundsPoints());
       },
     );
   }
 
   Widget _buildBody(
       double distance, int eta, ScrollController scrollController) {
-    final trip = widget.trip;
+    final trip = _latestTrip ?? widget.trip;
     return FutureBuilder<TrackingData>(
       future: tracking,
       builder: (context, snapshot) {
@@ -597,7 +714,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
               ),
               const SizedBox(width: 8),
               Text(
-                currentStatus == 'Asignado' ? 'En camino' : currentStatus,
+                currentStatus,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -721,6 +838,36 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             _StepsRow(status: currentStatus),
             const SizedBox(height: 12),
             if (isActive)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: glassBorder),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: cyan, size: 19),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        currentStatus == 'Pendiente'
+                            ? 'La solicitud está pendiente de asignación.'
+                            : 'Viaje en curso. Finalizará cuando el conductor confirme la entrega.',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Acumin Pro',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (currentStatus == 'Completado')
+              const SizedBox(height: 12),
+            if (currentStatus == 'Completado')
               SizedBox(
                 height: 48,
                 child: Material(
@@ -733,7 +880,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     ),
                     child: const Center(
                       child: Text(
-                        'Ver Entrega',
+                        'Ver detalle de entrega',
                         style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
                       ),
                     ),

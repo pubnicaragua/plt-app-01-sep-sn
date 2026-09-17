@@ -191,7 +191,9 @@ class _InicioState extends State<Inicio> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(height: size.height * .535),
+                  // Acerca el título y los campos al panel superior sin mover
+                  // el fondo ni alterar las proporciones del formulario.
+                  SizedBox(height: size.height * .535 - 50),
                   const Text(
                     'Iniciar sesión',
                     textAlign: TextAlign.center,

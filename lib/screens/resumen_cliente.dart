@@ -4,6 +4,7 @@ import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
+import '../widgets/notifications_sheet.dart';
 
 class ResumenCliente extends StatefulWidget {
   const ResumenCliente({super.key, this.embedded = false});
@@ -69,7 +70,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                       ),
                     ),
                     InkWell(
-                      onTap: () {},
+                      onTap: () => showAppNotifications(context),
                       borderRadius: BorderRadius.circular(30),
                       child: Container(
                         width: 38,
@@ -106,6 +107,10 @@ class _ResumenClienteState extends State<ResumenCliente> {
                     final earnings = completed.fold<double>(
                       0,
                       (sum, t) => sum + (t.estimatedCostCs ?? 0),
+                    );
+                    final invoiceTotal = completed.fold<double>(
+                      0,
+                      (sum, t) => sum + (t.invoiceAmountCs ?? 0),
                     );
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
@@ -162,7 +167,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                     ? '…'
                                     : tab == 0
                                         ? '${_thousand(totalTrips)}'
-                                        : _money(earnings),
+                                    : _money(invoiceTotal),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 52,
@@ -182,6 +187,18 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                   fontFamily: 'Acumin Pro',
                                 ),
                               ),
+                              if (!loading && tab == 1 && invoiceTotal == 0)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 5),
+                                  child: Text(
+                                    'No hay valores de factura declarados.',
+                                    style: TextStyle(
+                                      color: Color(0xFFB9D4FF),
+                                      fontSize: 10.5,
+                                      fontFamily: 'Acumin Pro',
+                                    ),
+                                  ),
+                                ),
                               const SizedBox(height: 15),
                               SizedBox(
                                 width: double.infinity,
@@ -236,7 +253,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                 label: 'Hoy',
                                 price: tab == 0
                                     ? _compactMoney(earnings * .18)
-                                    : _compactMoney(earnings * .18),
+                                    : _compactMoney(invoiceTotal * .18),
                                 sub: '${(totalTrips * .18).round()} viajes',
                                 delta: '+12%',
                                 active: true,
@@ -249,7 +266,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                 label: 'Semana',
                                 price: tab == 0
                                     ? _compactMoney(earnings * .64)
-                                    : _compactMoney(earnings * .64),
+                                    : _compactMoney(invoiceTotal * .64),
                                 sub: '${(totalTrips * .64).round()} viajes',
                                 delta: '+18%',
                                 active: false,
@@ -262,7 +279,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                 label: 'Este Mes',
                                 price: tab == 0
                                     ? _compactMoney(earnings)
-                                    : _compactMoney(earnings),
+                                    : _compactMoney(invoiceTotal),
                                 sub: '$totalTrips viajes',
                                 delta: '+24%',
                                 active: false,
