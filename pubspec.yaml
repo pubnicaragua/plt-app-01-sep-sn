@@ -16,6 +16,7 @@ dependencies:
   permission_handler: ^11.3.1
   flutter_local_notifications: ^17.2.3
   url_launcher: ^6.3.1
+  google_maps_flutter: ^2.10.1
 
 dev_dependencies:
   flutter_test:
@@ -39,6 +40,7 @@ flutter:
     - assets/img/brand-x.png
     - assets/img/PantallaInicio/
     - assets/img/EstadosCrearEnvio/
+    - assets/img/PantallaSeguimiento/
   fonts:
     - family: Acumin Pro
       fonts:

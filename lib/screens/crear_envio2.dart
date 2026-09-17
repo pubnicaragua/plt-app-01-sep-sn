@@ -211,6 +211,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
         darken: 0,
+        backgroundLogoOpacity: .86,
+        backgroundLogoOffsetY: -58,
+        backgroundLogoScale: 1.08,
         child: SafeArea(
           child: ListView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -222,7 +225,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: 'Peso y dimensiones',
                 subtitle: 'Para calcular el transporte adecuado',
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
               _dimensionBlock(),
               const SizedBox(height: 27),
               const _PageSectionTitle(title: 'Detalles de envío'),
@@ -255,9 +258,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   Widget _dimensionBlock() {
-    final weightShortcuts = weightUnit == 'lb'
-        ? const [5, 15, 45, 200]
-        : const [5, 15, 45, 405];
+    final weightShortcuts =
+        weightUnit == 'lb' ? const [5, 15, 45, 200] : const [5, 15, 45, 405];
     final maxWeight = weightUnit == 'lb' ? '3,307 lb' : '1,500 kg';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,9 +268,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         const SizedBox(height: 9),
         _CounterField(
           value: '$weight ${weightUnit == 'lb' ? 'lbs' : 'kg'}',
-          onMinus: weight > 1
-              ? () => setState(() => weight = weight - 1)
-              : null,
+          onMinus:
+              weight > 1 ? () => setState(() => weight = weight - 1) : null,
           onPlus: weight < (weightUnit == 'lb' ? 3307 : 1500)
               ? () => setState(() => weight = weight + 1)
               : null,
@@ -302,27 +303,27 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           'Cantidad de bultos',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 22,
+            fontSize: 16,
             fontWeight: FontWeight.w800,
             fontFamily: 'Acumin Pro',
           ),
         ),
-        const SizedBox(height: 11),
+        const SizedBox(height: 8),
         _labelRow(
           'Peso aproximado de la carga',
-          weightUnit == 'lb' ? 'Límite hasta 1,000 lbs' : 'Límite hasta 1,000 kg',
+          weightUnit == 'lb'
+              ? 'Límite hasta 1,000 lbs'
+              : 'Límite hasta 1,000 kg',
         ),
         const SizedBox(height: 9),
         _CounterField(
           value: '$bundles Bulto${bundles == 1 ? '' : 's'}',
-          onMinus: bundles > 1
-              ? () => setState(() => bundles = bundles - 1)
-              : null,
-          onPlus: bundles < 99
-              ? () => setState(() => bundles = bundles + 1)
-              : null,
+          onMinus:
+              bundles > 1 ? () => setState(() => bundles = bundles - 1) : null,
+          onPlus:
+              bundles < 99 ? () => setState(() => bundles = bundles + 1) : null,
         ),
-        const SizedBox(height: 13),
+        const SizedBox(height: 9),
         _shortcutRow(
           'Atajos:',
           const [1, 3, 5, 10, 15, 20, 30, 40],
@@ -338,8 +339,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       children: [
         GlassField(
           label: 'Descripción del paquete',
-          hint: 'Ej: Electrónicos, ropa, documentos...',
-          icon: Icons.description_outlined,
+          hint: 'Descripción del paquete',
+          icon: Icons.person,
           controller: description,
           showFloatingLabel: false,
         ),
@@ -350,8 +351,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             Expanded(
               child: GlassField(
                 label: 'Precio de factura',
-                hint: '0,00',
-                icon: Icons.description_outlined,
+                hint: 'Precio de factura',
+                icon: Icons.person,
                 controller: invoicePrice,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -369,8 +370,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         const SizedBox(height: 13),
         GlassField(
           label: 'Número de factura',
-          hint: 'FAC-1003',
-          icon: Icons.description_outlined,
+          hint: 'Número de factura',
+          icon: Icons.person,
           controller: invoiceNumber,
           showFloatingLabel: false,
         ),
@@ -379,45 +380,25 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   Widget _fragileBlock() {
-    return _GlassPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded,
-              color: Color(0xFFFF5C63), size: 24),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '¿Carga frágil?',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-                Text(
-                  'Requiere manejo especial',
-                  style: TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 11,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-              ],
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          '¿Carga frágil?',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'Acumin Pro',
           ),
-          _BinaryToggle(
-            value: fragile,
-            first: 'SÍ',
-            second: 'NO',
-            onChanged: (value) => setState(() => fragile = value),
-          ),
-        ],
-      ),
+        ),
+        _BinaryToggle(
+          value: fragile,
+          first: 'Sí',
+          second: 'No',
+          onChanged: (value) => setState(() => fragile = value),
+        ),
+      ],
     );
   }
 
@@ -451,8 +432,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         Align(
           alignment: Alignment.center,
           child: TextButton.icon(
-            onPressed:
-                productPhotos.length >= 5 ? null : _chooseProductSource,
+            onPressed: productPhotos.length >= 5 ? null : _chooseProductSource,
             icon: const Icon(Icons.photo_library_outlined,
                 color: Colors.white, size: 18),
             label: const Text(
@@ -544,7 +524,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
               : Icons.attach_file_rounded,
           title: hasFile ? invoiceFileName : 'Adjuntar factura del producto',
           subtitle:
-              hasFile ? 'Factura lista para enviar' : 'PDF, Excel, JPG o PNG',
+              hasFile ? 'Factura lista para enviar' : 'Todos los formatos',
           onTap: () => _pickImage(invoice: true, source: ImageSource.camera),
         ),
         Align(
@@ -554,7 +534,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             icon: const Icon(Icons.folder_open_outlined,
                 color: Colors.white, size: 18),
             label: const Text(
-              'Elegir archivo (PDF, Excel o imagen)',
+              'Elegir archivo',
               style: TextStyle(
                 color: Colors.white,
                 decoration: TextDecoration.underline,
@@ -592,7 +572,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             left,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: 11,
               fontWeight: FontWeight.w800,
               fontFamily: 'Acumin Pro',
             ),
@@ -605,7 +585,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             textAlign: TextAlign.right,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 13,
+              fontSize: 10,
               fontFamily: 'Acumin Pro',
             ),
           ),
@@ -628,7 +608,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           label,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 14,
+            fontSize: 11,
             fontWeight: FontWeight.w800,
             fontFamily: 'Acumin Pro',
           ),
@@ -732,7 +712,7 @@ class _PageSectionTitle extends StatelessWidget {
           title,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 22,
+            fontSize: 16,
             fontWeight: FontWeight.w800,
             letterSpacing: -.2,
             fontFamily: 'Acumin Pro',
@@ -744,7 +724,7 @@ class _PageSectionTitle extends StatelessWidget {
             subtitle!,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: 10,
               height: 1.2,
               fontFamily: 'Acumin Pro',
             ),
@@ -756,7 +736,8 @@ class _PageSectionTitle extends StatelessWidget {
 }
 
 class _GlassPanel extends StatelessWidget {
-  const _GlassPanel({required this.child, this.padding = const EdgeInsets.all(16)});
+  const _GlassPanel(
+      {required this.child, this.padding = const EdgeInsets.all(16)});
 
   final Widget child;
   final EdgeInsets padding;
@@ -807,7 +788,7 @@ class _CounterField extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 22,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 fontFamily: 'Acumin Pro',
               ),
@@ -840,10 +821,10 @@ class _CounterButton extends StatelessWidget {
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: SizedBox(
-          width: 54,
-          height: 54,
+          width: 40,
+          height: 40,
           child: Icon(icon,
-              color: onTap == null ? Colors.white38 : Colors.white, size: 28),
+              color: onTap == null ? Colors.white38 : Colors.white, size: 22),
         ),
       ),
     );
@@ -851,7 +832,8 @@ class _CounterButton extends StatelessWidget {
 }
 
 class _Shortcut extends StatelessWidget {
-  const _Shortcut({required this.label, required this.selected, required this.onTap});
+  const _Shortcut(
+      {required this.label, required this.selected, required this.onTap});
 
   final String label;
   final bool selected;
@@ -863,7 +845,7 @@ class _Shortcut extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: selected ? accentBlue : Colors.white.withValues(alpha: .15),
           borderRadius: BorderRadius.circular(18),
@@ -874,7 +856,7 @@ class _Shortcut extends StatelessWidget {
           label,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 12,
+            fontSize: 10,
             fontWeight: FontWeight.w800,
             fontFamily: 'Acumin Pro',
           ),

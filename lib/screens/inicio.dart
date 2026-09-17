@@ -17,7 +17,7 @@ class _InicioState extends State<Inicio> {
   // Cuenta de prueba corporativa creada por la API local.
   final email =
       TextEditingController(text: 'contacto@logisticanica.com.ni');
-  final password = TextEditingController();
+  final password = TextEditingController(text: 'Admin@2026');
   bool obscure = true;
   bool loading = false;
   String? errorMessage;
@@ -83,11 +83,12 @@ class _InicioState extends State<Inicio> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final rectTop = size.height * .36;
+    final formInset = size.width * .105;
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Capa 4 (fondo): paisaje con máscara
+          // Capa 4 (fondo): paisaje original de la mascota
           Image.asset(
             'assets/img/PantallaInicio/Maskgroup.png',
             fit: BoxFit.cover,
@@ -114,27 +115,47 @@ class _InicioState extends State<Inicio> {
               errorBuilder: (_, __, ___) => const SizedBox.shrink(),
             ),
           ),
-          // Capa 2: rectángulo azul degradado (tapa al pájaro)
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: FractionallySizedBox(
-              widthFactor: 1,
-              heightFactor: .64,
-              child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFF0135A7),
-                      Color(0xFF111230),
-                    ],
+          // Capa 2: panel de acceso con el logotipo geométrico de fondo
+          Positioned(
+            top: rectTop,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(50),
+                topRight: Radius.circular(50),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFF003EC7),
+                          Color(0xFF111230),
+                        ],
+                      ),
+                    ),
                   ),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(50),
-                    topRight: Radius.circular(50),
+                  Opacity(
+                    opacity: .36,
+                    child: ColorFiltered(
+                      colorFilter: const ColorFilter.mode(
+                        Color(0xFF83A9F5),
+                        BlendMode.srcIn,
+                      ),
+                      child: Image.asset(
+                        'assets/img/fondoapps.png',
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -166,13 +187,13 @@ class _InicioState extends State<Inicio> {
           // Contenido interactivo
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(28, 0, 28, 30),
+              padding: EdgeInsets.fromLTRB(formInset, 0, formInset, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(height: size.height * .47),
+                  SizedBox(height: size.height * .535),
                   const Text(
-                    'Inicia Sesión',
+                    'Iniciar sesión',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
@@ -182,35 +203,21 @@ class _InicioState extends State<Inicio> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  GlassField(
+                  _LoginField(
                     label: 'Correo',
-                    hint: 'Correo',
-                    icon: Icons.person_outline_rounded,
                     controller: email,
                     keyboardType: TextInputType.emailAddress,
-                    showFloatingLabel: false,
                   ),
-                  const SizedBox(height: 18),
-                  GlassField(
+                  const SizedBox(height: 8),
+                  _LoginField(
                     key: ValueKey(obscure),
                     label: 'Contraseña',
-                    hint: 'Contraseña',
-                    icon: Icons.lock_outline_rounded,
                     controller: password,
-                    obscure: obscure,
-                    showFloatingLabel: false,
-                    suffix: IconButton(
-                      onPressed: () => setState(() => obscure = !obscure),
-                      icon: Icon(
-                        obscure
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        color: Colors.white70,
-                      ),
-                    ),
+                    obscureText: obscure,
+                    onToggleObscure: () => setState(() => obscure = !obscure),
                   ),
                   if (errorMessage != null) ...[
-                    const SizedBox(height: 13),
+                    const SizedBox(height: 8),
                     Text(
                       errorMessage!,
                       textAlign: TextAlign.center,
@@ -222,12 +229,6 @@ class _InicioState extends State<Inicio> {
                       ),
                     ),
                   ],
-                  GlassButton(
-                    label: loading ? 'Accediendo…' : 'Iniciar sesión',
-                    filled: true,
-                    textColor: Colors.white,
-                    onPressed: loading ? () {} : _login,
-                  ),
                   const SizedBox(height: 10),
                   TextButton(
                     onPressed: () => Navigator.of(context).push(
@@ -235,17 +236,30 @@ class _InicioState extends State<Inicio> {
                         builder: (_) => const Registro(),
                       ),
                     ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     child: const Text(
                       '¿No tienes cuenta? Regístrate aquí',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 13.5,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         fontFamily: 'Acumin Pro',
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
+                  GlassButton(
+                    label: loading ? 'Accediendo…' : 'Iniciar sesión',
+                    filled: true,
+                    height: 36,
+                    textColor: Colors.white,
+                    onPressed: loading ? () {} : _login,
+                  ),
+                  const SizedBox(height: 58),
                   const Center(
                     child: Text(
                       'Uso de Términos y Condiciónes',
@@ -261,6 +275,76 @@ class _InicioState extends State<Inicio> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoginField extends StatelessWidget {
+  const _LoginField({
+    super.key,
+    required this.label,
+    required this.controller,
+    this.keyboardType,
+    this.obscureText = false,
+    this.onToggleObscure,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final TextInputType? keyboardType;
+  final bool obscureText;
+  final VoidCallback? onToggleObscure;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 37,
+      padding: const EdgeInsets.only(left: 18, right: 4),
+      decoration: BoxDecoration(
+        color: const Color(0x3D9AB0DF),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0x55FFFFFF)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              obscureText: obscureText,
+              keyboardType: keyboardType,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontFamily: 'Acumin Pro',
+              ),
+              decoration: InputDecoration(
+                hintText: label,
+                hintStyle: const TextStyle(
+                  color: Color(0xD9FFFFFF),
+                  fontSize: 11,
+                  fontFamily: 'Acumin Pro',
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          if (onToggleObscure != null)
+            IconButton(
+              onPressed: onToggleObscure,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 22, height: 28),
+              icon: Icon(
+                obscureText
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                color: const Color(0xD9FFFFFF),
+                size: 16,
+              ),
+            ),
         ],
       ),
     );

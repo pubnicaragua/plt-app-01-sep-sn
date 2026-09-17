@@ -7,7 +7,7 @@ import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/wizard.dart';
-import 'seguimiento_pedido.dart';
+import 'crear_envio3.dart';
 
 class Confirmarpedido extends StatefulWidget {
   const Confirmarpedido({
@@ -122,12 +122,6 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       ? widget.weight / 2.20462
       : widget.weight.toDouble();
 
-  String get _recommended => _weightKg <= 20
-      ? 'Moto'
-      : _weightKg <= 300
-          ? 'Vehículo'
-          : 'Camión';
-
   double? get _distance =>
       distanceKm(widget.originPlace, widget.destinationPlace);
 
@@ -158,100 +152,44 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
 
   String _money(double value) => 'C\$ ${value.toStringAsFixed(2)}';
 
-  Future<List<String>> _uploadEvidence() async {
-    final paths = <String>[];
-    for (var index = 0; index < widget.productPhotos.length; index++) {
-      final result = await apiClient.uploadEvidence(
-        widget.productPhotos[index],
-        'paquete-${index + 1}.jpg',
-      );
-      final stored =
-          result['evidence']?.toString() ?? result['url']?.toString() ?? '';
-      if (stored.isNotEmpty) paths.add(stored);
-    }
-    final invoice = widget.invoicePhoto;
-    if (invoice != null) {
-      final result =
-          await apiClient.uploadEvidence(invoice, widget.invoiceFileName);
-      final stored =
-          result['evidence']?.toString() ?? result['url']?.toString() ?? '';
-      if (stored.isNotEmpty) paths.add(stored);
-    }
-    return paths;
-  }
-
   Future<void> _submit() async {
     if (submitting) return;
     setState(() {
       submitting = true;
       errorMessage = null;
     });
-    try {
-      final evidence = await _uploadEvidence();
-      final originPlace = widget.originPlace;
-      final destinationPlace = widget.destinationPlace;
-      final shipping = _shippingFor(selectedTransport);
-      final details = <String>[
-        if (widget.description.trim().isNotEmpty) widget.description.trim(),
-        'Peso ${widget.weight}${widget.weightUnit}, ${widget.bundles} bulto(s)',
-        if (widget.invoiceNumber.trim().isNotEmpty)
-          'Factura ${widget.invoiceNumber.trim()} por ${_money(widget.invoiceAmount)}',
-        if (widget.fragile) 'Carga frágil',
-        if (evidence.isNotEmpty) 'Evidencias: ${evidence.join(', ')}',
-      ].join(' · ');
-      final created = await apiClient.createTrip(
-        client: apiClient.currentUser?.displayName.trim().isNotEmpty == true
-            ? apiClient.currentUser!.displayName
-            : 'Empresa INCOEX',
-        origin: widget.origin,
-        destination: widget.destination,
-        packages: widget.bundles,
-        description: details,
-        recipientName: widget.recipientName.trim().isEmpty
-            ? null
-            : widget.recipientName.trim(),
-        recipientPhone: widget.recipientPhone.trim().isEmpty
-            ? null
-            : widget.recipientPhone.trim(),
-        fragile: widget.fragile,
-        originLat: originPlace?.latitude,
-        originLng: originPlace?.longitude,
-        destinationLat: destinationPlace?.latitude,
-        destinationLng: destinationPlace?.longitude,
-        distanceKm: _distance,
-        transport: selectedTransport,
-        autoAssign: true,
-        originRefs:
-            widget.originRefs.trim().isEmpty ? null : widget.originRefs.trim(),
-        destinationRefs: widget.destinationRefs.trim().isEmpty
-            ? null
-            : widget.destinationRefs.trim(),
-        serviceType: widget.serviceType,
-        scheduledDate: widget.scheduledDate,
-        scheduledTime: widget.scheduledTime,
-        isScheduled: widget.isScheduled || widget.serviceType == 'Programado',
-        weight: widget.weight.toDouble(),
-        weightUnit: widget.weightUnit == 'lb' ? 'lb' : 'kg',
-      );
-      await apiClient.updateTripPayment(
-        id: created.id,
-        method: widget.paymentMethod,
-        amount: widget.paymentStatus == 'Pagado'
-            ? (created.estimatedCostCs ?? shipping)
-            : 0,
-      );
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => SeguimientoPedido(trip: created)),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        submitting = false;
-        errorMessage =
-            'No pudimos crear el envío. Revisa tu conexión e inténtalo de nuevo.';
-      });
-    }
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => CrearEnvio3(
+          origin: widget.origin,
+          destination: widget.destination,
+          weight: widget.weight,
+          weightUnit: widget.weightUnit,
+          bundles: widget.bundles,
+          originPlace: widget.originPlace,
+          destinationPlace: widget.destinationPlace,
+          transport: selectedTransport,
+          description: widget.description,
+          fragile: widget.fragile,
+          invoiceNumber: widget.invoiceNumber,
+          invoiceAmount: widget.invoiceAmount,
+          paymentStatus: widget.paymentStatus,
+          paymentMethod: widget.paymentMethod,
+          productPhotos: widget.productPhotos,
+          invoicePhoto: widget.invoicePhoto,
+          invoiceFileName: widget.invoiceFileName,
+          originRefs: widget.originRefs,
+          destinationRefs: widget.destinationRefs,
+          recipientName: widget.recipientName,
+          recipientPhone: widget.recipientPhone,
+          serviceType: widget.serviceType,
+          scheduledDate: widget.scheduledDate,
+          scheduledTime: widget.scheduledTime,
+          isScheduled: widget.isScheduled,
+        ),
+      ),
+    );
   }
 
   @override
@@ -270,15 +208,24 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       step: 2,
       totalSteps: 3,
       onClose: () => Navigator.of(context).pop(),
+      showNotification: false,
+      showProgress: false,
+      showDescription: false,
+      showStepBadge: true,
+      backgroundLogoOpacity: .86,
+      backgroundLogoOffsetY: -58,
+      backgroundLogoScale: 1.08,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final vehicle in _vehicles) ...[
-            _transportCard(vehicle),
-            const SizedBox(height: 10),
+          for (var index = 0; index < _vehicles.length; index++) ...[
+            _transportCard(_vehicles[index]),
+            if (index != _vehicles.length - 1) const SizedBox(height: 10),
           ],
+          const SizedBox(height: 20),
           GlassCard(
             padding: const EdgeInsets.all(16),
+            color: Colors.white.withValues(alpha: .22),
             child: _totalCard(
               shipping: shipping,
               base: base,
@@ -301,6 +248,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           GlassButton(
             label: submitting ? 'Creando envío…' : 'Confirmar envío',
             filled: true,
+            height: 44,
             textColor: Colors.white,
             onPressed: submitting ? () {} : _submit,
           ),
@@ -314,7 +262,6 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     final name = vehicle.$1;
     final blocked = _weightKg > vehicle.$5;
     final selected = selectedTransport == name;
-    final recommended = _recommended == name;
     final price = _shippingFor(name);
     return GestureDetector(
       onTap: blocked ? null : () => setState(() => selectedTransport = name),
@@ -324,11 +271,11 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: selected
-              ? figmaBlue.withValues(alpha: .82)
+              ? figmaBlue
               : Colors.white.withValues(alpha: .10),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-              color: selected ? cyan : glassBorder, width: selected ? 1.5 : 1),
+              color: selected ? figmaBlue : glassBorder, width: 1),
         ),
         child: Opacity(
           opacity: blocked ? .45 : 1,
@@ -360,16 +307,12 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                                     fontSize: 15,
                                     fontWeight: FontWeight.w800,
                                     fontFamily: 'Acumin Pro'))),
-                        if (recommended) ...[
-                          const SizedBox(width: 7),
-                          const StatusPill(text: 'RECOMENDADO', color: cyan),
-                        ],
                       ],
                     ),
                     const SizedBox(height: 3),
                     Text(vehicle.$2,
                         style: const TextStyle(
-                            color: Color(0xFFB9D4FF),
+                            color: Colors.white,
                             fontSize: 10.5,
                             fontFamily: 'Acumin Pro')),
                     Text(vehicle.$3,
@@ -388,23 +331,16 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                 children: [
                   const Text('ENVÍO DESDE',
                       style: TextStyle(
-                          color: Color(0xFF8FA0C4),
+                          color: Colors.white,
                           fontSize: 8,
                           fontWeight: FontWeight.w700,
                           fontFamily: 'Acumin Pro')),
                   Text(_money(price),
                       style: const TextStyle(
-                          color: cyan,
+                          color: Colors.white,
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                           fontFamily: 'Acumin Pro')),
-                  const SizedBox(height: 2),
-                  Icon(
-                      selected
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      color: selected ? cyan : Colors.white24,
-                      size: 18),
                 ],
               ),
             ],
@@ -427,88 +363,74 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Expanded(
-                child: Text('TOTAL A COBRAR AL DESTINATARIO',
+                child: Text('Total a cobrar al destinatario',
                     style: TextStyle(
-                        color: Color(0xFFB9D4FF),
-                        fontSize: 9.5,
-                        letterSpacing: .65,
+                        color: Colors.white,
+                        fontSize: 11,
                         fontWeight: FontWeight.w800,
                         fontFamily: 'Acumin Pro'))),
-            StatusPill(
-                text:
-                    '$selectedTransport (${widget.weight} ${widget.weightUnit})',
-                color: cyan),
+            _summaryPill(
+                '$selectedTransport (${widget.weight} ${widget.weightUnit})'),
           ],
         ),
-        const SizedBox(height: 7),
-        Text(_money(total),
-            style: const TextStyle(
-                color: cyan,
-                fontSize: 31,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -.5,
-                fontFamily: 'Acumin Pro')),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-              color: mint.withValues(alpha: .14),
-              borderRadius: BorderRadius.circular(6)),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle, color: mint, size: 14),
-              SizedBox(width: 5),
-              Text('Tarifa calculada al instante',
-                  style: TextStyle(
-                      color: Color(0xFFB9D4FF),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'Acumin Pro')),
-            ],
-          ),
+        const SizedBox(height: 9),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(_money(total),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -.5,
+                    fontFamily: 'Acumin Pro')),
+            _summaryPill('Tarifa calculada al instante'),
+          ],
         ),
-        const SizedBox(height: 12),
-        const Divider(color: Color(0x28FFFFFF), height: 1),
+        const SizedBox(height: 13),
+        const Divider(color: Color(0x55FFFFFF), height: 1),
         const SizedBox(height: 8),
         _priceLine('Tarifa base de envío', base),
+        _priceLine('Servicio y gestión logística', service),
         _priceLine('Carga adicional (${widget.weight} ${widget.weightUnit})',
             additional),
-        _priceLine('Servicio y gestión logística', service),
         Container(
           margin: const EdgeInsets.only(top: 3),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .08),
+              color: Colors.white.withValues(alpha: .13),
               borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: glassBorder)),
-          child:
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Subtotal del envío',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Acumin Pro')),
-            Text(_money(shipping),
-                style: const TextStyle(
-                    color: cyan,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Acumin Pro')),
-          ]),
+              border: Border.all(color: Colors.white.withValues(alpha: .30))),
+          child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Subtotal del envío',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Acumin Pro')),
+                Text(_money(shipping),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Acumin Pro')),
+              ]),
         ),
         if (widget.invoiceAmount > 0) ...[
           const SizedBox(height: 11),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             decoration: BoxDecoration(
-                color: figmaBlue.withValues(alpha: .65),
+                color: figmaBlue,
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: cyan.withValues(alpha: .45))),
+                border: Border.all(color: figmaBlue)),
             child: Row(
               children: [
-                const Icon(Icons.inventory_2_outlined, color: mint, size: 20),
+                const Icon(Icons.inventory_2_outlined,
+                    color: Colors.white, size: 20),
                 const SizedBox(width: 9),
                 Expanded(
                     child: Column(
@@ -527,13 +449,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                               fontFamily: 'Acumin Pro')),
                       const Text('(Valor a recaudar para la empresa)',
                           style: TextStyle(
-                              color: Color(0xFFB9D4FF),
+                              color: Colors.white,
                               fontSize: 9.5,
                               fontFamily: 'Acumin Pro')),
                     ])),
                 Text('+ ${_money(widget.invoiceAmount)}',
                     style: const TextStyle(
-                        color: cyan,
+                        color: Colors.white,
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                         fontFamily: 'Acumin Pro')),
@@ -564,7 +486,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                 ]),
             Text(_money(total),
                 style: const TextStyle(
-                    color: cyan,
+                    color: Colors.white,
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
                     fontFamily: 'Acumin Pro')),
@@ -574,23 +496,53 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     );
   }
 
+  Widget _summaryPill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: Colors.white.withValues(alpha: .28)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          fontFamily: 'Acumin Pro',
+        ),
+      ),
+    );
+  }
+
   Widget _priceLine(String label, double value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: const TextStyle(
-                  color: Color(0xFFB9D4FF),
-                  fontSize: 10.5,
-                  fontFamily: 'Acumin Pro')),
-          Text(_money(value),
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Acumin Pro')),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 11.5,
+                    fontFamily: 'Acumin Pro')),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white.withValues(alpha: .28)),
+            ),
+            child: Text(_money(value),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Acumin Pro')),
+          ),
         ],
       ),
     );

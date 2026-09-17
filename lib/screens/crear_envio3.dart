@@ -7,7 +7,6 @@ import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
-import '../widgets/wizard.dart';
 import 'seguimiento_pedido.dart';
 
 class CrearEnvio3 extends StatefulWidget {
@@ -29,6 +28,7 @@ class CrearEnvio3 extends StatefulWidget {
     this.paymentMethod = 'Efectivo',
     this.productPhotos = const [],
     this.invoicePhoto,
+    this.invoiceFileName = 'factura.jpg',
     this.originRefs = '',
     this.destinationRefs = '',
     this.recipientName = '',
@@ -55,6 +55,7 @@ class CrearEnvio3 extends StatefulWidget {
   final String paymentMethod;
   final List<Uint8List> productPhotos;
   final Uint8List? invoicePhoto;
+  final String invoiceFileName;
   final String originRefs;
   final String destinationRefs;
   final String recipientName;
@@ -68,49 +69,29 @@ class CrearEnvio3 extends StatefulWidget {
   State<CrearEnvio3> createState() => _CrearEnvio3State();
 }
 
-class _CrearEnvio3State extends State<CrearEnvio3> {
-  static const estados = [
-    'Buscando conductor...',
-    'Conductor encontrado',
-    'Asignando conductor...',
-  ];
-
-  int estado = 0;
-  int seconds = 0;
+class _CrearEnvio3State extends State<CrearEnvio3>
+    with SingleTickerProviderStateMixin {
   bool failed = false;
-  Timer? timer;
+  late final AnimationController characterAnimation;
 
   @override
   void initState() {
     super.initState();
+    characterAnimation = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
     _begin();
   }
 
   @override
   void dispose() {
-    timer?.cancel();
+    characterAnimation.dispose();
     super.dispose();
   }
 
   void _begin() {
-    setState(() {
-      estado = 0;
-      seconds = 0;
-      failed = false;
-    });
-    timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) return t.cancel();
-      setState(() {
-        seconds += 1;
-        if (seconds <= 4) {
-          estado = 0;
-        } else if (seconds <= 7) {
-          estado = 1;
-        } else {
-          estado = 2;
-        }
-      });
-    });
+    setState(() => failed = false);
     _create();
   }
 
@@ -127,7 +108,8 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
     }
     final invoice = widget.invoicePhoto;
     if (invoice != null) {
-      final result = await apiClient.uploadEvidence(invoice, 'factura.jpg');
+      final result =
+          await apiClient.uploadEvidence(invoice, widget.invoiceFileName);
       stored.add(
         result['evidence']?.toString() ?? result['url']?.toString() ?? '',
       );
@@ -169,7 +151,7 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
         serviceType: widget.serviceType,
         scheduledDate: widget.scheduledDate,
         scheduledTime: widget.scheduledTime,
-        isScheduled: widget.serviceType == 'Programado',
+        isScheduled: widget.isScheduled || widget.serviceType == 'Programado',
         weight: widget.weight.toDouble(),
         weightUnit: widget.weightUnit == 'lb' ? 'lb' : 'kg',
       );
@@ -192,93 +174,193 @@ class _CrearEnvio3State extends State<CrearEnvio3> {
     } catch (_) {
       if (!mounted) return;
       setState(() => failed = true);
-      timer?.cancel();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WizardScaffold(
-      title: 'Asignando conductor',
-      subtitle: failed
-          ? 'No pudimos crear el pedido'
-          : estados[estado],
-      description: failed
-          ? 'La API respondió con error. Verifica la conexión y reintenta.'
-          : 'Estamos buscando un conductor disponible cerca de ti.\nEsto puede tardar unos segundos...',
-      step: 2,
-      onClose: () => Navigator.of(context).pop(),
-      body: Column(
-        children: [
-          const SizedBox(height: 4),
-          SizedBox(
-            height: 300,
-            width: double.infinity,
-            child: Image.asset(
-              'assets/img/EstadosCrearEnvio/crearenvio.png',
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    return Scaffold(
+      backgroundColor: navy,
+      body: Container(
+        decoration: const BoxDecoration(gradient: appGradient),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 92,
+                      height: 28,
+                      child: Image.asset(
+                        'assets/brand/incoex-logo.png',
+                        fit: BoxFit.contain,
+                        alignment: Alignment.centerLeft,
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        height: 25,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .06),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: .28)),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '× Cancelar',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final imageHeight = (constraints.maxHeight * .55)
+                          .clamp(220.0, 300.0)
+                          .toDouble();
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: imageHeight,
+                            width: double.infinity,
+                            child: AnimatedBuilder(
+                              animation: characterAnimation,
+                              builder: (context, child) {
+                                final value = characterAnimation.value;
+                                return Transform.translate(
+                                  offset: Offset(0, -5 * value),
+                                  child: Transform.scale(
+                                    scale: .98 + value * .02,
+                                    child: child,
+                                  ),
+                                );
+                              },
+                              child: Image.asset(
+                                'assets/img/EstadosCrearEnvio/crearenvio.png',
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) =>
+                                    const SizedBox.shrink(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: .06),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: .25)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (!failed)
+                                  const SizedBox(
+                                    width: 11,
+                                    height: 11,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                if (!failed) const SizedBox(width: 5),
+                                Text(
+                                  failed
+                                      ? 'No se pudo asignar'
+                                      : 'Buscando conductor...',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w700,
+                                    fontFamily: 'Acumin Pro',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            failed ? 'No pudimos crear el pedido' : 'Asignando conductor',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            failed
+                                ? 'La API no respondió. Revisa tu conexión.'
+                                : 'Estamos buscando un conductor disponible\ncerca de ti.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFFE1E8FF),
+                              fontSize: 9.5,
+                              height: 1.25,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          SizedBox(
+                            width: 188,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(5),
+                              child: LinearProgressIndicator(
+                                value: failed ? 1 : null,
+                                minHeight: 4,
+                                backgroundColor: Colors.white,
+                                color: accentBlue,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            'Esto puede tardar unos segundos...',
+                            style: const TextStyle(
+                              color: Color(0xFFD4DCFA),
+                              fontSize: 8.5,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                          if (failed) ...[
+                            const SizedBox(height: 18),
+                            GlassButton(
+                              label: 'Reintentar búsqueda',
+                              filled: true,
+                              height: 38,
+                              onPressed: _begin,
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            failed ? 'No pudimos crear el pedido' : estados[estado],
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 19,
-              fontWeight: FontWeight.w800,
-              fontFamily: 'Acumin Pro',
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            failed
-                ? 'La API no respondió. Revisa tu conexión.'
-                : 'Estamos buscando un conductor disponible\ncerca de ti. Esto puede tardar unos segundos...',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFFB9D4FF),
-              fontSize: 12,
-              fontFamily: 'Acumin Pro',
-            ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: 210,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(5),
-              child: LinearProgressIndicator(
-                value: failed ? 1 : (estado + 1) / 3,
-                minHeight: 5,
-                backgroundColor: Colors.white.withValues(alpha: .18),
-                color: cyan,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${seconds}s',
-            style: const TextStyle(
-              color: Color(0xFF8FA0C4),
-              fontSize: 10.5,
-              fontFamily: 'Acumin Pro',
-            ),
-          ),
-          const SizedBox(height: 30),
-          if (failed)
-            GlassButton(
-              label: 'Reintentar búsqueda',
-              filled: true,
-              textColor: Colors.white,
-              onPressed: _begin,
-            )
-          else
-            GlassButton(
-              label: 'Cancelar',
-              onPressed: () => Navigator.of(context).pop(),
-              width: 220,
-            ),
-        ],
+        ),
       ),
     );
   }

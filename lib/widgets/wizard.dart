@@ -14,6 +14,13 @@ class WizardScaffold extends StatelessWidget {
     this.totalSteps = 3,
     this.footer,
     this.onClose,
+    this.showNotification = true,
+    this.showProgress = true,
+    this.showDescription = true,
+    this.showStepBadge = false,
+    this.backgroundLogoOpacity = .53,
+    this.backgroundLogoOffsetY = 0,
+    this.backgroundLogoScale = 1,
   });
 
   final String title;
@@ -24,6 +31,13 @@ class WizardScaffold extends StatelessWidget {
   final int totalSteps;
   final Widget? footer;
   final VoidCallback? onClose;
+  final bool showNotification;
+  final bool showProgress;
+  final bool showDescription;
+  final bool showStepBadge;
+  final double backgroundLogoOpacity;
+  final double backgroundLogoOffsetY;
+  final double backgroundLogoScale;
 
   @override
   Widget build(BuildContext context) {
@@ -52,82 +66,110 @@ class WizardScaffold extends StatelessWidget {
           ),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withValues(alpha: .18)),
+          if (showStepBadge)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .08),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.white.withValues(alpha: .30)),
+                ),
+                child: Text(
+                  'Paso ${safeStep + 1}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
               ),
-              child: Image.asset(
-                'assets/img/HomeCliente/notificaciones.png',
-                width: 22,
-                height: 22,
-                fit: BoxFit.contain,
-                semanticLabel: 'Notificaciones',
-                errorBuilder: (_, __, ___) => const Icon(
-                  Icons.notifications_none_rounded,
-                  color: Colors.white,
-                  size: 22,
+            )
+          else if (showNotification)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: .18)),
+                ),
+                child: Image.asset(
+                  'assets/img/HomeCliente/notificaciones.png',
+                  width: 22,
+                  height: 22,
+                  fit: BoxFit.contain,
+                  semanticLabel: 'Notificaciones',
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.notifications_none_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
       extendBodyBehindAppBar: true,
       body: AppBackground(
+        backgroundLogoOpacity: backgroundLogoOpacity,
+        backgroundLogoOffsetY: backgroundLogoOffsetY,
+        backgroundLogoScale: backgroundLogoScale,
         child: SafeArea(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(22, 76, 22, 28),
+            padding: EdgeInsets.fromLTRB(
+                22, showProgress ? 76 : 68, 22, 28),
             children: [
-              Row(
-                children: List.generate(
-                  safeTotalSteps,
-                  (index) => Expanded(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      height: 5,
-                      margin: EdgeInsets.only(
-                        right: index == safeTotalSteps - 1 ? 0 : 6,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(4),
-                        color: index <= safeStep
-                            ? cyan
-                            : Colors.white.withValues(alpha: .16),
+              if (showProgress) ...[
+                Row(
+                  children: List.generate(
+                    safeTotalSteps,
+                    (index) => Expanded(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        height: 5,
+                        margin: EdgeInsets.only(
+                          right: index == safeTotalSteps - 1 ? 0 : 6,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          color: index <= safeStep
+                              ? cyan
+                              : Colors.white.withValues(alpha: .16),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Paso ${safeStep + 1} de $safeTotalSteps',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Acumin Pro',
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Paso ${safeStep + 1} de $safeTotalSteps',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Acumin Pro',
+                      ),
                     ),
-                  ),
-                  Text(
-                    sectionLabels[safeStep],
-                    style: const TextStyle(
-                      color: Color(0xFFB9D4FF),
-                      fontSize: 10.5,
-                      fontFamily: 'Acumin Pro',
+                    Text(
+                      sectionLabels[safeStep],
+                      style: const TextStyle(
+                        color: Color(0xFFB9D4FF),
+                        fontSize: 10.5,
+                        fontFamily: 'Acumin Pro',
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
+                  ],
+                ),
+                const SizedBox(height: 22),
+              ],
               Text(
                 subtitle,
                 style: const TextStyle(
@@ -138,15 +180,17 @@ class WizardScaffold extends StatelessWidget {
                   fontFamily: 'Acumin Pro',
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                description,
-                style: const TextStyle(
-                  color: Color(0xFFB9D4FF),
-                  fontSize: 12.5,
-                  fontFamily: 'Acumin Pro',
+              if (showDescription) ...[
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 12.5,
+                    fontFamily: 'Acumin Pro',
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 22),
               body,
               if (footerWidget != null) ...[

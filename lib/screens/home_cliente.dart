@@ -350,8 +350,7 @@ class _HomeTabState extends State<_HomeTab> {
           ],
         ),
         const SizedBox(height: 18),
-        const _StepBanner(),
-        const SizedBox(height: 24),
+        const SizedBox(height: 18),
         const Text(
           'Selecciona el transporte',
           style: TextStyle(
@@ -400,6 +399,14 @@ class _HomeTabState extends State<_HomeTab> {
           onOriginSelected: (place) => setState(() => originPlace = place),
           onDestinationSelected: (place) =>
               setState(() => destinationPlace = place),
+        ),
+        const SizedBox(height: 12),
+        _FareCard(
+          km: _km,
+          fare: _fareFor(transport),
+          transportLabel: transport,
+          rate: settings?.rateFor(transport),
+          usdRate: settings?.dollarRate ?? 36.5,
         ),
         const SizedBox(height: 12),
         _ReferencesCard(
@@ -471,65 +478,6 @@ class _HomeTabState extends State<_HomeTab> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _StepBanner extends StatelessWidget {
-  const _StepBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(15, 14, 15, 15),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .13),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: glassBorder),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Paso 1 de 2',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Acumin Pro',
-                    ),
-                  ),
-                  const Text(
-                    'Información del envío',
-                    style: TextStyle(
-                      color: Color(0xFFB9D4FF),
-                      fontSize: 10.5,
-                      fontFamily: 'Acumin Pro',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: .5,
-                  minHeight: 5,
-                  backgroundColor: Colors.white.withValues(alpha: .18),
-                  color: cyan,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

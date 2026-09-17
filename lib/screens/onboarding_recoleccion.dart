@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 import '../widgets/glass.dart' show BrandLockup;
@@ -14,7 +14,7 @@ class OnboardingRecoleccion extends StatefulWidget {
 
 class _OnboardingRecoleccionState extends State<OnboardingRecoleccion> {
   static const titulo =
-      'Gestiona la recolección,\nentrega de tus paquetes de forma\nrápida y segura desde un solo lugar.';
+      'Gestiona la recolección,\nentrega de tus paquetes de forma rápida\ny segura desde un solo lugar.';
   static const visual = 'assets/img/imagen_pantalla1.png';
 
   @override
@@ -24,64 +24,36 @@ class _OnboardingRecoleccionState extends State<OnboardingRecoleccion> {
         decoration: const BoxDecoration(gradient: bgGradient),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 22),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
             child: Column(
               children: [
-                Row(
-                  children: List.generate(
-                    3,
-                    (index) => Expanded(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        height: 5,
-                        margin: EdgeInsets.only(
-                          right: index == 2 ? 0 : 7,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: index == 0
-                              ? Colors.white
-                              : Colors.white.withValues(alpha: .18),
+                FractionallySizedBox(
+                  widthFactor: .9,
+                  child: Row(
+                    children: List.generate(
+                      3,
+                      (index) => Expanded(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          height: 5,
+                          margin: EdgeInsets.only(
+                            right: index == 2 ? 0 : 7,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: index == 0
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: .18),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
                 const BrandLockup(),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        FractionallySizedBox(
-                          heightFactor: .92,
-                          widthFactor: 1,
-                          child: Image.asset(
-                            visual,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                          ),
-                        ),
-                        const Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                stops: [.55, .85],
-                                colors: [
-                                  Colors.transparent,
-                                  Color(0xCC0B1B4D),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                const Expanded(
+                  child: OnboardingVisual(asset: visual),
                 ),
                 HeroCopy(
                   title: titulo,
@@ -126,19 +98,19 @@ class HeroCopy extends StatelessWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 17,
-            height: 1.7,
-            fontWeight: FontWeight.w600,
+            fontSize: 16,
+            height: 1.15,
+            fontWeight: FontWeight.w700,
             fontFamily: 'Acumin Pro',
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 36),
         _PillButton(
           label: 'Continuar',
           filled: false,
           onTap: onNext,
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         _PillButton(
           label: 'Omitir',
           filled: true,
@@ -167,7 +139,7 @@ class _PillButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final button = SizedBox(
       width: double.infinity,
-      height: 52,
+      height: 48,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -190,7 +162,7 @@ class _PillButton extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: blueText ? figmaBlue : Colors.white,
-                  fontSize: 17,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                   fontFamily: 'Acumin Pro',
                 ),
@@ -201,5 +173,58 @@ class _PillButton extends StatelessWidget {
       ),
     );
     return button;
+  }
+}
+
+/// The source PNG contains transparent margins around the character. It is
+/// intentionally rendered larger than the viewport and clipped here so the
+/// character has the same visual scale as the mobile design reference.
+class OnboardingVisual extends StatelessWidget {
+  const OnboardingVisual({super.key, required this.asset});
+
+  final String asset;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final imageSize = constraints.maxWidth * 2.1;
+
+        return ClipRect(
+          child: Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned(
+                top: 0,
+                left: (constraints.maxWidth - imageSize) / 2,
+                width: imageSize,
+                height: imageSize,
+                child: Image.asset(
+                  asset,
+                  fit: BoxFit.fill,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: [.63, .96],
+                      colors: [
+                        Colors.transparent,
+                        Color(0xCC0B1B4D),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

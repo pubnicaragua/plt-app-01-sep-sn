@@ -104,6 +104,7 @@ class Trip {
     this.serviceType,
     this.contactName,
     this.contactPhone,
+    this.driverPhoto,
     this.pickupTime,
     this.originLat,
     this.originLng,
@@ -133,6 +134,7 @@ class Trip {
   final String? serviceType;
   final String? contactName;
   final String? contactPhone;
+  final String? driverPhoto;
   final String? pickupTime;
   final double? originLat;
   final double? originLng;
@@ -187,6 +189,7 @@ class Trip {
       serviceType: json['serviceType']?.toString(),
       contactName: json['contactName']?.toString(),
       contactPhone: json['contactPhone']?.toString(),
+      driverPhoto: (json['driverPhoto'] ?? json['driverAvatar'] ?? json['photo'])?.toString(),
       pickupTime: json['pickupTime']?.toString(),
       originLat: (json['originLat'] as num?)?.toDouble(),
       originLng: (json['originLng'] as num?)?.toDouble(),
@@ -273,6 +276,7 @@ class TrackingData {
     this.driverVehicle,
     this.driverPlate,
     this.driverPhone,
+    this.driverPhoto,
     this.currentLocationLabel,
   });
 
@@ -286,6 +290,7 @@ class TrackingData {
   final String? driverVehicle;
   final String? driverPlate;
   final String? driverPhone;
+  final String? driverPhoto;
   final String? currentLocationLabel;
 
   factory TrackingData.fromJson(Map<String, dynamic> json) {
@@ -307,6 +312,7 @@ class TrackingData {
       driverVehicle: json['driverVehicle']?.toString(),
       driverPlate: json['driverPlate']?.toString(),
       driverPhone: json['driverPhone']?.toString(),
+      driverPhoto: (json['driverPhoto'] ?? json['driverAvatar'] ?? json['photo'])?.toString(),
       currentLocationLabel: json['currentLocationLabel']?.toString(),
     );
   }

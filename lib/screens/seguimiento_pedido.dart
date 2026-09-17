@@ -1,9 +1,13 @@
 ﻿import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
@@ -28,12 +32,17 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   late Future<TrackingData> tracking;
   String _prevStatus = '';
   Timer? poll;
+  GoogleMapController? _mapController;
+  TrackingData? _mapData;
+  LatLng? _lastCenteredDriver;
+  List<LatLng> _roadRoute = const [];
 
   @override
   void initState() {
     super.initState();
     _prevStatus = widget.trip.status;
     tracking = apiClient.getTracking(widget.trip.id);
+    _loadRoadRoute();
     poll = Timer.periodic(const Duration(seconds: 5), (_) => _refresh());
   }
 
@@ -61,10 +70,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       }
       final data = await apiClient.getTrip(widget.trip.id);
       if (!mounted) return;
+      final refreshedTracking = apiClient.getTracking(widget.trip.id);
       if (data.status != _prevStatus) {
         setState(() {
           _prevStatus = data.status;
-          tracking = apiClient.getTracking(widget.trip.id);
+          tracking = refreshedTracking;
         });
         pushNotification(
           title: 'Estado del envío ${data.id}',
@@ -89,6 +99,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             ),
           ),
         );
+      } else {
+        setState(() => tracking = refreshedTracking);
       }
     } catch (_) {}
   }
@@ -187,325 +199,315 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     );
   }
 
+  LatLng get _initialMapCenter {
+    final trip = widget.trip;
+    final latitude = trip.originLat ?? trip.destinationLat ?? 12.115;
+    final longitude = trip.originLng ?? trip.destinationLng ?? -86.236;
+    return LatLng(latitude, longitude);
+  }
+
+  List<LatLng> _routeCoordinates(TrackingData? data) {
+    if (_roadRoute.length >= 2) return _roadRoute;
+    final liveRoute = data?.route ?? const <TrackingPoint>[];
+    if (liveRoute.length >= 3) {
+      return liveRoute
+          .map((point) => LatLng(point.latitude, point.longitude))
+          .toList();
+    }
+    return const [];
+  }
+
+  Future<void> _loadRoadRoute() async {
+    final trip = widget.trip;
+    if (trip.originLat == null ||
+        trip.originLng == null ||
+        trip.destinationLat == null ||
+        trip.destinationLng == null) {
+      return;
+    }
+
+    // Se puede reemplazar en el build con --dart-define para usar una clave restringida.
+    const mapsKey = String.fromEnvironment(
+      'GOOGLE_MAPS_API_KEY',
+      defaultValue: 'AIzaSyCMwxArmM-BEJuxgbjOiON8KdH_IsNH1F4',
+    );
+    if (mapsKey.isEmpty) return;
+    final uri = Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
+      'origin': '${trip.originLat},${trip.originLng}',
+      'destination': '${trip.destinationLat},${trip.destinationLng}',
+      'mode': 'driving',
+      'alternatives': 'false',
+      'key': mapsKey,
+    });
+
+    try {
+      final response = await http.get(uri);
+      if (response.statusCode < 200 || response.statusCode >= 300) return;
+      final payload = jsonDecode(response.body);
+      if (payload is! Map || payload['status'] != 'OK') return;
+      final routes = payload['routes'];
+      if (routes is! List || routes.isEmpty) return;
+      final overview = routes.first['overview_polyline'];
+      final encoded = overview is Map ? overview['points']?.toString() : null;
+      if (encoded == null || encoded.isEmpty) return;
+      final points = _decodePolyline(encoded);
+      if (!mounted || points.length < 2) return;
+      setState(() => _roadRoute = points);
+    } catch (_) {
+      // Si falla la consulta, se conserva la ruta enviada por el tracking.
+    }
+  }
+
+  List<LatLng> _decodePolyline(String encoded) {
+    final points = <LatLng>[];
+    var index = 0;
+    var latitude = 0;
+    var longitude = 0;
+
+    while (index < encoded.length) {
+      var result = 0;
+      var shift = 0;
+      int byte;
+      do {
+        byte = encoded.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20 && index < encoded.length);
+      latitude += (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+
+      result = 0;
+      shift = 0;
+      do {
+        byte = encoded.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20 && index < encoded.length);
+      longitude += (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+
+      points.add(LatLng(latitude / 1e5, longitude / 1e5));
+    }
+    return points;
+  }
+
+  Set<Marker> _mapMarkers(TrackingData? data) {
+    final markers = <Marker>{};
+    final trip = widget.trip;
+    final driver = data?.driverLocation;
+    if (driver != null) {
+      markers.add(Marker(
+        markerId: const MarkerId('driver'),
+        position: LatLng(driver.latitude, driver.longitude),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        infoWindow: InfoWindow(title: data?.driver ?? trip.driver),
+      ));
+    }
+    if (trip.destinationLat != null && trip.destinationLng != null) {
+      markers.add(Marker(
+        markerId: const MarkerId('destination'),
+        position: LatLng(trip.destinationLat!, trip.destinationLng!),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        infoWindow: InfoWindow(title: trip.destination),
+      ));
+    }
+    return markers;
+  }
+
+  Set<Polyline> _mapPolylines(TrackingData? data) {
+    final coordinates = _routeCoordinates(data);
+    if (coordinates.length < 2) return const <Polyline>{};
+    return {
+      Polyline(
+        polylineId: const PolylineId('tracking-route'),
+        points: coordinates,
+        color: const Color(0xFF1677FF),
+        width: 5,
+        jointType: JointType.round,
+      ),
+    };
+  }
+
+  void _syncMapData(TrackingData data) {
+    if (identical(data, _mapData)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _mapData = data);
+      final driver = data.driverLocation;
+      if (driver == null || _mapController == null) return;
+      final position = LatLng(driver.latitude, driver.longitude);
+      final previous = _lastCenteredDriver;
+      if (previous != null &&
+          (previous.latitude - position.latitude).abs() < .00001 &&
+          (previous.longitude - position.longitude).abs() < .00001) {
+        return;
+      }
+      _lastCenteredDriver = position;
+      _mapController!.animateCamera(CameraUpdate.newLatLng(position));
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final trip = widget.trip;
     final distance = trip.distanceKm ?? 4.2;
     final eta = math.max(4, (distance * 2.4).round());
-    final active = trip.isActive;
-    final statusColor = active ? mint : Colors.white54;
     return Scaffold(
       body: AppBackground(
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-                child: Row(
-                  children: [
-                    InkWell(
-                      onTap: widget.closeable
-                          ? () => Navigator.of(context).pop()
-                          : null,
-                      borderRadius: BorderRadius.circular(30),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .12),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: glassBorder),
-                        ),
-                        child: const Icon(Icons.arrow_back_ios_new_rounded,
-                            color: Colors.white, size: 17),
+        child: Stack(
+          children: [
+            Positioned.fill(child: _buildGoogleMap()),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                  child: Row(
+                    children: [
+                      _HeaderButton(
+                        icon: Icons.arrow_back_ios_new_rounded,
+                        onTap: widget.closeable
+                            ? () => Navigator.of(context).pop()
+                            : null,
                       ),
-                    ),
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          'Seguimiento en Vivo',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Acumin Pro',
-                          ),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: .16),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: statusColor.withValues(alpha: .5)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: statusColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            active ? 'Activo' : trip.status,
+                      const Expanded(
+                        child: Center(
+                          child: Text(
+                            'Seguimiento en vivo',
                             style: TextStyle(
-                              color: statusColor,
-                              fontSize: 11,
+                              color: Colors.white,
+                              fontSize: 16,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'Acumin Pro',
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Chips superiores
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _Pill(
-                        child: Text(
-                          'GUÍA: ${trip.id}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Acumin Pro',
-                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 7),
-                    _Pill(
-                      onTap: () => _shareTracking(),
-                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.ios_share_rounded, color: Colors.white, size: 13),
-                        SizedBox(width: 5),
-                        Text('Compartir', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
-                      ]),
-                    ),
-                    const SizedBox(width: 7),
-                    _Pill(onTap: () => _shareWhatsApp(), child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 13),
-                      SizedBox(width: 5),
-                      Text('Chat', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
-                      SizedBox(width: 3),
-                      CircleAvatar(radius: 7, backgroundColor: Color(0xFFE5484D), child: Text('1', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800))),
-                    ])),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF101E4A),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: glassBorder),
+                      const SizedBox(width: 42),
+                    ],
                   ),
-                  child: _buildBody(distance, eta),
                 ),
               ),
-            ],
-          ),
+            ),
+            DraggableScrollableSheet(
+              initialChildSize: .63,
+              minChildSize: .58,
+              maxChildSize: .90,
+              snap: true,
+              snapSizes: const [.63, .90],
+              builder: (context, scrollController) {
+                return ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(22),
+                  ),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xEC1E246E),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(22),
+                        ),
+                      ),
+                      child: _buildBody(distance, eta, scrollController),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildBody(double distance, int eta) {
+  Widget _buildGoogleMap() {
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(target: _initialMapCenter, zoom: 12.8),
+      markers: _mapMarkers(_mapData),
+      polylines: _mapPolylines(_mapData),
+      mapType: MapType.normal,
+      zoomControlsEnabled: false,
+      myLocationButtonEnabled: false,
+      compassEnabled: false,
+      mapToolbarEnabled: false,
+      rotateGesturesEnabled: false,
+      tiltGesturesEnabled: false,
+      onMapCreated: (controller) => _mapController = controller,
+    );
+  }
+
+  Widget _buildBody(
+      double distance, int eta, ScrollController scrollController) {
     final trip = widget.trip;
     return FutureBuilder<TrackingData>(
       future: tracking,
       builder: (context, snapshot) {
         final liveData = snapshot.data;
         final currentStatus = liveData?.status ?? trip.status;
-        final routeProgress = _progressFor(currentStatus);
-        final isActive = ['Asignado', 'En camino', 'En entrega'].contains(currentStatus);
+        final isActive =
+            !['Completado', 'Cancelado', 'Anulado'].contains(currentStatus);
         final driverName = liveData?.driver ?? trip.driver;
         final driverVehicle = liveData?.driverVehicle ?? 'Vehículo asignado';
         final driverPlate = liveData?.driverPlate ?? 'Placa pendiente';
-        final speed = liveData?.driverLocation?.speedKmh;
+        final driverPhoto = liveData?.driverPhoto ?? trip.driverPhoto;
         final currentLocation = liveData?.currentLocationLabel ?? trip.destination;
-        final speedLabel = speed != null && speed > 0 ? '${speed.toStringAsFixed(0)} km/h' : 'GPS activo';
+        if (liveData != null) _syncMapData(liveData);
         return ListView(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 28),
           children: [
-            // Barra GPS Dinámico
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: const Color(0xFF17285C),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: glassBorder),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.gps_fixed_rounded, color: mint, size: 16),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'GPS Dinámico Managua',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Acumin Pro',
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${_secondsAgo().toString().padLeft(2, '0')}s · 2a',
-                    style: const TextStyle(
-                      color: Color(0xFF8FA0C4),
-                      fontSize: 10.5,
-                      fontFamily: 'Acumin Pro',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            // Mapa
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+            Center(
               child: Container(
-                height: 230,
+                width: 44,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8ECF2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Stack(
-                  children: [
-                    CustomPaint(
-                      painter: _LiveMapPainter(
-                        progress: routeProgress,
-                        route: liveData?.route ?? const [],
-                        driverLat: liveData?.driverLocation?.latitude,
-                        driverLng: liveData?.driverLocation?.longitude,
-                        live: liveData?.driverLocation != null,
-                      ),
-                      size: Size.infinite,
-                    ),
-                    Positioned(
-                      top: 10,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(9),
-                          boxShadow: const [BoxShadow(color: Color(0x33071B53), blurRadius: 10, offset: Offset(0, 3))],
-                        ),
-                        child: Text(
-                          currentLocation,
-                          style: TextStyle(color: Color(0xFF17396E), fontSize: 10, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro'),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 14,
-                      bottom: 16,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0D1F52),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          speed != null && speed > 0
-                              ? '$driverPlate · ${speed.toStringAsFixed(0)} km/h'
-                              : driverPlate,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Acumin Pro',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(5),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
             // Estado de entrega
-            Row(
-              children: [
-                Container(
-                  width: 9,
-                  height: 9,
-                  decoration: const BoxDecoration(color: mint, shape: BoxShape.circle),
+            Row(children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                currentStatus == 'Asignado' ? 'En camino' : currentStatus,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Acumin Pro',
                 ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    currentStatus.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      letterSpacing: .7,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Acumin Pro',
-                    ),
-                  ),
-                ),
-                _CardPill(text: 'Asegurado', color: mint),
-                const SizedBox(width: 6),
-                _CardPill(text: speedLabel, color: cyan),
-              ],
-            ),
+              ),
+            ]),
             const SizedBox(height: 11),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  'Llegada: $eta min',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '(${distance.toStringAsFixed(1)} km)',
-                  style: const TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 13,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-              ],
+            Text(
+              'Llegada en $eta minutos (${distance.toStringAsFixed(1)} km)',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Acumin Pro',
+              ),
             ),
             const SizedBox(height: 3),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined, color: Color(0xFFB9D4FF), size: 13),
-                SizedBox(width: 6),
+                _AssetIcon('location.png', size: 15),
+                const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    currentLocation,
+                    'Aproximándose a $currentLocation',
                     style: const TextStyle(
-                      color: Color(0xFFB9D4FF),
-                      fontSize: 11.5,
+                      color: Colors.white,
+                      fontSize: 10.5,
                       fontFamily: 'Acumin Pro',
                     ),
                   ),
@@ -516,7 +518,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: .45,
+                value: _progressFor(currentStatus),
                 minHeight: 5,
                 backgroundColor: Colors.white.withValues(alpha: .16),
                 color: figmaBlue,
@@ -527,9 +529,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             Container(
               padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF17285C),
+                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: glassBorder),
+                 border: Border.all(color: Colors.transparent),
               ),
               child: Row(
                 children: [
@@ -544,19 +546,12 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     ),
                   ),
                   _MiniBtn(
-                    icon: Icons.content_copy_rounded,
+                    asset: 'copiar.png',
                     label: 'Copiar',
                     onTap: () => _copyText(trip.id, 'Código de seguimiento copiado'),
                   ),
                   const SizedBox(width: 6),
-                  _MiniBtn(icon: Icons.ios_share_rounded, label: 'Compartir', filled: true, onTap: () => _shareTracking()),
-                  const SizedBox(width: 6),
-                  _MiniBtn(
-                    icon: Icons.chat_rounded,
-                    label: 'WhatsApp',
-                    filled: true,
-                    onTap: () => _shareWhatsApp(),
-                  ),
+                  _MiniBtn(asset: 'compartir.png', label: 'Compartir', filled: true, onTap: () => _shareTracking()),
                 ],
               ),
             ),
@@ -565,25 +560,13 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: const Color(0xFF17285C),
+                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: glassBorder),
+                 border: Border.all(color: Colors.transparent),
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(colors: [Color(0xFF0D47D9), Color(0xFF083EC0)]),
-                    ),
-                    child: Text(
-                      initials(driverName),
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
-                    ),
-                  ),
+                  _DriverAvatar(name: driverName, photoUrl: driverPhoto),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -607,22 +590,22 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                       ],
                     ),
                   ),
-                  RoundBtn(icon: Icons.call_rounded, onTap: () => _callDriver(liveData?.driverPhone ?? trip.contactPhone)),
+                  RoundBtn(asset: 'llamada.png', onTap: () => _callDriver(liveData?.driverPhone ?? trip.contactPhone)),
                   const SizedBox(width: 7),
-                  RoundBtn(icon: Icons.chat_bubble_rounded, onTap: () => _shareWhatsApp(), badge: true),
+                  RoundBtn(asset: 'mensaje.png', filled: true, onTap: () => _shareWhatsApp()),
                 ],
               ),
             ),
             const SizedBox(height: 14),
-            const Text('ESTADO DE ENVÍO', style: TextStyle(color: Color(0xFF8FA0C4), fontSize: 10, letterSpacing: .8, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+            const Text('Estado de envío', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
             const SizedBox(height: 9),
             _StepsRow(status: currentStatus),
             const SizedBox(height: 16),
             if (isActive)
               SizedBox(
-                height: 50,
+                height: 38,
                 child: Material(
-                  color: const Color(0xFFB7E24C),
+                  color: accentBlue,
                   borderRadius: BorderRadius.circular(26),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(26),
@@ -632,7 +615,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     child: const Center(
                       child: Text(
                         'Ver Entrega',
-                        style: TextStyle(color: Color(0xFF10224A), fontSize: 15, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
                       ),
                     ),
                   ),
@@ -643,8 +626,6 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       },
     );
   }
-
-  int _secondsAgo() => 5 - (DateTime.now().second % 4);
 
   double _progressFor(String status) {
     switch (status) {
@@ -659,6 +640,31 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       default:
         return 0;
     }
+  }
+}
+
+class _HeaderButton extends StatelessWidget {
+  const _HeaderButton({required this.icon, this.onTap});
+
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      customBorder: const CircleBorder(),
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .12),
+          shape: BoxShape.circle,
+          border: Border.all(color: glassBorder),
+        ),
+        child: Icon(icon, color: Colors.white, size: 17),
+      ),
+    );
   }
 }
 
@@ -680,6 +686,77 @@ class _Pill extends StatelessWidget {
           border: Border.all(color: glassBorder),
         ),
         child: child,
+      ),
+    );
+  }
+}
+
+class _DriverAvatar extends StatelessWidget {
+  const _DriverAvatar({required this.name, this.photoUrl});
+
+  final String name;
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final photo = photoUrl?.trim();
+    return Container(
+      width: 46,
+      height: 46,
+      alignment: Alignment.center,
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(colors: [Color(0xFF0D47D9), Color(0xFF083EC0)]),
+      ),
+      child: photo == null || photo.isEmpty
+          ? Text(
+              initials(name),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Acumin Pro',
+              ),
+            )
+          : Image.network(
+              photo,
+              width: 46,
+              height: 46,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Center(
+                child: Text(
+                  initials(name),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Acumin Pro',
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _AssetIcon extends StatelessWidget {
+  const _AssetIcon(this.name, {required this.size});
+
+  final String name;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/img/PantallaSeguimiento/$name',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => Icon(
+        Icons.image_not_supported_outlined,
+        color: Colors.white,
+        size: size,
       ),
     );
   }
@@ -708,8 +785,9 @@ class _CardPill extends StatelessWidget {
 }
 
 class _MiniBtn extends StatelessWidget {
-  const _MiniBtn({required this.icon, required this.label, this.filled = false, this.onTap});
-  final IconData icon;
+  const _MiniBtn({this.icon, this.asset, required this.label, this.filled = false, this.onTap});
+  final IconData? icon;
+  final String? asset;
   final String label;
   final bool filled;
   final VoidCallback? onTap;
@@ -729,7 +807,9 @@ class _MiniBtn extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 13),
+            asset != null
+                ? _AssetIcon(asset!, size: 13)
+                : Icon(icon, color: Colors.white, size: 13),
             const SizedBox(width: 5),
             Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
           ],
@@ -740,10 +820,11 @@ class _MiniBtn extends StatelessWidget {
 }
 
 class RoundBtn extends StatelessWidget {
-  const RoundBtn({required this.icon, required this.onTap, this.badge = false});
-  final IconData icon;
+  const RoundBtn({this.icon, this.asset, required this.onTap, this.filled = false});
+  final IconData? icon;
+  final String? asset;
   final VoidCallback onTap;
-  final bool badge;
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
@@ -754,29 +835,27 @@ class RoundBtn extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: .09),
-              border: Border.all(color: glassBorder),
+              color: filled ? accentBlue : Colors.white.withValues(alpha: .09),
+              border: Border.all(
+                  color: filled ? accentBlue : glassBorder),
             ),
-            child: Icon(icon, color: Colors.white, size: 18),
+             child: asset != null
+                 ? Center(
+                     child: SizedBox(
+                       width: asset == 'mensaje.png' ? 12 : 14,
+                       height: asset == 'mensaje.png' ? 12 : 14,
+                       child: _AssetIcon(
+                         asset!,
+                         size: asset == 'mensaje.png' ? 12 : 14,
+                       ),
+                     ),
+                   )
+                : Icon(icon, color: Colors.white, size: 18),
           ),
-          if (badge)
-            Positioned(
-              top: -1,
-              right: -2,
-              child: Container(
-                width: 11,
-                height: 11,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5484D),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -800,45 +879,54 @@ class _StepsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        for (var i = 0; i < steps.length; i++) ...[
-          Expanded(
-            child: Row(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: i < _done ? figmaBlue : Colors.white.withValues(alpha: .10),
-                    border: Border.all(color: i < _done ? figmaBlue : Colors.white24),
-                  ),
-                  child: i < _done
-                      ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
-                      : Center(child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'))),
+        Row(
+          children: [
+            for (var i = 0; i < steps.length; i++) ...[
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i < _done
+                      ? figmaBlue
+                      : Colors.white.withValues(alpha: .10),
+                  border: Border.all(
+                      color: i < _done ? figmaBlue : Colors.white24),
                 ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    steps[i],
-                    style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (i != steps.length - 1)
-            Expanded(
-              child: Container(
-                height: 2,
-                margin: const EdgeInsets.symmetric(horizontal: 5),
-                color: i + 1 < _done
-                    ? figmaBlue
-                    : Colors.white.withValues(alpha: .14),
+                child: const Icon(Icons.circle, color: Colors.white, size: 7),
               ),
-            ),
-        ],
+              if (i != steps.length - 1)
+                Expanded(
+                  child: Container(
+                    height: 2,
+                    margin: const EdgeInsets.symmetric(horizontal: 5),
+                    color: i + 1 < _done
+                        ? figmaBlue
+                        : Colors.white.withValues(alpha: .14),
+                  ),
+                ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            for (final step in steps)
+              Expanded(
+                child: Text(
+                  step,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Acumin Pro'),
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }

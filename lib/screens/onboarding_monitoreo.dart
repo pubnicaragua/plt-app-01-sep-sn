@@ -1,10 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 import '../widgets/glass.dart' show BrandLockup;
 import 'inicio.dart';
 import 'onboarding_entrega.dart';
-import 'onboarding_recoleccion.dart' show HeroCopy;
+import 'onboarding_recoleccion.dart' show HeroCopy, OnboardingVisual;
 
 class OnboardingMonitoreo extends StatefulWidget {
   const OnboardingMonitoreo({super.key});
@@ -24,64 +24,37 @@ class _OnboardingMonitoreoState extends State<OnboardingMonitoreo> {
         decoration: const BoxDecoration(gradient: bgGradient),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 22),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
             child: Column(
               children: [
-                Row(
-                  children: List.generate(
-                    3,
-                    (index) => Expanded(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        height: 5,
-                        margin: EdgeInsets.only(
-                          right: index == 2 ? 0 : 7,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: index <= 1
-                              ? Colors.white
-                              : Colors.white.withValues(alpha: .18),
+                FractionallySizedBox(
+                  widthFactor: .9,
+                  child: Row(
+                    children: List.generate(
+                      3,
+                      (index) => Expanded(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          height: 5,
+                          margin: EdgeInsets.only(
+                            right: index == 2 ? 0 : 7,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: index <= 1
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: .18),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
                 const BrandLockup(),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        FractionallySizedBox(
-                          heightFactor: .92,
-                          widthFactor: 1,
-                          child: Image.asset(
-                            'assets/img/imagen_pantalla2.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) =>
-                                const SizedBox.shrink(),
-                          ),
-                        ),
-                        const Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                stops: [.55, .85],
-                                colors: [
-                                  Colors.transparent,
-                                  Color(0xCC0B1B4D),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                const Expanded(
+                  child: OnboardingVisual(
+                    asset: 'assets/img/imagen_pantalla2.png',
                   ),
                 ),
                 HeroCopy(

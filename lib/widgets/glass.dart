@@ -21,10 +21,18 @@ class AppBackground extends StatelessWidget {
     super.key,
     required this.child,
     this.darken = 0.18,
+    this.backgroundLogoOpacity = .53,
+    this.backgroundLogoOffsetX = 0,
+    this.backgroundLogoOffsetY = 0,
+    this.backgroundLogoScale = 1,
   });
 
   final Widget child;
   final double darken;
+  final double backgroundLogoOpacity;
+  final double backgroundLogoOffsetX;
+  final double backgroundLogoOffsetY;
+  final double backgroundLogoScale;
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +43,19 @@ class AppBackground extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (dark)
-              const _DarkBase()
+              _DarkBase(
+                logoOpacity: backgroundLogoOpacity,
+                logoOffsetX: backgroundLogoOffsetX,
+                logoOffsetY: backgroundLogoOffsetY,
+                logoScale: backgroundLogoScale,
+              )
             else
-              const _LightBase(),
+              _LightBase(
+                logoOpacity: backgroundLogoOpacity,
+                logoOffsetX: backgroundLogoOffsetX,
+                logoOffsetY: backgroundLogoOffsetY,
+                logoScale: backgroundLogoScale,
+              ),
             if (dark) Container(color: Colors.black.withValues(alpha: darken)),
             child,
           ],
@@ -48,7 +66,17 @@ class AppBackground extends StatelessWidget {
 }
 
 class _LightBase extends StatelessWidget {
-  const _LightBase();
+  const _LightBase({
+    required this.logoOpacity,
+    required this.logoOffsetX,
+    required this.logoOffsetY,
+    required this.logoScale,
+  });
+
+  final double logoOpacity;
+  final double logoOffsetX;
+  final double logoOffsetY;
+  final double logoScale;
 
   @override
   Widget build(BuildContext context) {
@@ -58,14 +86,29 @@ class _LightBase extends StatelessWidget {
         const DecoratedBox(
           decoration: BoxDecoration(gradient: fondoGradient),
         ),
-        const _BackgroundLogo(),
+        _BackgroundLogo(
+          opacity: logoOpacity,
+          offsetX: logoOffsetX,
+          offsetY: logoOffsetY,
+          scale: logoScale,
+        ),
       ],
     );
   }
 }
 
 class _DarkBase extends StatelessWidget {
-  const _DarkBase();
+  const _DarkBase({
+    required this.logoOpacity,
+    required this.logoOffsetX,
+    required this.logoOffsetY,
+    required this.logoScale,
+  });
+
+  final double logoOpacity;
+  final double logoOffsetX;
+  final double logoOffsetY;
+  final double logoScale;
 
   @override
   Widget build(BuildContext context) {
@@ -73,38 +116,56 @@ class _DarkBase extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         const DecoratedBox(decoration: BoxDecoration(gradient: fondoGradient)),
-        const _BackgroundLogo(),
+        _BackgroundLogo(
+          opacity: logoOpacity,
+          offsetX: logoOffsetX,
+          offsetY: logoOffsetY,
+          scale: logoScale,
+        ),
       ],
     );
   }
 }
 
 class _BackgroundLogo extends StatelessWidget {
-  const _BackgroundLogo();
+  const _BackgroundLogo({
+    required this.opacity,
+    required this.offsetX,
+    required this.offsetY,
+    required this.scale,
+  });
+
+  final double opacity;
+  final double offsetX;
+  final double offsetY;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth.clamp(0.0, 390.0).toDouble();
-        final height = width * 793 / 390;
-        return Align(
-          alignment: Alignment.bottomCenter,
-          child: SizedBox(
-            width: width,
-            height: height,
-            child: Opacity(
-              opacity: .53,
-              child: ColorFiltered(
-                colorFilter: const ColorFilter.mode(
-                  Color(0xFF9BA8C5),
-                  BlendMode.srcIn,
-                ),
-                child: Image.asset(
-                  'assets/img/fondoapps.png',
-                  fit: BoxFit.contain,
-                  alignment: Alignment.bottomCenter,
-                  filterQuality: FilterQuality.high,
+        final height = width * 793 / 390 * scale;
+        return Transform.translate(
+          offset: Offset(offsetX, offsetY),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              width: width * scale,
+              height: height,
+              child: Opacity(
+                opacity: opacity,
+                child: ColorFiltered(
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xFF9BA8C5),
+                    BlendMode.srcIn,
+                  ),
+                  child: Image.asset(
+                    'assets/img/fondoapps.png',
+                    fit: BoxFit.contain,
+                    alignment: Alignment.bottomCenter,
+                    filterQuality: FilterQuality.high,
+                  ),
                 ),
               ),
             ),
@@ -198,7 +259,8 @@ class GlassButton extends StatelessWidget {
               filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
               child: Container(
                 decoration: BoxDecoration(
-                  color: filled ? accentBlue : Colors.white.withValues(alpha: .16),
+                  color:
+                      filled ? accentBlue : Colors.white.withValues(alpha: .16),
                   borderRadius: BorderRadius.circular(45),
                   border: Border.all(
                     color: filled ? const Color(0x40FFFFFF) : glassBorder,
