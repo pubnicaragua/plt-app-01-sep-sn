@@ -23,7 +23,7 @@ class AppNavBar extends StatelessWidget {
           assetPath: 'assets/img/HomeCliente/EnviosNavbar.png'),
       AppNavBarItem(Icons.history_rounded, 'Historial',
           assetPath: 'assets/img/HomeCliente/HistorialNavbar.png'),
-      AppNavBarItem(Icons.person_outline_rounded, 'Tú'),
+      AppNavBarItem(Icons.person_outline_rounded, 'Perfil'),
     ],
   });
 

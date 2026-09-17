@@ -36,12 +36,15 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   TrackingData? _mapData;
   LatLng? _lastCenteredDriver;
   List<LatLng> _roadRoute = const [];
+  BitmapDescriptor? _driverMarkerIcon;
+  String? _markerTransport;
 
   @override
   void initState() {
     super.initState();
     _prevStatus = widget.trip.status;
     tracking = apiClient.getTracking(widget.trip.id);
+    unawaited(_loadDriverMarkerIcon(widget.trip.transport));
     _loadRoadRoute();
     poll = Timer.periodic(const Duration(seconds: 5), (_) => _refresh());
   }
@@ -208,13 +211,37 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
 
   List<LatLng> _routeCoordinates(TrackingData? data) {
     if (_roadRoute.length >= 2) return _roadRoute;
-    final liveRoute = data?.route ?? const <TrackingPoint>[];
-    if (liveRoute.length >= 3) {
-      return liveRoute
-          .map((point) => LatLng(point.latitude, point.longitude))
-          .toList();
-    }
     return const [];
+  }
+
+  String _transportAsset(String? value) {
+    final normalized = (value ?? '').toLowerCase();
+    if (normalized.contains('moto') ||
+        normalized.contains('scooter') ||
+        normalized.contains('f150')) {
+      return 'assets/img/HomeCliente/moto.png';
+    }
+    if (normalized.contains('camion') || normalized.contains('camión') ||
+        normalized.contains('truck')) {
+      return 'assets/img/HomeCliente/camion.png';
+    }
+    return 'assets/img/HomeCliente/vehiculo.png';
+  }
+
+  Future<void> _loadDriverMarkerIcon(String? value) async {
+    final transport = (value ?? 'Vehículo').trim().toLowerCase();
+    if (_driverMarkerIcon != null && _markerTransport == transport) return;
+    _markerTransport = transport;
+    try {
+      final icon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(64, 64)),
+        _transportAsset(value),
+      );
+      if (!mounted || _markerTransport != transport) return;
+      setState(() => _driverMarkerIcon = icon);
+    } catch (_) {
+      // El marcador estándar queda como respaldo si el asset no está disponible.
+    }
   }
 
   Future<void> _loadRoadRoute() async {
@@ -226,35 +253,64 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       return;
     }
 
-    // Se puede reemplazar en el build con --dart-define para usar una clave restringida.
+    // Google entrega la geometría de conducción más precisa. OSRM queda como
+    // respaldo para que la ruta siga calles aun cuando la clave esté limitada.
     const mapsKey = String.fromEnvironment(
       'GOOGLE_MAPS_API_KEY',
       defaultValue: 'AIzaSyCMwxArmM-BEJuxgbjOiON8KdH_IsNH1F4',
     );
-    if (mapsKey.isEmpty) return;
-    final uri = Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
-      'origin': '${trip.originLat},${trip.originLng}',
-      'destination': '${trip.destinationLat},${trip.destinationLng}',
-      'mode': 'driving',
-      'alternatives': 'false',
-      'key': mapsKey,
-    });
+    final requests = <Uri>[];
+    if (mapsKey.isNotEmpty) {
+      requests.add(Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
+        'origin': '${trip.originLat},${trip.originLng}',
+        'destination': '${trip.destinationLat},${trip.destinationLng}',
+        'mode': 'driving',
+        'alternatives': 'false',
+        'departure_time': 'now',
+        'key': mapsKey,
+      }));
+    }
+    requests.add(Uri.https(
+      'router.project-osrm.org',
+      '/route/v1/driving/${trip.originLng},${trip.originLat};${trip.destinationLng},${trip.destinationLat}',
+      {'overview': 'full', 'geometries': 'geojson'},
+    ));
 
-    try {
-      final response = await http.get(uri);
-      if (response.statusCode < 200 || response.statusCode >= 300) return;
-      final payload = jsonDecode(response.body);
-      if (payload is! Map || payload['status'] != 'OK') return;
-      final routes = payload['routes'];
-      if (routes is! List || routes.isEmpty) return;
-      final overview = routes.first['overview_polyline'];
-      final encoded = overview is Map ? overview['points']?.toString() : null;
-      if (encoded == null || encoded.isEmpty) return;
-      final points = _decodePolyline(encoded);
-      if (!mounted || points.length < 2) return;
-      setState(() => _roadRoute = points);
-    } catch (_) {
-      // Si falla la consulta, se conserva la ruta enviada por el tracking.
+    for (final uri in requests) {
+      try {
+        final response = await http.get(uri);
+        if (response.statusCode < 200 || response.statusCode >= 300) continue;
+        final payload = jsonDecode(response.body);
+        List<LatLng> points = const [];
+        if (uri.host == 'maps.googleapis.com') {
+          if (payload is! Map || payload['status'] != 'OK') continue;
+          final routes = payload['routes'];
+          if (routes is! List || routes.isEmpty) continue;
+          points = _decodeGoogleRoute(routes.first);
+        } else {
+          if (payload is! Map || payload['code'] != 'Ok') continue;
+          final routes = payload['routes'];
+          final geometry = routes is List && routes.isNotEmpty
+              ? routes.first['geometry']
+              : null;
+          final coordinates = geometry is Map ? geometry['coordinates'] : null;
+          if (coordinates is! List) continue;
+          points = coordinates
+              .whereType<List>()
+              .where((pair) => pair.length >= 2)
+              .map((pair) => LatLng(
+                    (pair[1] as num).toDouble(),
+                    (pair[0] as num).toDouble(),
+                  ))
+              .toList();
+        }
+        if (!mounted || points.length < 2) continue;
+        setState(() => _roadRoute = points);
+        _fitRoute(points);
+        return;
+      } catch (_) {
+        // Prueba el siguiente proveedor antes de usar el tracking original.
+      }
     }
   }
 
@@ -289,6 +345,49 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     return points;
   }
 
+  List<LatLng> _decodeGoogleRoute(Map<String, dynamic> route) {
+    final points = <LatLng>[];
+    final legs = route['legs'];
+    if (legs is List) {
+      for (final leg in legs.whereType<Map>()) {
+        final steps = leg['steps'];
+        if (steps is! List) continue;
+        for (final step in steps.whereType<Map>()) {
+          final polyline = step['polyline'];
+          final encoded = polyline is Map ? polyline['points']?.toString() : null;
+          if (encoded == null || encoded.isEmpty) continue;
+          final decoded = _decodePolyline(encoded);
+          if (points.isNotEmpty && decoded.isNotEmpty && points.last == decoded.first) {
+            points.addAll(decoded.skip(1));
+          } else {
+            points.addAll(decoded);
+          }
+        }
+      }
+    }
+    if (points.length >= 2) return points;
+    final overview = route['overview_polyline'];
+    final encoded = overview is Map ? overview['points']?.toString() : null;
+    return encoded == null || encoded.isEmpty ? const [] : _decodePolyline(encoded);
+  }
+
+  void _fitRoute(List<LatLng> points) {
+    if (_mapController == null || points.length < 2) return;
+    final latitudes = points.map((point) => point.latitude).toList();
+    final longitudes = points.map((point) => point.longitude).toList();
+    final bounds = LatLngBounds(
+      southwest: LatLng(
+        latitudes.reduce((a, b) => a < b ? a : b),
+        longitudes.reduce((a, b) => a < b ? a : b),
+      ),
+      northeast: LatLng(
+        latitudes.reduce((a, b) => a > b ? a : b),
+        longitudes.reduce((a, b) => a > b ? a : b),
+      ),
+    );
+    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 56));
+  }
+
   Set<Marker> _mapMarkers(TrackingData? data) {
     final markers = <Marker>{};
     final trip = widget.trip;
@@ -297,8 +396,17 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       markers.add(Marker(
         markerId: const MarkerId('driver'),
         position: LatLng(driver.latitude, driver.longitude),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        icon: _driverMarkerIcon ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
         infoWindow: InfoWindow(title: data?.driver ?? trip.driver),
+      ));
+    }
+    if (trip.originLat != null && trip.originLng != null) {
+      markers.add(Marker(
+        markerId: const MarkerId('pickup'),
+        position: LatLng(trip.originLat!, trip.originLng!),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+        infoWindow: InfoWindow(title: trip.origin),
       ));
     }
     if (trip.destinationLat != null && trip.destinationLng != null) {
@@ -328,6 +436,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
 
   void _syncMapData(TrackingData data) {
     if (identical(data, _mapData)) return;
+    unawaited(_loadDriverMarkerIcon(data.transport ?? widget.trip.transport));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _mapData = data);
@@ -359,55 +468,62 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
               top: 0,
               left: 0,
               right: 0,
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-                  child: Row(
-                    children: [
-                      _HeaderButton(
-                        icon: Icons.arrow_back_ios_new_rounded,
-                        onTap: widget.closeable
-                            ? () => Navigator.of(context).pop()
-                            : null,
-                      ),
-                      const Expanded(
-                        child: Center(
-                          child: Text(
-                            'Seguimiento en vivo',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'Acumin Pro',
+              child: Container(
+                height: 116,
+                color: const Color(0xF20C1C53),
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                    child: Row(
+                      children: [
+                        _HeaderButton(
+                          icon: Icons.arrow_back_ios_new_rounded,
+                          onTap: widget.closeable
+                              ? () => Navigator.of(context).pop()
+                              : null,
+                        ),
+                        const Expanded(
+                          child: Center(
+                            child: Text(
+                              'Seguimiento en vivo',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Acumin Pro',
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 42),
-                    ],
+                        const SizedBox(width: 42),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
             DraggableScrollableSheet(
-              initialChildSize: .63,
-              minChildSize: .58,
+              initialChildSize: .59,
+              minChildSize: .56,
               maxChildSize: .90,
               snap: true,
-              snapSizes: const [.63, .90],
+              snapSizes: const [.59, .90],
               builder: (context, scrollController) {
                 return ClipRRect(
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(22),
                   ),
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
                     child: Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0xEC1E246E),
+                      decoration: BoxDecoration(
+                        color: const Color(0xB31A356F),
                         borderRadius: BorderRadius.vertical(
                           top: Radius.circular(22),
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: .18),
                         ),
                       ),
                       child: _buildBody(distance, eta, scrollController),
@@ -434,7 +550,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       mapToolbarEnabled: false,
       rotateGesturesEnabled: false,
       tiltGesturesEnabled: false,
-      onMapCreated: (controller) => _mapController = controller,
+      onMapCreated: (controller) {
+        _mapController = controller;
+        _fitRoute(_roadRoute);
+      },
     );
   }
 
@@ -456,7 +575,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         if (liveData != null) _syncMapData(liveData);
         return ListView(
           controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 28),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           children: [
             Center(
               child: Container(
@@ -468,7 +587,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 ),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             // Estado de entrega
             Row(children: [
               Container(
@@ -481,18 +600,18 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 currentStatus == 'Asignado' ? 'En camino' : currentStatus,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                   fontFamily: 'Acumin Pro',
                 ),
               ),
             ]),
-            const SizedBox(height: 11),
+            const SizedBox(height: 8),
             Text(
               'Llegada en $eta minutos (${distance.toStringAsFixed(1)} km)',
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 19,
                 fontWeight: FontWeight.w800,
                 fontFamily: 'Acumin Pro',
               ),
@@ -500,31 +619,31 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             const SizedBox(height: 3),
             Row(
               children: [
-                _AssetIcon('location.png', size: 15),
+                _AssetIcon('location.png', size: 18),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
                     'Aproximándose a $currentLocation',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 10.5,
+                      fontSize: 13,
                       fontFamily: 'Acumin Pro',
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 9),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: _progressFor(currentStatus),
-                minHeight: 5,
+                minHeight: 6,
                 backgroundColor: Colors.white.withValues(alpha: .16),
                 color: figmaBlue,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             // Código de seguimiento
             Container(
               padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
@@ -539,9 +658,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Código de Seguimiento', style: TextStyle(color: Color(0xFF8FA0C4), fontSize: 9.5, letterSpacing: .6, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
+                        Text('Código de Seguimiento', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 10.5, letterSpacing: .6, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
                         SizedBox(height: 3),
-                        Text('Guía: ${trip.id}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+                        Text('Guía: ${trip.id}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
                       ],
                     ),
                   ),
@@ -555,10 +674,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             // Conductor
             Container(
-              padding: const EdgeInsets.all(13),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               decoration: BoxDecoration(
                  color: Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
@@ -574,9 +693,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                       children: [
                       Text(
                           driverName,
-                          style: const TextStyle(color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
                         ),
-                        Text(driverVehicle, style: const TextStyle(color: Color(0xFFB9D4FF), fontSize: 10.5, fontFamily: 'Acumin Pro')),
+                        Text(driverVehicle, style: const TextStyle(color: Color(0xFFB9D4FF), fontSize: 12, fontFamily: 'Acumin Pro')),
                         Container(
                           margin: const EdgeInsets.only(top: 3),
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -585,7 +704,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: glassBorder),
                           ),
-                          child: Text(driverPlate, style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+                          child: Text(driverPlate, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
                         ),
                       ],
                     ),
@@ -596,14 +715,14 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 ],
               ),
             ),
-            const SizedBox(height: 14),
-            const Text('Estado de envío', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
-            const SizedBox(height: 9),
+            const SizedBox(height: 8),
+            const Text('Estado de envío', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
+            const SizedBox(height: 8),
             _StepsRow(status: currentStatus),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             if (isActive)
               SizedBox(
-                height: 38,
+                height: 48,
                 child: Material(
                   color: accentBlue,
                   borderRadius: BorderRadius.circular(26),
@@ -615,7 +734,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     child: const Center(
                       child: Text(
                         'Ver Entrega',
-                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
+                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
                       ),
                     ),
                   ),
@@ -701,8 +820,8 @@ class _DriverAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final photo = photoUrl?.trim();
     return Container(
-      width: 46,
-      height: 46,
+      width: 68,
+      height: 68,
       alignment: Alignment.center,
       clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(
@@ -721,8 +840,8 @@ class _DriverAvatar extends StatelessWidget {
             )
           : Image.network(
               photo,
-              width: 46,
-              height: 46,
+              width: 68,
+              height: 68,
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Center(
                 child: Text(
@@ -798,7 +917,7 @@ class _MiniBtn extends StatelessWidget {
       onTap: onTap ?? () {},
       borderRadius: BorderRadius.circular(9),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: filled ? figmaBlue : Colors.white.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(9),
@@ -808,10 +927,10 @@ class _MiniBtn extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             asset != null
-                ? _AssetIcon(asset!, size: 13)
-                : Icon(icon, color: Colors.white, size: 13),
+                ? _AssetIcon(asset!, size: 15)
+                : Icon(icon, color: Colors.white, size: 15),
             const SizedBox(width: 5),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
           ],
         ),
       ),
@@ -835,8 +954,8 @@ class RoundBtn extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: filled ? accentBlue : Colors.white.withValues(alpha: .09),
@@ -846,15 +965,15 @@ class RoundBtn extends StatelessWidget {
              child: asset != null
                  ? Center(
                      child: SizedBox(
-                       width: asset == 'mensaje.png' ? 12 : 14,
-                       height: asset == 'mensaje.png' ? 12 : 14,
+                       width: asset == 'mensaje.png' ? 17 : 18,
+                       height: asset == 'mensaje.png' ? 17 : 18,
                        child: _AssetIcon(
                          asset!,
-                         size: asset == 'mensaje.png' ? 12 : 14,
+                         size: asset == 'mensaje.png' ? 17 : 18,
                        ),
                      ),
                    )
-                : Icon(icon, color: Colors.white, size: 18),
+                : Icon(icon, color: Colors.white, size: 21),
           ),
         ],
       ),
@@ -885,8 +1004,8 @@ class _StepsRow extends StatelessWidget {
           children: [
             for (var i = 0; i < steps.length; i++) ...[
               Container(
-                width: 24,
-                height: 24,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: i < _done
@@ -920,7 +1039,7 @@ class _StepsRow extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 10.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                       fontFamily: 'Acumin Pro'),
                 ),

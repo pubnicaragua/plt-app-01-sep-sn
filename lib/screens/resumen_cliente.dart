@@ -16,14 +16,15 @@ class ResumenCliente extends StatefulWidget {
 
 class _ResumenClienteState extends State<ResumenCliente> {
   late Future<List<Trip>> trips;
-  int tab = 0; // 0 = Viajes, 1 = Ganancias
+  int tab = 0; // 0 = Viajes, 1 = Facturas movilizadas
 
   @override
   void initState() {
     super.initState();
     final user = apiClient.currentUser;
+    final clientName = user?.companyName?.trim();
     final client = user != null && (user.role == 'corporate' || user.role == 'company')
-        ? user.displayName.trim()
+        ? (clientName?.isNotEmpty == true ? clientName : user.displayName.trim())
         : null;
     trips = apiClient.getTrips(client: client);
   }
@@ -78,8 +79,15 @@ class _ResumenClienteState extends State<ResumenCliente> {
                           shape: BoxShape.circle,
                           border: Border.all(color: glassBorder),
                         ),
-                        child: const Icon(Icons.notifications_none_rounded,
-                            color: Colors.white, size: 20),
+                        child: Image.asset(
+                          'assets/img/HomeCliente/notificaciones.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.notifications_none_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -102,59 +110,53 @@ class _ResumenClienteState extends State<ResumenCliente> {
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
                       children: [
-                        // Segmentado Viajes / Ganancias
-                        Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF23366F),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: glassBorder),
-                          ),
-                          child: Row(
-                            children: [
-                              for (final (index, label) in [
-                                (0, 'Viajes'),
-                                (1, 'Ganancias'),
-                              ])
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () =>
-                                        setState(() => tab = index),
-                                    child: AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 200),
-                                      padding:
-                                          const EdgeInsets.symmetric(vertical: 10),
-                                      decoration: BoxDecoration(
-                                        color: tab == index
-                                            ? figmaBlue
-                                            : Colors.transparent,
-                                        borderRadius:
-                                            BorderRadius.circular(11),
-                                      ),
-                                      child: Text(
-                                        label,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w800,
-                                          fontFamily: 'Acumin Pro',
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        // Cifra grande
                         GlassCard(
-                          padding: const EdgeInsets.all(18),
+                          padding: const EdgeInsets.fromLTRB(12, 6, 12, 9),
+                          color: Colors.white.withValues(alpha: .11),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Segmentado Viajes / Facturas movilizadas
+                              Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: .16),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: glassBorder),
+                                ),
+                                child: Row(
+                                  children: [
+                                    for (final (index, label) in [
+                                      (0, 'Viajes'),
+                                      (1, 'Facturas movilizadas'),
+                                    ])
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: () => setState(() => tab = index),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 200),
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                            decoration: BoxDecoration(
+                                              color: tab == index ? figmaBlue : Colors.transparent,
+                                              borderRadius: BorderRadius.circular(11),
+                                            ),
+                                            child: Text(
+                                              label,
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w800,
+                                                fontFamily: 'Acumin Pro',
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 42),
                               Text(
                                 loading
                                     ? '…'
@@ -163,7 +165,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                         : _money(earnings),
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 40,
+                                  fontSize: 52,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -1,
                                   fontFamily: 'Acumin Pro',
@@ -173,7 +175,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                               Text(
                                 tab == 0
                                     ? 'Viajes realizados'
-                                    : 'Ganancias totales',
+                                    : 'Facturas movilizadas',
                                 style: const TextStyle(
                                   color: Color(0xFFB9D4FF),
                                   fontSize: 13,
@@ -189,7 +191,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                   borderRadius: BorderRadius.circular(14),
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(14),
-                                    onTap: () {},
+                                    onTap: () => Navigator.of(context).maybePop(),
                                     child: const Center(
                                       child: Row(
                                         mainAxisAlignment:
@@ -231,10 +233,9 @@ class _ResumenClienteState extends State<ResumenCliente> {
                           children: [
                             Expanded(
                               child: _PeriodCard(
-                                label: 'HOY',
+                                label: 'Hoy',
                                 price: tab == 0
-                                    ? totalTrips
-                                        .toStringAsFixed(0)
+                                    ? _compactMoney(earnings * .18)
                                     : _compactMoney(earnings * .18),
                                 sub: '${(totalTrips * .18).round()} viajes',
                                 delta: '+12%',
@@ -245,10 +246,9 @@ class _ResumenClienteState extends State<ResumenCliente> {
                             const SizedBox(width: 9),
                             Expanded(
                               child: _PeriodCard(
-                                label: 'ESTA SEMANA',
+                                label: 'Semana',
                                 price: tab == 0
-                                    ? (totalTrips * .64)
-                                        .toStringAsFixed(0)
+                                    ? _compactMoney(earnings * .64)
                                     : _compactMoney(earnings * .64),
                                 sub: '${(totalTrips * .64).round()} viajes',
                                 delta: '+18%',
@@ -259,9 +259,9 @@ class _ResumenClienteState extends State<ResumenCliente> {
                             const SizedBox(width: 9),
                             Expanded(
                               child: _PeriodCard(
-                                label: 'ESTE MES',
+                                label: 'Este Mes',
                                 price: tab == 0
-                                    ? '$_thousand(totalTrips)'
+                                    ? _compactMoney(earnings)
                                     : _compactMoney(earnings),
                                 sub: '$totalTrips viajes',
                                 delta: '+24%',
@@ -272,21 +272,31 @@ class _ResumenClienteState extends State<ResumenCliente> {
                           ],
                         ),
                         const SizedBox(height: 18),
-                        const Text(
-                          'Rendimiento semanal',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Acumin Pro',
-                          ),
-                        ),
-                        const SizedBox(height: 11),
                         GlassCard(
                           padding: const EdgeInsets.fromLTRB(15, 15, 15, 13),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Rendimiento semanal',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15.5,
+                                      fontWeight: FontWeight.w800,
+                                      fontFamily: 'Acumin Pro',
+                                    ),
+                                  ),
+                                  StatusPill(
+                                    text: '+15% vs sem. ant.',
+                                    color: cyan,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
                               _WeeklyChart(trips: totalTrips),
                               const SizedBox(height: 12),
                               const Row(
@@ -306,7 +316,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                   _LegendDot(color: mint),
                                   SizedBox(width: 6),
                                   Text(
-                                    'Ganancias',
+                                    'Facturas movilizadas',
                                     style: TextStyle(
                                       color: Color(0xFFB9D4FF),
                                       fontSize: 10.5,
@@ -314,53 +324,6 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                     ),
                                   ),
                                 ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        GlassCard(
-                          color: figmaBlue.withValues(alpha: .30),
-                          padding: const EdgeInsets.all(14),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: figmaBlue,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(Icons.trending_up_rounded,
-                                    color: Colors.white, size: 22),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      tab == 0
-                                          ? 'Tu mejor día fue el jueves'
-                                          : 'Tu mejor ganancia fue el jueves',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w800,
-                                        fontFamily: 'Acumin Pro',
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Realizaste ${(totalTrips * .26).round()} viajes y generaste ${_money(earnings * .26)}.',
-                                      style: const TextStyle(
-                                        color: Color(0xFFB9D4FF),
-                                        fontSize: 11,
-                                        fontFamily: 'Acumin Pro',
-                                      ),
-                                    ),
-                                  ],
-                                ),
                               ),
                             ],
                           ),
@@ -416,16 +379,16 @@ class _PeriodCard extends StatelessWidget {
     return GlassCard(
       padding: const EdgeInsets.all(12),
       color: active
-          ? const Color(0xFF23366F)
-          : const Color(0xFF17285C),
+          ? Colors.white.withValues(alpha: .20)
+          : Colors.white.withValues(alpha: .11),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: const TextStyle(
-              color: Color(0xFF8FA0C4),
-              fontSize: 9.5,
+              color: Colors.white,
+              fontSize: 13,
               letterSpacing: .7,
               fontWeight: FontWeight.w800,
               fontFamily: 'Acumin Pro',

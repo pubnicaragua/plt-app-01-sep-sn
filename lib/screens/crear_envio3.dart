@@ -72,6 +72,7 @@ class CrearEnvio3 extends StatefulWidget {
 class _CrearEnvio3State extends State<CrearEnvio3>
     with SingleTickerProviderStateMixin {
   bool failed = false;
+  String? failureMessage;
   late final AnimationController characterAnimation;
 
   @override
@@ -91,7 +92,10 @@ class _CrearEnvio3State extends State<CrearEnvio3>
   }
 
   void _begin() {
-    setState(() => failed = false);
+    setState(() {
+      failed = false;
+      failureMessage = null;
+    });
     _create();
   }
 
@@ -122,8 +126,12 @@ class _CrearEnvio3State extends State<CrearEnvio3>
       final evidence = await _uploadShipmentEvidence();
       final originPlace = widget.originPlace;
       final destinationPlace = widget.destinationPlace;
+      final currentUser = apiClient.currentUser;
+      final companyName = currentUser?.companyName?.trim();
       final created = await apiClient.createTrip(
-        client: apiClient.currentUser?.displayName ?? 'Empresa INCOEX',
+        client: companyName?.isNotEmpty == true
+            ? companyName!
+            : currentUser?.displayName ?? 'Empresa INCOEX',
         origin: widget.origin,
         destination: widget.destination,
         packages: widget.bundles,
@@ -171,9 +179,19 @@ class _CrearEnvio3State extends State<CrearEnvio3>
           builder: (_) => SeguimientoPedido(trip: created),
         ),
       );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        failed = true;
+        failureMessage = error.message;
+      });
     } catch (_) {
       if (!mounted) return;
-      setState(() => failed = true);
+      setState(() {
+        failed = true;
+        failureMessage =
+            'No se pudo conectar con la API de Render. Revisa la URL del APK y tu conexión.';
+      });
     }
   }
 
@@ -299,7 +317,7 @@ class _CrearEnvio3State extends State<CrearEnvio3>
                           ),
                           const SizedBox(height: 14),
                           Text(
-                            failed ? 'No pudimos crear el pedido' : 'Asignando conductor',
+                            failed ? 'No se pudo crear el pedido' : 'Asignando conductor',
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: Colors.white,
@@ -311,8 +329,11 @@ class _CrearEnvio3State extends State<CrearEnvio3>
                           const SizedBox(height: 6),
                           Text(
                             failed
-                                ? 'La API no respondió. Revisa tu conexión.'
+                                ? failureMessage ??
+                                    'No se pudo conectar con la API. Intenta nuevamente.'
                                 : 'Estamos buscando un conductor disponible\ncerca de ti.',
+                            maxLines: failed ? 3 : 2,
+                            overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: Color(0xFFE1E8FF),

@@ -130,21 +130,30 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   double _shippingFor(String vehicle) {
     final rate = _rateFor(vehicle);
     final distance = _distance;
-    if (vehicle == widget.transport && widget.estimatedShipping != null) {
-      return widget.estimatedShipping!;
-    }
     if (rate != null && distance != null) {
       final surcharge = widget.serviceType == 'Express'
           ? settings?.prioritySurchargePct ?? 25
-          : 0;
-      return (rate.baseFeeCs + distance * rate.farePerKmCs) *
+          : widget.serviceType == 'Programado'
+              ? settings?.scheduledSurchargePct ?? 0
+              : 0;
+      return (rate.baseFeeCs + distance * rate.farePerKmCs +
+              logisticsServiceFeeCs) *
           (1 + surcharge / 100);
+    }
+    if (vehicle == widget.transport && widget.estimatedShipping != null) {
+      return widget.estimatedShipping!;
     }
     return _vehicle(vehicle).$6;
   }
 
+  bool get _invoiceAlreadyPaid =>
+      widget.paymentStatus.trim().toLowerCase() == 'pagado';
+
+  double get _invoiceToCollect =>
+      _invoiceAlreadyPaid ? 0 : widget.invoiceAmount;
+
   double _baseFor(String vehicle) =>
-      _rateFor(vehicle)?.baseFeeCs ?? _vehicle(vehicle).$6 - 15;
+      _rateFor(vehicle)?.baseFeeCs ?? _vehicle(vehicle).$6 - logisticsServiceFeeCs;
 
   (String, String, String, IconData, int, double) _vehicle(String value) =>
       _vehicles.firstWhere((item) => item.$1 == value,
@@ -196,10 +205,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   Widget build(BuildContext context) {
     final shipping = _shippingFor(selectedTransport);
     final base = _baseFor(selectedTransport);
-    final service = 15.0;
+    final service = logisticsServiceFeeCs;
     final additional =
         (shipping - base - service).clamp(0, double.infinity).toDouble();
-    final total = shipping + widget.invoiceAmount;
+    final total = shipping + _invoiceToCollect;
     return WizardScaffold(
       title: 'Detalles de carga',
       subtitle: 'Transporte recomendado',
@@ -447,13 +456,19 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                               fontSize: 11.5,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'Acumin Pro')),
-                      const Text('(Valor a recaudar para la empresa)',
+                      Text(
+                          _invoiceAlreadyPaid
+                              ? '(Producto pagado por transferencia)'
+                              : '(Valor a recaudar para la empresa)',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 9.5,
                               fontFamily: 'Acumin Pro')),
                     ])),
-                Text('+ ${_money(widget.invoiceAmount)}',
+                Text(
+                    _invoiceAlreadyPaid
+                        ? 'Pagado'
+                        : '+ ${_money(_invoiceToCollect)}',
                     style: const TextStyle(
                         color: Colors.white,
                         fontSize: 13,
@@ -469,7 +484,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Column(
+            Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Total a pagar por el cliente',
@@ -478,7 +493,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           fontFamily: 'Acumin Pro')),
-                  Text('Envío + Producto',
+                  Text(
+                      _invoiceAlreadyPaid
+                          ? 'Envío · producto pagado'
+                          : 'Envío + Producto',
                       style: TextStyle(
                           color: Color(0xFFB9D4FF),
                           fontSize: 9.5,

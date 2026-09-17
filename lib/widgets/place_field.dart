@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -33,6 +34,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
   Timer? debounce;
   List<PlaceSuggestion> results = const [];
   bool open = false;
+  bool loading = false;
   int requestId = 0;
 
   @override
@@ -46,11 +48,13 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
       setState(() {
         results = const [];
         open = false;
+        loading = false;
       });
       return;
     }
     debounce?.cancel();
     final currentRequest = ++requestId;
+    setState(() => loading = true);
     debounce = Timer(const Duration(milliseconds: 300), () async {
       try {
         final found = await apiClient.searchPlaces(value);
@@ -59,14 +63,24 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
           setState(() {
             results = const [];
             open = false;
+            loading = false;
           });
           return;
         }
         setState(() {
           results = found;
           open = true;
+          loading = false;
         });
-      } catch (_) {}
+      } catch (_) {
+        if (mounted && currentRequest == requestId) {
+          setState(() {
+            results = const [];
+            open = false;
+            loading = false;
+          });
+        }
+      }
     });
   }
 
@@ -97,9 +111,21 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
             child: Text(
               'Sugerencias en tiempo real',
               style: TextStyle(
-                color: Color(0xFFB9D4FF),
+                color: Color(0xCCFFFFFF),
                 fontSize: 10,
                 fontFamily: 'Acumin Pro',
+              ),
+            ),
+          ),
+        if (widget.bare && loading)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                minHeight: 2,
+                backgroundColor: Colors.white.withValues(alpha: .08),
+                color: Colors.white.withValues(alpha: .72),
               ),
             ),
           ),
@@ -109,13 +135,15 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
             maxHeight: 235,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0B1D4D).withValues(alpha: .96),
-                  border: Border.all(color: glassBorder),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: ListView.builder(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0C1C53).withValues(alpha: .84),
+                    border: Border.all(color: Colors.white.withValues(alpha: .28)),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ListView.builder(
                   shrinkWrap: true,
                   padding: const EdgeInsets.symmetric(vertical: 5),
                   itemCount: results.length,
@@ -154,7 +182,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
                               index == 0
                                   ? Icons.near_me_rounded
                                   : Icons.place_outlined,
-                              color: index == 0 ? mint : cyan,
+                              color: Colors.white.withValues(alpha: .86),
                               size: 17,
                             ),
                             const SizedBox(width: 11),
@@ -180,7 +208,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        color: Color(0xFFB9D4FF),
+                                         color: Color(0xB3FFFFFF),
                                         fontSize: 10.5,
                                         fontFamily: 'Acumin Pro',
                                       ),
@@ -193,7 +221,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
                       ),
                     );
                   },
-                ),
+                  ),
               ),
             ),
           ),
@@ -239,7 +267,7 @@ class _BareRouteField extends StatelessWidget {
         Text(
           label.toUpperCase(),
           style: const TextStyle(
-            color: Color(0xFFB9D4FF),
+            color: Color(0xD9FFFFFF),
             fontSize: 9,
             letterSpacing: 1.1,
             fontWeight: FontWeight.w700,
@@ -259,7 +287,7 @@ class _BareRouteField extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: const TextStyle(
-              color: Color(0x8CFFFFFF),
+              color: Color(0xB3FFFFFF),
               fontSize: 15.5,
               fontWeight: FontWeight.w500,
               fontFamily: 'Acumin Pro',

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -67,6 +68,10 @@ class ApiClient {
     required String email,
     required String password,
     required String role,
+    String? phone,
+    String? identification,
+    String? taxId,
+    String? documentName,
   }) async {
     final json = (await _send(
       'POST',
@@ -77,12 +82,55 @@ class ApiClient {
         'email': email,
         'password': password,
         'role': role,
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+        if (identification != null && identification.trim().isNotEmpty)
+          'identification': identification.trim(),
+        if (taxId != null && taxId.trim().isNotEmpty) 'taxId': taxId.trim(),
+        if (documentName != null && documentName.trim().isNotEmpty)
+          'documentName': documentName.trim(),
       },
     )) as Map<String, dynamic>;
     final response = LoginResponse.fromJson(json);
     accessToken = response.accessToken;
     currentUser = response.user;
     return response;
+  }
+
+  Future<List<Map<String, dynamic>>> getClients() async {
+    final json = await _send('GET', '/clients');
+    final list = json is List
+        ? json
+        : json is Map && json['items'] is List
+            ? json['items'] as List
+            : const [];
+    return list
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> updateClient(
+    String id, {
+    String? name,
+    String? phone,
+    String? email,
+    String? contact,
+    String? taxId,
+    String? notes,
+  }) async {
+    final json = await _send(
+      'PATCH',
+      '/clients/${Uri.encodeComponent(id)}',
+      body: {
+        if (name != null) 'name': name,
+        if (phone != null) 'phone': phone,
+        if (email != null) 'email': email,
+        if (contact != null) 'contact': contact,
+        if (taxId != null) 'taxId': taxId,
+        if (notes != null) 'notes': notes,
+      },
+    );
+    return (json as Map).cast<String, dynamic>();
   }
 
   Future<DashboardSummary> getDashboardSummary() async {
@@ -350,7 +398,7 @@ class ApiClient {
     if (accessToken != null && accessToken!.isNotEmpty) {
       request.headers['Authorization'] = 'Bearer $accessToken';
     }
-    final streamed = await request.send();
+    final streamed = await request.send().timeout(const Duration(seconds: 75));
     final response = await http.Response.fromStream(streamed);
     final decoded = response.body.isEmpty
         ? <String, dynamic>{}
@@ -409,20 +457,32 @@ class ApiClient {
     }
 
     late http.Response response;
-    if (method == 'POST') {
-      response = await _client.post(
-        uri,
-        headers: headers,
-        body: jsonEncode(body ?? const {}),
+    try {
+      if (method == 'POST') {
+        response = await _client
+            .post(
+              uri,
+              headers: headers,
+              body: jsonEncode(body ?? const {}),
+            )
+            .timeout(const Duration(seconds: 75));
+      } else if (method == 'PATCH') {
+        response = await _client
+            .patch(
+              uri,
+              headers: headers,
+              body: jsonEncode(body ?? const {}),
+            )
+            .timeout(const Duration(seconds: 75));
+      } else {
+        response = await _client
+            .get(uri, headers: headers)
+            .timeout(const Duration(seconds: 75));
+      }
+    } on TimeoutException {
+      throw ApiException(
+        'La API tardó demasiado en responder. Intenta nuevamente en unos segundos.',
       );
-    } else if (method == 'PATCH') {
-      response = await _client.patch(
-        uri,
-        headers: headers,
-        body: jsonEncode(body ?? const {}),
-      );
-    } else {
-      response = await _client.get(uri, headers: headers);
     }
 
     final decoded =

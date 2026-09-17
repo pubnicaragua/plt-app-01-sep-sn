@@ -387,7 +387,8 @@ class _GlassFieldState extends State<GlassField> {
                       fontFamily: 'Acumin Pro',
                       fontWeight: FontWeight.w600,
                     ),
-                    hintText: widget.hint,
+                    hintText: widget.hint ??
+                        (widget.showFloatingLabel ? null : widget.label),
                     hintStyle: const TextStyle(
                       color: Color(0x8CFFFFFF),
                       fontSize: 13,

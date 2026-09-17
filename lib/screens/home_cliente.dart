@@ -166,7 +166,7 @@ class _HomeTabState extends State<_HomeTab> {
     if (km == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    return rate.baseFeeCs + km * rate.farePerKmCs;
+    return rate.baseFeeCs + km * rate.farePerKmCs + logisticsServiceFeeCs;
   }
 
   static const _dayOptions = ['Hoy', 'Mañana'];
@@ -217,7 +217,7 @@ class _HomeTabState extends State<_HomeTab> {
     });
   }
 
-  void _autoAgenda() {
+  (DateTime, TimeOfDay) _defaultAgendaSlot() {
     final now = DateTime.now().add(const Duration(minutes: 30));
     final today = DateTime(now.year, now.month, now.day);
     for (final hour in _hourOptions) {
@@ -225,37 +225,49 @@ class _HomeTabState extends State<_HomeTab> {
       final candidate = DateTime(today.year, today.month, today.day,
           int.parse(parts[0]), int.parse(parts[1]));
       if (candidate.isAfter(now)) {
-        setState(() {
-          agendaDate = candidate;
-          agendaTime =
-              TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-        });
-        return;
+        return (
+          candidate,
+          TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
+        );
       }
     }
-    agendaDate = today.add(const Duration(days: 1));
-    agendaTime = const TimeOfDay(hour: 9, minute: 0);
+    return (
+      today.add(const Duration(days: 1)),
+      const TimeOfDay(hour: 9, minute: 0),
+    );
   }
+
+  void _autoAgenda() {
+    final slot = _defaultAgendaSlot();
+    setState(() {
+      agendaDate = slot.$1;
+      agendaTime = slot.$2;
+    });
+  }
+
+  String _formatAgendaDate(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  String _formatAgendaTime(TimeOfDay time) =>
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
 
   String? get _agendaDateString {
     final date = agendaDate;
     if (date == null) return null;
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    return _formatAgendaDate(date);
   }
 
   String? get _agendaTimeString {
     final time = agendaTime;
     if (time == null) return null;
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    return _formatAgendaTime(time);
   }
 
   @override
   Widget build(BuildContext context) {
     final user = apiClient.currentUser;
     final apiName = user?.displayName.trim() ?? '';
-    final displayName = apiName.isEmpty || apiName.toLowerCase() == 'logística nica sa'
-        ? 'Mario Belfort'
-        : apiName;
+    final displayName = apiName.isEmpty ? 'Usuario INCOEX' : apiName;
     final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 20.0;
     return ListView(
       physics: const BouncingScrollPhysics(),
@@ -349,7 +361,6 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ],
         ),
-        const SizedBox(height: 18),
         const SizedBox(height: 18),
         const Text(
           'Selecciona el transporte',
@@ -457,25 +468,42 @@ class _HomeTabState extends State<_HomeTab> {
           label: 'Solicitar nuevo envío',
           filled: true,
           textColor: Colors.white,
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => Pedido(
-                origin: origin.text.trim(),
-                destination: destination.text.trim(),
-                originPlace: originPlace,
-                destinationPlace: destinationPlace,
-                transport: transport,
-                estimatedShipping: _fareFor(transport),
-                originRefs: refOrigin.text.trim(),
-                destinationRefs: refDestination.text.trim(),
-                recipientName: recipientName.text.trim(),
-                recipientPhone: recipientPhone.text.trim(),
-                startScheduled: programado,
-                startDate: _agendaDateString,
-                startTime: _agendaTimeString,
+          onPressed: () {
+            var selectedDate = agendaDate;
+            var selectedTime = agendaTime;
+            if (programado && (selectedDate == null || selectedTime == null)) {
+              final slot = _defaultAgendaSlot();
+              selectedDate = slot.$1;
+              selectedTime = slot.$2;
+              setState(() {
+                agendaDate = selectedDate;
+                agendaTime = selectedTime;
+              });
+            }
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => Pedido(
+                  origin: origin.text.trim(),
+                  destination: destination.text.trim(),
+                  originPlace: originPlace,
+                  destinationPlace: destinationPlace,
+                  transport: transport,
+                  estimatedShipping: _fareFor(transport),
+                  originRefs: refOrigin.text.trim(),
+                  destinationRefs: refDestination.text.trim(),
+                  recipientName: recipientName.text.trim(),
+                  recipientPhone: recipientPhone.text.trim(),
+                  startScheduled: programado,
+                  startDate: selectedDate == null
+                      ? null
+                      : _formatAgendaDate(selectedDate),
+                  startTime: selectedTime == null
+                      ? null
+                      : _formatAgendaTime(selectedTime),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ],
     );
@@ -624,7 +652,8 @@ class _FareCard extends StatelessWidget {
         : '${distanceValue.toStringAsFixed(1)} km · base '
             'C\$ ${rateValue.baseFeeCs.toStringAsFixed(0)} + '
             '${distanceValue.toStringAsFixed(1)} × C\$ '
-            '${rateValue.farePerKmCs.toStringAsFixed(2)}';
+            '${rateValue.farePerKmCs.toStringAsFixed(2)} + '
+            'C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} gestión';
     final priceLabel = priceValue == null
         ? 'C\$ —'
         : 'C\$ ${priceValue.toStringAsFixed(2)}';

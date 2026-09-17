@@ -210,7 +210,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     if (distance == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    return rate.baseFeeCs + distance * rate.farePerKmCs;
+    return rate.baseFeeCs + distance * rate.farePerKmCs + logisticsServiceFeeCs;
   }
 
   @override

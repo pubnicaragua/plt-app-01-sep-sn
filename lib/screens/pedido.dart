@@ -36,8 +36,9 @@ class _MisEnviosState extends State<MisEnvios> {
 
   Future<List<Trip>> _loadTrips() {
     final user = apiClient.currentUser;
+    final clientName = user?.companyName?.trim();
     final client = user != null && (user.role == 'corporate' || user.role == 'company')
-        ? user.displayName.trim()
+        ? (clientName?.isNotEmpty == true ? clientName : user.displayName.trim())
         : null;
     return apiClient.getTrips(client: client);
   }
@@ -216,47 +217,207 @@ class _TripCard extends StatelessWidget {
           builder: (_) => SeguimientoPedido(trip: trip),
         ),
       ),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(15, 14, 15, 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: .16),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: color, size: 22),
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .16),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color.withValues(alpha: .38)),
+                ),
+                child: Icon(icon, color: color, size: 21),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Viaje ${trip.id}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        fontFamily: 'Acumin Pro',
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      trip.date,
+                      style: const TextStyle(
+                        color: Color(0xFFB9D4FF),
+                        fontSize: 11,
+                        fontFamily: 'Acumin Pro',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              StatusPill(text: note, color: color),
+            ],
           ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${trip.origin} → ${trip.destination}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
-                    fontFamily: 'Acumin Pro',
-                  ),
+          const SizedBox(height: 15),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _RoutePoint(
+                  label: 'DESDE',
+                  value: trip.origin,
+                  color: cyan,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  'GUÍA ${trip.id} · ${trip.packages} paq. · ${trip.date}',
-                  style: const TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 10.5,
-                    fontFamily: 'Acumin Pro',
-                  ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 14, left: 5, right: 5),
+                child: Icon(Icons.arrow_forward_rounded,
+                    color: Colors.white54, size: 18),
+              ),
+              Expanded(
+                child: _RoutePoint(
+                  label: 'HACIA',
+                  value: trip.destination,
+                  color: const Color(0xFF8FA0C4),
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: Color(0x2FFFFFFF), height: 1),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _TripMeta(icon: Icons.inventory_2_outlined, text: '${trip.packages} bultos'),
+              if (trip.serviceType != null) ...[
+                const SizedBox(width: 7),
+                _TripMeta(icon: Icons.bolt_rounded, text: trip.serviceType!),
               ],
+              const Spacer(),
+              Text(
+                'C\$ ${(trip.estimatedCostCs ?? 0).toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: cyan,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const Text(
+                'Ver detalle',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+              const SizedBox(width: 3),
+              Icon(Icons.chevron_right_rounded,
+                  color: color, size: 19),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoutePoint extends StatelessWidget {
+  const _RoutePoint({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(Icons.location_on_outlined, color: color, size: 17),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF8FA0C4),
+                  fontSize: 8.5,
+                  letterSpacing: .7,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                  fontFamily: 'Acumin Pro',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TripMeta extends StatelessWidget {
+  const _TripMeta({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: .16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white70, size: 14),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'Acumin Pro',
             ),
           ),
-          const SizedBox(width: 8),
-          StatusPill(text: note, color: color),
         ],
       ),
     );

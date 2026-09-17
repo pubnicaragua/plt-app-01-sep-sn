@@ -12,6 +12,7 @@ const Color glassFill = Color(0x0FFFFFFF);
 const Color surfaceBlue = Color(0xFF003EC7);
 const Color glowBlue = Color(0xFF0047FF);
 const Color accentBlue = Color(0xFF0A57FF);
+const double logisticsServiceFeeCs = 15.0;
 
 final ValueNotifier<bool> appDarkMode = ValueNotifier<bool>(false);
 

@@ -9,6 +9,7 @@ class SessionUser {
     this.vehicle,
     this.plate,
     this.phone,
+    this.companyName,
   });
 
   final String id;
@@ -18,6 +19,7 @@ class SessionUser {
   final String? vehicle;
   final String? plate;
   final String? phone;
+  final String? companyName;
 
   factory SessionUser.fromJson(Map<String, dynamic> json) {
     return SessionUser(
@@ -28,15 +30,21 @@ class SessionUser {
       vehicle: json['vehicle']?.toString(),
       plate: json['plate']?.toString(),
       phone: json['phone']?.toString(),
+      companyName: json['companyName']?.toString(),
     );
   }
 }
 
 class LoginResponse {
-  const LoginResponse({required this.accessToken, required this.user});
+  const LoginResponse({
+    required this.accessToken,
+    required this.user,
+    this.profile = const {},
+  });
 
   final String accessToken;
   final SessionUser user;
+  final Map<String, dynamic> profile;
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
     return LoginResponse(
@@ -44,6 +52,7 @@ class LoginResponse {
       user: SessionUser.fromJson(
         (json['user'] as Map?)?.cast<String, dynamic>() ?? const {},
       ),
+      profile: (json['profile'] as Map?)?.cast<String, dynamic>() ?? const {},
     );
   }
 }
@@ -102,6 +111,7 @@ class Trip {
     this.distanceKm,
     this.estimatedCostCs,
     this.serviceType,
+    this.transport,
     this.contactName,
     this.contactPhone,
     this.driverPhoto,
@@ -132,6 +142,7 @@ class Trip {
   final double? distanceKm;
   final double? estimatedCostCs;
   final String? serviceType;
+  final String? transport;
   final String? contactName;
   final String? contactPhone;
   final String? driverPhoto;
@@ -187,6 +198,7 @@ class Trip {
       distanceKm: (json['distanceKm'] as num?)?.toDouble(),
       estimatedCostCs: (json['estimatedCostCs'] as num?)?.toDouble(),
       serviceType: json['serviceType']?.toString(),
+      transport: json['transport']?.toString(),
       contactName: json['contactName']?.toString(),
       contactPhone: json['contactPhone']?.toString(),
       driverPhoto: (json['driverPhoto'] ?? json['driverAvatar'] ?? json['photo'])?.toString(),
@@ -278,6 +290,7 @@ class TrackingData {
     this.driverPhone,
     this.driverPhoto,
     this.currentLocationLabel,
+    this.transport,
   });
 
   final String tripId;
@@ -292,6 +305,7 @@ class TrackingData {
   final String? driverPhone;
   final String? driverPhoto;
   final String? currentLocationLabel;
+  final String? transport;
 
   factory TrackingData.fromJson(Map<String, dynamic> json) {
     final points = (json['route'] as List? ?? const [])
@@ -314,6 +328,7 @@ class TrackingData {
       driverPhone: json['driverPhone']?.toString(),
       driverPhoto: (json['driverPhoto'] ?? json['driverAvatar'] ?? json['photo'])?.toString(),
       currentLocationLabel: json['currentLocationLabel']?.toString(),
+      transport: json['transport']?.toString(),
     );
   }
 }
