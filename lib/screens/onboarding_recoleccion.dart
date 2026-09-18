@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
@@ -53,7 +55,11 @@ class _OnboardingRecoleccionState extends State<OnboardingRecoleccion> {
                 const SizedBox(height: 18),
                 const BrandLockup(),
                 const Expanded(
-                  child: OnboardingVisual(asset: visual),
+                  child: OnboardingVisual(
+                    asset: visual,
+                    scale: 1.85,
+                    topFactor: 0,
+                  ),
                 ),
                 HeroCopy(
                   title: titulo,
@@ -98,13 +104,13 @@ class HeroCopy extends StatelessWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 16,
-            height: 1.15,
+            fontSize: 18,
+            height: 1.22,
             fontWeight: FontWeight.w700,
             fontFamily: 'Acumin Pro',
           ),
         ),
-        const SizedBox(height: 36),
+        const SizedBox(height: 64),
         _PillButton(
           label: 'Continuar',
           filled: false,
@@ -145,26 +151,57 @@ class _PillButton extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(45),
-          child: Container(
-            decoration: BoxDecoration(
-              color: filled
-                  ? Colors.white
-                  : const Color(0xFF111230).withValues(alpha: .92),
-              borderRadius: BorderRadius.circular(45),
-              border: Border.all(
-                color: filled
-                    ? Colors.white
-                    : const Color(0xB3FFFFFF).withValues(alpha: .45),
-              ),
-            ),
-            child: Center(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: blueText ? figmaBlue : Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Acumin Pro',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(45),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: filled ? Colors.white : null,
+                  gradient: filled
+                      ? null
+                      : const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0x603A4E80),
+                            Color(0x4C15244F),
+                            Color(0x2A0B1536),
+                          ],
+                          stops: [0, .52, 1],
+                        ),
+                  borderRadius: BorderRadius.circular(45),
+                  border: Border.all(
+                    color: filled
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: .28),
+                  ),
+                  boxShadow: filled
+                      ? null
+                      : const [
+                          BoxShadow(
+                            color: Color(0x552D5EAA),
+                            blurRadius: 12,
+                            spreadRadius: -2,
+                            offset: Offset(0, 1),
+                          ),
+                          BoxShadow(
+                            color: Color(0x44000000),
+                            blurRadius: 10,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                ),
+                child: Center(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: blueText ? figmaBlue : Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Acumin Pro',
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -176,52 +213,66 @@ class _PillButton extends StatelessWidget {
   }
 }
 
-/// The source PNG contains transparent margins around the character. It is
-/// intentionally rendered larger than the viewport and clipped here so the
-/// character has the same visual scale as the mobile design reference.
 class OnboardingVisual extends StatelessWidget {
-  const OnboardingVisual({super.key, required this.asset});
+  const OnboardingVisual({
+    super.key,
+    required this.asset,
+    this.scale = 1.25,
+    this.topFactor = .17,
+  });
 
   final String asset;
+  final double scale;
+  final double topFactor;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final imageSize = constraints.maxWidth * 2.1;
+        final imageSize = constraints.maxWidth * scale;
+        final imageTop = constraints.maxHeight * topFactor;
 
-        return ClipRect(
-          child: Stack(
-            fit: StackFit.expand,
-            clipBehavior: Clip.hardEdge,
-            children: [
-              Positioned(
-                top: 0,
-                left: (constraints.maxWidth - imageSize) / 2,
-                width: imageSize,
-                height: imageSize,
-                child: Image.asset(
-                  asset,
-                  fit: BoxFit.fill,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        final fullWidth = constraints.maxWidth + 40;
+
+        return OverflowBox(
+          alignment: Alignment.center,
+          minWidth: fullWidth,
+          maxWidth: fullWidth,
+          child: SizedBox(
+            width: fullWidth,
+            height: constraints.maxHeight,
+            child: Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  top: imageTop,
+                  left: (fullWidth - imageSize) / 2,
+                  width: imageSize,
+                  height: imageSize,
+                  child: Image.asset(
+                    asset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
                 ),
-              ),
-              const Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: [.63, .96],
-                      colors: [
-                        Colors.transparent,
-                        Color(0xCC0B1B4D),
-                      ],
+                const Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [.63, .96],
+                        colors: [
+                          Colors.transparent,
+                          Color(0x330B1B4D),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

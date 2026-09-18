@@ -140,88 +140,89 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
                 child: Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF0C1C53).withValues(alpha: .84),
-                    border: Border.all(color: Colors.white.withValues(alpha: .28)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: .28)),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: ListView.builder(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  itemCount: results.length,
-                  itemBuilder: (context, index) {
-                    final suggestion = results[index];
-                    return InkWell(
-                      onTap: () async {
-                        widget.controller.text = suggestion.description;
-                        var resolved = suggestion;
-                        if (suggestion.latitude == null ||
-                            suggestion.longitude == null) {
-                          final detail = await apiClient
-                              .placeDetail(suggestion.placeId);
-                          if (detail != null && detail.latitude != null) {
-                            resolved = PlaceSuggestion(
-                              placeId: suggestion.placeId,
-                              description: suggestion.description,
-                              main: suggestion.main,
-                              secondary: suggestion.secondary,
-                              latitude: detail.latitude,
-                              longitude: detail.longitude,
-                            );
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    itemCount: results.length,
+                    itemBuilder: (context, index) {
+                      final suggestion = results[index];
+                      return InkWell(
+                        onTap: () async {
+                          widget.controller.text = suggestion.description;
+                          var resolved = suggestion;
+                          if (suggestion.latitude == null ||
+                              suggestion.longitude == null) {
+                            final detail =
+                                await apiClient.placeDetail(suggestion.placeId);
+                            if (detail != null && detail.latitude != null) {
+                              resolved = PlaceSuggestion(
+                                placeId: suggestion.placeId,
+                                description: suggestion.description,
+                                main: suggestion.main,
+                                secondary: suggestion.secondary,
+                                latitude: detail.latitude,
+                                longitude: detail.longitude,
+                              );
+                            }
                           }
-                        }
-                        widget.onSelected?.call(resolved);
-                        if (!mounted) return;
-                        FocusScope.of(context).unfocus();
-                        setState(() => open = false);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 11),
-                        child: Row(
-                          children: [
-                            Icon(
-                              index == 0
-                                  ? Icons.near_me_rounded
-                                  : Icons.place_outlined,
-                              color: Colors.white.withValues(alpha: .86),
-                              size: 17,
-                            ),
-                            const SizedBox(width: 11),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    suggestion.main,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      fontFamily: 'Acumin Pro',
-                                    ),
-                                  ),
-                                  if (suggestion.secondary.isNotEmpty)
+                          widget.onSelected?.call(resolved);
+                          if (!mounted) return;
+                          FocusScope.of(context).unfocus();
+                          setState(() => open = false);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 11),
+                          child: Row(
+                            children: [
+                              Icon(
+                                index == 0
+                                    ? Icons.near_me_rounded
+                                    : Icons.place_outlined,
+                                color: Colors.white.withValues(alpha: .86),
+                                size: 17,
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                     Text(
-                                      suggestion.secondary,
+                                      suggestion.main,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                         color: Color(0xB3FFFFFF),
-                                        fontSize: 10.5,
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
                                         fontFamily: 'Acumin Pro',
                                       ),
                                     ),
-                                ],
+                                    if (suggestion.secondary.isNotEmpty)
+                                      Text(
+                                        suggestion.secondary,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Color(0xB3FFFFFF),
+                                          fontSize: 10.5,
+                                          fontFamily: 'Acumin Pro',
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
                   ),
+                ),
               ),
             ),
           ),

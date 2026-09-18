@@ -72,9 +72,6 @@ class _OnboardingEntregaState extends State<OnboardingEntrega> {
   }
 }
 
-/// Composition used only by the delivery onboarding screen. Its artwork is
-/// taller and slightly wider than the viewport so the complete flying pose is
-/// visible while the lower part fades into the background.
 class _DeliveryVisual extends StatelessWidget {
   const _DeliveryVisual();
 
@@ -82,42 +79,52 @@ class _DeliveryVisual extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final imageWidth = constraints.maxWidth * 1.08;
-        final imageHeight = imageWidth * 1.55;
+        final imageSize = constraints.maxWidth * 1.55;
+        final fullWidth = constraints.maxWidth + 40;
 
-        return ClipRect(
-          child: Stack(
-            fit: StackFit.expand,
-            clipBehavior: Clip.hardEdge,
-            children: [
-              Positioned(
-                // Keep the top of the character inside the visual viewport.
-                top: 0,
-                left: (constraints.maxWidth - imageWidth) / 2,
-                width: imageWidth,
-                height: imageHeight,
-                child: Image.asset(
-                  'assets/img/imagen_pantalla3.png',
-                  fit: BoxFit.fill,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                ),
-              ),
-              const Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: [.68, .98],
-                      colors: [
-                        Colors.transparent,
-                        Color(0xCC0B1B4D),
-                      ],
+        return OverflowBox(
+          alignment: Alignment.center,
+          minWidth: fullWidth,
+          maxWidth: fullWidth,
+          child: SizedBox(
+            width: fullWidth,
+            height: constraints.maxHeight,
+            child: Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  top: constraints.maxHeight * .16,
+                  left:
+                      (fullWidth - imageSize) / 2 + constraints.maxWidth * .055,
+                  width: imageSize,
+                  height: imageSize,
+                  child: Transform.rotate(
+                    angle: -.43,
+                    child: Image.asset(
+                      'assets/img/imagen_pantalla3.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                     ),
                   ),
                 ),
-              ),
-            ],
+                const Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [.68, .98],
+                        colors: [
+                          Colors.transparent,
+                          Color(0x1A0B1B4D),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
