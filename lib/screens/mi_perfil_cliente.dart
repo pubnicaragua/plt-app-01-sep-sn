@@ -7,6 +7,7 @@ import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
+import '../widgets/notifications_sheet.dart';
 import 'inicio.dart';
 import 'pedido.dart';
 
@@ -358,16 +359,20 @@ class _ProfileHeader extends StatelessWidget {
             ),
           ),
         ),
-        SizedBox(
-          width: 42,
-          height: 42,
-          child: Image.asset(
-            'assets/img/HomeCliente/notificaciones.png',
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Icon(
-              Icons.notifications_none_rounded,
-              color: Colors.white,
-              size: 24,
+        InkWell(
+          onTap: () => showAppNotifications(context),
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 42,
+            height: 42,
+            child: Image.asset(
+              'assets/img/HomeCliente/notificaciones.png',
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.notifications_none_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
             ),
           ),
         ),

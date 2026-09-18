@@ -9,6 +9,7 @@ import '../models/api_models.dart';
 import '../widgets/app_nav_bar.dart';
 import '../widgets/corte_banner.dart';
 import '../widgets/glass.dart';
+import '../widgets/notifications_sheet.dart';
 import '../widgets/place_field.dart';
 import 'inicio.dart';
 import 'pedido.dart';
@@ -24,13 +25,20 @@ class HomeCliente extends StatefulWidget {
 
 class _HomeClienteState extends State<HomeCliente> {
   int tab = 0;
+  int _tripRefreshVersion = 0;
 
   @override
   Widget build(BuildContext context) {
     final views = <Widget>[
       const _HomeTab(),
-      const MisEnvios(embedded: true),
-      const ResumenCliente(embedded: true),
+      MisEnvios(
+        key: ValueKey('mis-envios-$_tripRefreshVersion'),
+        embedded: true,
+      ),
+      ResumenCliente(
+        key: ValueKey('resumen-$_tripRefreshVersion'),
+        embedded: true,
+      ),
       const MiPerfilCliente(embedded: true),
     ];
     final safeBottom = MediaQuery.paddingOf(context).bottom;
@@ -62,7 +70,10 @@ class _HomeClienteState extends State<HomeCliente> {
               bottom: safeBottom + 8,
               child: AppNavBar(
                 current: tab,
-                onChanged: (index) => setState(() => tab = index),
+                onChanged: (index) => setState(() {
+                  tab = index;
+                  if (index == 1 || index == 2) _tripRefreshVersion++;
+                }),
               ),
             ),
           ],
@@ -303,7 +314,7 @@ class _HomeTabState extends State<_HomeTab> {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () {},
+                onTap: () => showAppNotifications(context),
                 customBorder: const CircleBorder(),
                 child: Container(
               width: 46,

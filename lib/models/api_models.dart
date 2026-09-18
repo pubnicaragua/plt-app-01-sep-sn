@@ -108,9 +108,10 @@ class Trip {
     this.recipientName,
     this.recipientPhone,
     this.fragile = false,
-    this.distanceKm,
-    this.estimatedCostCs,
-    this.serviceType,
+      this.distanceKm,
+      this.estimatedCostCs,
+      this.invoiceAmountCs,
+      this.serviceType,
     this.transport,
     this.contactName,
     this.contactPhone,
@@ -141,6 +142,7 @@ class Trip {
   final bool fragile;
   final double? distanceKm;
   final double? estimatedCostCs;
+  final double? invoiceAmountCs;
   final String? serviceType;
   final String? transport;
   final String? contactName;
@@ -182,6 +184,8 @@ class Trip {
   }
 
   factory Trip.fromJson(Map<String, dynamic> json) {
+    final description = json['description']?.toString();
+    final invoiceAmount = (json['invoiceAmountCs'] as num?)?.toDouble();
     return Trip(
       id: json['id']?.toString() ?? '',
       client: json['client']?.toString() ?? 'Cliente pendiente',
@@ -191,12 +195,15 @@ class Trip {
       date: json['date']?.toString() ?? '',
       packages: (json['packages'] as num?)?.toInt() ?? 0,
       status: json['status']?.toString() ?? 'Pendiente',
-      description: json['description']?.toString(),
+      description: description,
       recipientName: json['recipientName']?.toString(),
       recipientPhone: json['recipientPhone']?.toString(),
       fragile: json['fragile']?.toString() == 'true',
       distanceKm: (json['distanceKm'] as num?)?.toDouble(),
       estimatedCostCs: (json['estimatedCostCs'] as num?)?.toDouble(),
+      invoiceAmountCs: invoiceAmount != null && invoiceAmount > 0
+          ? invoiceAmount
+          : _invoiceAmountFromDescription(description),
       serviceType: json['serviceType']?.toString(),
       transport: json['transport']?.toString(),
       contactName: json['contactName']?.toString(),
@@ -291,6 +298,9 @@ class TrackingData {
     this.driverPhoto,
     this.currentLocationLabel,
     this.transport,
+    this.routeProvider,
+    this.routeDistanceKm,
+    this.routeDurationSeconds,
   });
 
   final String tripId;
@@ -306,6 +316,9 @@ class TrackingData {
   final String? driverPhoto;
   final String? currentLocationLabel;
   final String? transport;
+  final String? routeProvider;
+  final double? routeDistanceKm;
+  final int? routeDurationSeconds;
 
   factory TrackingData.fromJson(Map<String, dynamic> json) {
     final points = (json['route'] as List? ?? const [])
@@ -329,8 +342,21 @@ class TrackingData {
       driverPhoto: (json['driverPhoto'] ?? json['driverAvatar'] ?? json['photo'])?.toString(),
       currentLocationLabel: json['currentLocationLabel']?.toString(),
       transport: json['transport']?.toString(),
+      routeProvider: json['routeProvider']?.toString(),
+      routeDistanceKm: (json['routeDistanceKm'] as num?)?.toDouble(),
+      routeDurationSeconds: (json['routeDurationSeconds'] as num?)?.toInt(),
     );
   }
+}
+
+double? _invoiceAmountFromDescription(String? description) {
+  final text = description ?? '';
+  final match = RegExp(
+    r'(?:Valor de factura|por)\s+C\$\s*([0-9]+(?:[.,][0-9]+)?)',
+    caseSensitive: false,
+  ).firstMatch(text);
+  if (match == null) return null;
+  return double.tryParse(match.group(1)!.replaceAll(',', '.'));
 }
 
 class PlaceSuggestion {

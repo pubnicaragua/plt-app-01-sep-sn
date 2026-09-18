@@ -138,8 +138,10 @@ class _CrearEnvio3State extends State<CrearEnvio3>
         description: [
           if (widget.description.trim().isNotEmpty) widget.description.trim(),
           'Peso ${widget.weight}${widget.weightUnit}, ${widget.bundles} bulto(s)',
+          if (widget.invoiceAmount > 0)
+            'Valor de factura C\$${widget.invoiceAmount.toStringAsFixed(2)}',
           if (widget.invoiceNumber.trim().isNotEmpty)
-            'Factura ${widget.invoiceNumber.trim()} por C\$${widget.invoiceAmount.toStringAsFixed(2)}',
+            'Factura ${widget.invoiceNumber.trim()}',
           if (evidence.isNotEmpty) 'Evidencias: ${evidence.join(', ')}',
         ].join(' · '),
         originLat: originPlace?.latitude,

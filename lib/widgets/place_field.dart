@@ -226,6 +226,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
               ),
             ),
           ),
+        ),
         ],
       ],
     );

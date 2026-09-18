@@ -171,6 +171,18 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       _pickImage(invoice: true, source: ImageSource.gallery);
 
   void _continue() {
+    if (invoiceAmount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Ingresa el precio de la factura para continuar.',
+            style: TextStyle(fontFamily: 'Acumin Pro'),
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Confirmarpedido(
