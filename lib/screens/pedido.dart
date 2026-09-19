@@ -299,7 +299,7 @@ class _TripCard extends StatelessWidget {
               ],
               const Spacer(),
               Text(
-                'C\$ ${(trip.estimatedCostCs ?? 0).toStringAsFixed(2)}',
+                formatFareCs(trip.estimatedCostCs ?? 0),
                 style: const TextStyle(
                   color: cyan,
                   fontSize: 14,

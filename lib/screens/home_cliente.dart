@@ -177,7 +177,7 @@ class _HomeTabState extends State<_HomeTab> {
     if (km == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    return rate.baseFeeCs + km * rate.farePerKmCs + logisticsServiceFeeCs;
+    return roundFareCs(rate.baseFeeCs + km * rate.farePerKmCs + logisticsServiceFeeCs);
   }
 
   static const _dayOptions = ['Hoy', 'Mañana'];
@@ -667,7 +667,7 @@ class _FareCard extends StatelessWidget {
             'C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} gestión';
     final priceLabel = priceValue == null
         ? 'C\$ —'
-        : 'C\$ ${priceValue.toStringAsFixed(2)}';
+        : formatFareCs(priceValue);
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(

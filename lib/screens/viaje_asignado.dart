@@ -388,7 +388,7 @@ class _DetailBody extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      'C\$${trip.estimatedCostCs!.toStringAsFixed(2)}',
+                      formatFareCs(trip.estimatedCostCs!),
                       style: const TextStyle(
                         color: mint,
                         fontSize: 14.5,

@@ -136,9 +136,9 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           : widget.serviceType == 'Programado'
               ? settings?.scheduledSurchargePct ?? 0
               : 0;
-      return (rate.baseFeeCs + distance * rate.farePerKmCs +
+      return roundFareCs((rate.baseFeeCs + distance * rate.farePerKmCs +
               logisticsServiceFeeCs) *
-          (1 + surcharge / 100);
+          (1 + surcharge / 100));
     }
     if (vehicle == widget.transport && widget.estimatedShipping != null) {
       return widget.estimatedShipping!;
@@ -159,7 +159,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       _vehicles.firstWhere((item) => item.$1 == value,
           orElse: () => _vehicles.first);
 
-  String _money(double value) => 'C\$ ${value.toStringAsFixed(2)}';
+  String _money(double value) => formatFareCs(value);
 
   Future<void> _submit() async {
     if (submitting) return;

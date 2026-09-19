@@ -436,7 +436,7 @@ class _DeliverySheet extends StatelessWidget {
                 const Icon(Icons.payments_outlined, color: mint, size: 17),
                 const SizedBox(width: 10),
                 Text(
-                  'Precio del viaje: C\$${trip.estimatedCostCs!.toStringAsFixed(2)}',
+                  'Precio del viaje: ${formatFareCs(trip.estimatedCostCs!)}',
                   style: const TextStyle(
                     color: mint,
                     fontSize: 12.5,

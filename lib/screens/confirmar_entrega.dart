@@ -226,7 +226,7 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                               icon: Icons.payments_outlined,
                               label: 'Precio del viaje',
                               value:
-                                  'C\$${trip.estimatedCostCs!.toStringAsFixed(2)}',
+                                  formatFareCs(trip.estimatedCostCs!),
                             ),
                             const SizedBox(height: 15),
                             _DetailRow(
@@ -240,7 +240,7 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                               icon: Icons.receipt_long_outlined,
                               label: 'Total a cobrar al destinatario',
                               value:
-                                  'C\$${(trip.estimatedCostCs! + 450).toStringAsFixed(2)}',
+                                  formatFareCs(trip.estimatedCostCs! + 450),
                             ),
                           ],
                           const SizedBox(height: 12),

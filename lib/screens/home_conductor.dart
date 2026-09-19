@@ -628,7 +628,7 @@ class _NextTripCard extends StatelessWidget {
                     color: Color(0xFF0D47D9), size: 15),
                 const SizedBox(width: 7),
                 Text(
-                  'Precio: C\$${trip.estimatedCostCs!.toStringAsFixed(2)}',
+                  'Precio: ${formatFareCs(trip.estimatedCostCs!)}',
                   style: const TextStyle(
                     color: Color(0xFF0D47D9),
                     fontSize: 12.5,
@@ -900,7 +900,7 @@ class _UpcomingTile extends StatelessWidget {
               Text(
                 trip.estimatedCostCs == null
                     ? '${trip.packages} paquete${trip.packages == 1 ? '' : 's'}'
-                    : 'C\$${trip.estimatedCostCs!.toStringAsFixed(2)}',
+                    : formatFareCs(trip.estimatedCostCs!),
                 style: const TextStyle(
                   color: Color(0xFFCBD9F5),
                   fontSize: 11.5,
@@ -949,7 +949,7 @@ class _HistoryCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'C\$${earned.toStringAsFixed(2)}',
+                formatFareCs(earned),
                 style: const TextStyle(
                   color: mint,
                   fontSize: 16,
@@ -995,7 +995,7 @@ class _HistoryCard extends StatelessWidget {
                   Text(
                     trip.estimatedCostCs == null
                         ? '—'
-                        : 'C\$${trip.estimatedCostCs!.toStringAsFixed(2)}',
+                        : formatFareCs(trip.estimatedCostCs!),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12.5,

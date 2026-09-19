@@ -210,7 +210,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     if (distance == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    return rate.baseFeeCs + distance * rate.farePerKmCs + logisticsServiceFeeCs;
+    return roundFareCs(rate.baseFeeCs + distance * rate.farePerKmCs + logisticsServiceFeeCs);
   }
 
   @override
@@ -1508,9 +1508,9 @@ class _PriceBreakdown extends StatelessWidget {
   final double exchangeRate;
 
   String _money(double valueCs) {
-    final value = currency == 'USD' ? valueCs / exchangeRate : valueCs;
+    final value = currency == 'USD' ? valueCs / exchangeRate : roundFareCs(valueCs);
     final symbol = currency == 'USD' ? 'USD' : 'C\$';
-    return '$symbol ${value.toStringAsFixed(2)}';
+    return '$symbol ${value.toStringAsFixed(currency == 'USD' ? 2 : 0)}';
   }
 
   @override
