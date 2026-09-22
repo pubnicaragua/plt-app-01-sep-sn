@@ -155,7 +155,8 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           : widget.serviceType == 'Programado'
               ? settings?.scheduledSurchargePct ?? 0
               : 0;
-      return roundFareCs((rate.baseFeeCs + distance * rate.farePerKmCs +
+      final chargeableKm = (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
+      return roundFareCs((rate.baseFeeCs + chargeableKm * rate.farePerKmCs +
               logisticsServiceFeeCs) *
           (1 + surcharge / 100), settings?.fareRoundingCs ?? 5);
     }

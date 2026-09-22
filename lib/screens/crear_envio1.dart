@@ -224,7 +224,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     if (distance == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    return roundFareCs(rate.baseFeeCs + distance * rate.farePerKmCs + logisticsServiceFeeCs,
+    final chargeableKm = (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
+    return roundFareCs(rate.baseFeeCs + chargeableKm * rate.farePerKmCs + logisticsServiceFeeCs,
         settings?.fareRoundingCs ?? 5);
   }
 

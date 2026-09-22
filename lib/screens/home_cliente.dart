@@ -250,7 +250,8 @@ class _HomeTabState extends State<_HomeTab> {
     if (km == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    return roundFareCs(rate.baseFeeCs + km * rate.farePerKmCs + logisticsServiceFeeCs,
+    final chargeableKm = (km - rate.includedKm).clamp(0, double.infinity).toDouble();
+    return roundFareCs(rate.baseFeeCs + chargeableKm * rate.farePerKmCs + logisticsServiceFeeCs,
         settings?.fareRoundingCs ?? 5);
   }
 
@@ -766,7 +767,7 @@ class _FareCard extends StatelessWidget {
         ? 'Selecciona ambos lugares para cotizar tu envío'
         : '${distanceValue.toStringAsFixed(1)} km · base '
             'C\$ ${rateValue.baseFeeCs.toStringAsFixed(0)} + '
-            '${distanceValue.toStringAsFixed(1)} × C\$ '
+            '${(distanceValue - rateValue.includedKm).clamp(0, double.infinity).toStringAsFixed(1)} adicionales × C\$ '
             '${rateValue.farePerKmCs.toStringAsFixed(2)} + '
             'C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} gestión';
     final priceLabel = priceValue == null

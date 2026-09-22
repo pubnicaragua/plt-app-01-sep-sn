@@ -243,13 +243,28 @@ class _InicioState extends State<Inicio> {
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: const Text(
-                      '¿No tienes cuenta? Regístrate aquí',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Acumin Pro',
+                    child: const Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '¿No tienes cuenta? ',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                          TextSpan(
+                            text: 'Regístrate aquí',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Acumin Pro',
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

@@ -392,15 +392,18 @@ class VehicleRate {
   const VehicleRate({
     required this.baseFeeCs,
     required this.farePerKmCs,
+    required this.includedKm,
   });
 
   final double baseFeeCs;
   final double farePerKmCs;
+  final double includedKm;
 
   factory VehicleRate.fromJson(Map<String, dynamic> json) {
     return VehicleRate(
       baseFeeCs: (json['baseFeeCs'] as num?)?.toDouble() ?? 80,
       farePerKmCs: (json['farePerKmCs'] as num?)?.toDouble() ?? 8.5,
+      includedKm: (json['includedKm'] as num?)?.toDouble() ?? 4,
     );
   }
 }
@@ -423,7 +426,7 @@ class AppSettings {
   VehicleRate rateFor(String vehicle) =>
       vehicleRates[vehicle] ??
       vehicleRates['Vehículo'] ??
-      const VehicleRate(baseFeeCs: 80, farePerKmCs: 8.5);
+      const VehicleRate(baseFeeCs: 80, farePerKmCs: 8.5, includedKm: 4);
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     final rates = (json['vehicleRates'] as Map?)?.cast<String, dynamic>() ??
