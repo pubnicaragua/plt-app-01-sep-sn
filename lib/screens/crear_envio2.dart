@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
@@ -68,6 +69,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   Uint8List? invoicePhoto;
   String invoiceFileName = 'factura.jpg';
   AppSettings? settings;
+  Timer? _settingsPoll;
 
   @override
   void initState() {
@@ -81,10 +83,22 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     apiClient.getSettings().then((value) {
       if (mounted) setState(() => settings = value);
     }).catchError((_) {});
+    _settingsPoll = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _refreshSettings(),
+    );
+  }
+
+  Future<void> _refreshSettings() async {
+    try {
+      final value = await apiClient.getSettings();
+      if (mounted) setState(() => settings = value);
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _settingsPoll?.cancel();
     description.dispose();
     invoicePrice.dispose();
     invoiceNumber.dispose();

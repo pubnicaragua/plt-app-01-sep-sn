@@ -52,8 +52,8 @@ class ApiClient {
         '/auth/session/$token',
       )) as Map<String, dynamic>;
       return json['valid'] == true;
-    } catch (_) {
-      return true;
+    } catch (error) {
+      return error is ApiException && error.statusCode == 401 ? false : true;
     }
   }
 
@@ -355,6 +355,17 @@ class ApiClient {
     return json as Map<String, dynamic>;
   }
 
+  Future<List<IncidentNotification>> getIncidentNotifications() async {
+    final json = await _send('GET', '/incidents/notifications');
+    if (json is! List) return const [];
+    return json
+        .whereType<Map>()
+        .map((item) => IncidentNotification.fromJson(
+              item.cast<String, dynamic>(),
+            ))
+        .toList(growable: false);
+  }
+
   Future<Map<String, dynamic>> addFuelRecord({
     required String plate,
     required double liters,
@@ -488,8 +499,15 @@ class ApiClient {
     final decoded =
         response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (response.statusCode == 401) {
+        accessToken = null;
+        currentUser = null;
+      }
       final message = decoded is Map ? decoded['message'] : null;
-      throw ApiException(message?.toString() ?? 'La API respondió con error.');
+      throw ApiException(
+        message?.toString() ?? 'La API respondió con error.',
+        statusCode: response.statusCode,
+      );
     }
     if (decoded is Map) return decoded.cast<String, dynamic>();
     if (decoded is List) return decoded;
@@ -498,9 +516,10 @@ class ApiClient {
 }
 
 class ApiException implements Exception {
-  const ApiException(this.message);
+  const ApiException(this.message, {this.statusCode});
 
   final String message;
+  final int? statusCode;
 
   @override
   String toString() => message;

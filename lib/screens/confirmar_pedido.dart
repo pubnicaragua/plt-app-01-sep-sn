@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -75,6 +76,7 @@ class Confirmarpedido extends StatefulWidget {
 class _ConfirmarpedidoState extends State<Confirmarpedido> {
   late String selectedTransport;
   AppSettings? settings;
+  Timer? _settingsPoll;
   bool submitting = false;
   String? errorMessage;
 
@@ -113,6 +115,23 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     apiClient.getSettings().then((value) {
       if (mounted) setState(() => settings = value);
     }).catchError((_) {});
+    _settingsPoll = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _refreshSettings(),
+    );
+  }
+
+  Future<void> _refreshSettings() async {
+    try {
+      final value = await apiClient.getSettings();
+      if (mounted) setState(() => settings = value);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _settingsPoll?.cancel();
+    super.dispose();
   }
 
   bool _validTransport(String value) =>
@@ -138,7 +157,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
               : 0;
       return roundFareCs((rate.baseFeeCs + distance * rate.farePerKmCs +
               logisticsServiceFeeCs) *
-          (1 + surcharge / 100));
+          (1 + surcharge / 100), settings?.fareRoundingCs ?? 5);
     }
     if (vehicle == widget.transport && widget.estimatedShipping != null) {
       return widget.estimatedShipping!;
@@ -159,7 +178,8 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       _vehicles.firstWhere((item) => item.$1 == value,
           orElse: () => _vehicles.first);
 
-  String _money(double value) => formatFareCs(value);
+  String _money(double value) =>
+      formatFareCs(value, settings?.fareRoundingCs ?? 5);
 
   Future<void> _submit() async {
     if (submitting) return;

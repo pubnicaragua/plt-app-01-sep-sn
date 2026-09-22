@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:image_picker/image_picker.dart';
@@ -57,6 +58,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   late PlaceSuggestion? originPlace;
   late PlaceSuggestion? destinationPlace;
   AppSettings? settings;
+  Timer? _settingsPoll;
   final description = TextEditingController();
   final invoicePrice = TextEditingController(text: '0,00');
   final invoiceNumber = TextEditingController(text: 'FAC-1003');
@@ -97,10 +99,22 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     apiClient.getSettings().then((data) {
       if (mounted) setState(() => settings = data);
     }).catchError((_) {});
+    _settingsPoll = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _refreshSettings(),
+    );
+  }
+
+  Future<void> _refreshSettings() async {
+    try {
+      final data = await apiClient.getSettings();
+      if (mounted) setState(() => settings = data);
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _settingsPoll?.cancel();
     origin.dispose();
     destination.dispose();
     description.dispose();
@@ -210,7 +224,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     if (distance == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    return roundFareCs(rate.baseFeeCs + distance * rate.farePerKmCs + logisticsServiceFeeCs);
+    return roundFareCs(rate.baseFeeCs + distance * rate.farePerKmCs + logisticsServiceFeeCs,
+        settings?.fareRoundingCs ?? 5);
   }
 
   @override
@@ -1000,6 +1015,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                     productValue: _invoiceAmountCs,
                     currency: currency,
                     exchangeRate: settings?.dollarRate ?? 36.5,
+                    fareRoundingCs: settings?.fareRoundingCs ?? 5,
                   ),
                 ],
               ],
@@ -1498,6 +1514,7 @@ class _PriceBreakdown extends StatelessWidget {
     required this.productValue,
     required this.currency,
     required this.exchangeRate,
+    required this.fareRoundingCs,
   });
 
   final String transport;
@@ -1506,9 +1523,12 @@ class _PriceBreakdown extends StatelessWidget {
   final double productValue;
   final String currency;
   final double exchangeRate;
+  final double fareRoundingCs;
 
   String _money(double valueCs) {
-    final value = currency == 'USD' ? valueCs / exchangeRate : roundFareCs(valueCs);
+    final value = currency == 'USD'
+        ? valueCs / exchangeRate
+        : roundFareCs(valueCs, fareRoundingCs);
     final symbol = currency == 'USD' ? 'USD' : 'C\$';
     return '$symbol ${value.toStringAsFixed(currency == 'USD' ? 2 : 0)}';
   }

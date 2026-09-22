@@ -26,8 +26,10 @@ class _HomeConductorState extends State<HomeConductor> {
   String? error;
   Timer? poll;
   final Set<String> knownIds = {};
+  final Set<String> knownIncidentIds = {};
   final List<String> news = [];
   int unread = 0;
+  String? incidentError;
   CurrentLocation? location;
 
   String get _driverName =>
@@ -94,6 +96,7 @@ class _HomeConductorState extends State<HomeConductor> {
     } finally {
       if (mounted) setState(() => loading = false);
     }
+    await _refreshIncidentNotifications();
     final loc = await requestCurrentLocation();
     if (mounted && loc != null) setState(() => location = loc);
     await requestAppPermissions();
@@ -116,7 +119,7 @@ class _HomeConductorState extends State<HomeConductor> {
         for (final trip in fresh) {
           news.insert(0, 'Nuevo viaje ${trip.id} asignado · ${trip.origin} → ${trip.destination}');
         }
-        setState(() => unread = news.length);
+        setState(() => unread += fresh.length);
         if (mounted && fresh.any((t) => t.status == 'Asignado')) {
           pushNotification(
             title: 'Nuevo viaje asignado ${fresh.first.id}',
@@ -147,6 +150,52 @@ class _HomeConductorState extends State<HomeConductor> {
       }
       setState(() => trips = data);
     } catch (_) {}
+    await _refreshIncidentNotifications();
+  }
+
+  Future<void> _refreshIncidentNotifications() async {
+    try {
+      final incidents = await apiClient.getIncidentNotifications();
+      if (!mounted) return;
+      final fresh = incidents
+          .where((incident) => incident.id.isNotEmpty && !knownIncidentIds.contains(incident.id))
+          .toList(growable: false);
+      if (fresh.isEmpty) return;
+      for (final incident in fresh) {
+        knownIncidentIds.add(incident.id);
+        final target = incident.isGeneral ? 'General' : 'Viaje ${incident.trip}';
+        final details = '${incident.type} · prioridad ${incident.priority} · $target'
+            '${incident.description.trim().isEmpty ? '' : ' · ${incident.description.trim()}'}';
+        news.insert(0, '${incident.id} · $details');
+      }
+      setState(() => unread += fresh.length);
+      final latest = fresh.first;
+      final title = latest.isGeneral ? 'Incidencia general: ${latest.type}' : 'Incidencia en viaje ${latest.trip}';
+      final body = latest.description.trim().isEmpty
+          ? 'Prioridad ${latest.priority}'
+          : latest.description.trim();
+      pushNotification(title: title, body: body, id: latest.id.hashCode);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF0B1D4D),
+          behavior: SnackBarBehavior.floating,
+          content: Text('$title · $body', maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontFamily: 'Acumin Pro', fontWeight: FontWeight.w700)),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceFirst('Exception: ', '').trim();
+      if (message.isNotEmpty && message != incidentError) {
+        setState(() => incidentError = message);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudieron consultar incidencias: $message'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   void _openNotifications() {

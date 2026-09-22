@@ -409,12 +409,14 @@ class AppSettings {
   const AppSettings({
     required this.dollarRate,
     required this.vehicleRates,
+    this.fareRoundingCs = 5,
     this.prioritySurchargePct = 25,
     this.scheduledSurchargePct = 0,
   });
 
   final double dollarRate;
   final Map<String, VehicleRate> vehicleRates;
+  final double fareRoundingCs;
   final double prioritySurchargePct;
   final double scheduledSurchargePct;
 
@@ -428,6 +430,7 @@ class AppSettings {
         const <String, dynamic>{};
     return AppSettings(
       dollarRate: (json['dollarRate'] as num?)?.toDouble() ?? 36.5,
+      fareRoundingCs: (json['fareRoundingCs'] as num?)?.toDouble() ?? 5,
       vehicleRates: rates.map(
         (key, value) => MapEntry(
           key,
@@ -475,3 +478,46 @@ double? distanceKm(PlaceSuggestion? from, PlaceSuggestion? to) {
 }
 
 double _radians(double degrees) => degrees * math.pi / 180.0;
+
+class IncidentNotification {
+  const IncidentNotification({
+    required this.id,
+    required this.scope,
+    required this.trip,
+    required this.driver,
+    required this.client,
+    required this.type,
+    required this.priority,
+    required this.status,
+    this.description = '',
+    this.createdAt = 0,
+  });
+
+  final String id;
+  final String scope;
+  final String trip;
+  final String driver;
+  final String client;
+  final String type;
+  final String priority;
+  final String status;
+  final String description;
+  final int createdAt;
+
+  bool get isGeneral => scope == 'general';
+
+  factory IncidentNotification.fromJson(Map<String, dynamic> json) {
+    return IncidentNotification(
+      id: json['id']?.toString() ?? '',
+      scope: json['scope']?.toString() ?? 'trip',
+      trip: json['trip']?.toString() ?? '',
+      driver: json['driver']?.toString() ?? '',
+      client: json['client']?.toString() ?? '',
+      type: json['type']?.toString() ?? 'Incidencia',
+      priority: json['priority']?.toString() ?? 'Media',
+      status: json['status']?.toString() ?? 'Abierta',
+      description: json['description']?.toString() ?? '',
+      createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
+    );
+  }
+}

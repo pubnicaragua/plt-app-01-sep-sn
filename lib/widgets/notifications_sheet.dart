@@ -17,11 +17,19 @@ Future<void> showAppNotifications(BuildContext context) async {
       : null;
 
   List<Trip> trips = const [];
-  String? error;
+  List<IncidentNotification> incidents = const [];
+  final errors = <String>[];
+  String cleanError(Object error) =>
+      error.toString().replaceFirst('Exception: ', '').trim();
   try {
     trips = await apiClient.getTrips(client: client);
-  } catch (_) {
-    error = 'No se pudieron consultar las novedades.';
+  } catch (error) {
+    errors.add('Viajes: ${cleanError(error)}');
+  }
+  try {
+    incidents = await apiClient.getIncidentNotifications();
+  } catch (error) {
+    errors.add('Incidencias: ${cleanError(error)}');
   }
   if (!context.mounted) return;
 
@@ -31,11 +39,43 @@ Future<void> showAppNotifications(BuildContext context) async {
     isScrollControlled: true,
     builder: (sheetContext) => _NotificationsSheet(
       trips: trips.take(8).toList(growable: false),
-      error: error,
+      incidents: incidents.take(12).toList(growable: false),
+      error: errors.isEmpty ? null : errors.join('\n'),
       onTripTap: (trip) {
         Navigator.of(sheetContext).pop();
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => SeguimientoPedido(trip: trip)),
+        );
+      },
+      onIncidentTap: (incident) {
+        Navigator.of(sheetContext).pop();
+        showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF12275D),
+            title: Text(
+              incident.isGeneral ? 'Aviso operativo' : 'Incidencia · ${incident.trip}',
+              style: const TextStyle(color: Colors.white, fontFamily: 'Acumin Pro'),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(incident.type, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+                const SizedBox(height: 8),
+                Text('Prioridad ${incident.priority} · ${incident.status}', style: const TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Acumin Pro')),
+                if (!incident.isGeneral) ...[
+                  const SizedBox(height: 6),
+                  Text('Cliente: ${incident.client}', style: const TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Acumin Pro')),
+                ],
+                if (incident.description.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(incident.description, style: const TextStyle(color: Colors.white, fontFamily: 'Acumin Pro')),
+                ],
+              ],
+            ),
+            actions: [TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cerrar'))],
+          ),
         );
       },
     ),
@@ -45,13 +85,17 @@ Future<void> showAppNotifications(BuildContext context) async {
 class _NotificationsSheet extends StatelessWidget {
   const _NotificationsSheet({
     required this.trips,
+    required this.incidents,
     required this.onTripTap,
+    required this.onIncidentTap,
     this.error,
   });
 
   final List<Trip> trips;
+  final List<IncidentNotification> incidents;
   final String? error;
   final ValueChanged<Trip> onTripTap;
+  final ValueChanged<IncidentNotification> onIncidentTap;
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +152,7 @@ class _NotificationsSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Actualizaciones de tus envíos',
+                    'Avisos de incidencias y actualizaciones de tus envíos',
                     style: TextStyle(
                       color: Color(0xD9FFFFFF),
                       fontSize: 12,
@@ -116,7 +160,7 @@ class _NotificationsSheet extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  if (error != null)
+                  if (error != null) ...[
                     GlassCard(
                       padding: const EdgeInsets.all(14),
                       child: Text(
@@ -128,8 +172,9 @@ class _NotificationsSheet extends StatelessWidget {
                           fontFamily: 'Acumin Pro',
                         ),
                       ),
-                    )
-                  else if (trips.isEmpty)
+                    ),
+                  ],
+                  if (trips.isEmpty && incidents.isEmpty && error == null) ...[
                     const GlassCard(
                       padding: EdgeInsets.all(18),
                       child: Text(
@@ -141,24 +186,85 @@ class _NotificationsSheet extends StatelessWidget {
                           fontFamily: 'Acumin Pro',
                         ),
                       ),
-                    )
-                  else
+                    ),
+                  ],
+                  if (trips.isNotEmpty || incidents.isNotEmpty) ...[
                     Flexible(
                       child: ListView.separated(
                         shrinkWrap: true,
-                        itemCount: trips.length,
+                        itemCount: incidents.length + trips.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (_, index) => _NotificationRow(
-                          trip: trips[index],
-                          onTap: () => onTripTap(trips[index]),
-                        ),
+                        itemBuilder: (_, index) {
+                          if (index < incidents.length) {
+                            final incident = incidents[index];
+                            return _IncidentNotificationRow(
+                              incident: incident,
+                              onTap: () => onIncidentTap(incident),
+                            );
+                          }
+                          final trip = trips[index - incidents.length];
+                          return _NotificationRow(
+                            trip: trip,
+                            onTap: () => onTripTap(trip),
+                          );
+                        },
                       ),
                     ),
+                  ],
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _IncidentNotificationRow extends StatelessWidget {
+  const _IncidentNotificationRow({required this.incident, required this.onTap});
+
+  final IncidentNotification incident;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF6B6B).withValues(alpha: .18),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFFF6B6B).withValues(alpha: .45)),
+            ),
+            child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF8B8B), size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  incident.isGeneral ? 'Aviso general · ${incident.type}' : '${incident.type} · ${incident.trip}',
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  incident.description.trim().isEmpty ? 'Prioridad ${incident.priority}' : incident.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xD9FFFFFF), fontSize: 11, fontFamily: 'Acumin Pro'),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: Colors.white.withValues(alpha: .8), size: 20),
+        ],
       ),
     );
   }

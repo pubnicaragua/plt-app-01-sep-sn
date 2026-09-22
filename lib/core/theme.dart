@@ -14,16 +14,20 @@ const Color glowBlue = Color(0xFF0047FF);
 const Color accentBlue = Color(0xFF0A57FF);
 const double logisticsServiceFeeCs = 15.0;
 
-/// Redondea la tarifa final al múltiplo de cinco más cercano.
-/// La unidad 7 sube al siguiente 10: 857 -> 860.
-double roundFareCs(double value) {
+/// Redondea al múltiplo comercial configurado más cercano.
+/// Con múltiplo 5, la unidad 7 conserva la regla especial 857 -> 860.
+double roundFareCs(double value, [double multiple = 5]) {
   final whole = value.isFinite ? value.floor() : 0;
   if (whole <= 0) return 0;
-  if (whole % 10 == 7) return (((whole ~/ 10) + 1) * 10).toDouble();
-  return ((whole / 5).round() * 5).toDouble();
+  final step = multiple.isFinite ? multiple.round().clamp(1, 1000000) : 5;
+  if (step == 5 && whole % 10 == 7) {
+    return (((whole ~/ 10) + 1) * 10).toDouble();
+  }
+  return ((whole / step).round() * step).toDouble();
 }
 
-String formatFareCs(double value) => 'C\$ ${roundFareCs(value).toStringAsFixed(0)}';
+String formatFareCs(double value, [double multiple = 5]) =>
+    'C\$ ${roundFareCs(value, multiple).toStringAsFixed(0)}';
 
 final ValueNotifier<bool> appDarkMode = ValueNotifier<bool>(false);
 

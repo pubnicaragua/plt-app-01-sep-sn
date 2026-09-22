@@ -1,9 +1,11 @@
 import 'dart:ui';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/location_service.dart';
+import '../core/notifications.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/app_nav_bar.dart';
@@ -121,6 +123,10 @@ class _HomeTabState extends State<_HomeTab> {
   final recipientPhone = TextEditingController();
   PlaceSuggestion? originPlace;
   PlaceSuggestion? destinationPlace;
+  Timer? _incidentPoll;
+  final Set<String> _seenIncidentIds = {};
+  int _incidentUnread = 0;
+  String? _incidentError;
 
   @override
   void initState() {
@@ -144,6 +150,72 @@ class _HomeTabState extends State<_HomeTab> {
       });
     });
     _checkRemoteSession();
+    _pollIncidentNotifications();
+    _incidentPoll = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) {
+        _pollIncidentNotifications();
+        _refreshSettings();
+      },
+    );
+  }
+
+  Future<void> _refreshSettings() async {
+    try {
+      final data = await apiClient.getSettings();
+      if (mounted) setState(() => settings = data);
+    } catch (_) {}
+  }
+
+  Future<void> _pollIncidentNotifications() async {
+    try {
+      final incidents = await apiClient.getIncidentNotifications();
+      if (!mounted) return;
+      final fresh = incidents
+          .where((incident) =>
+              incident.id.isNotEmpty && !_seenIncidentIds.contains(incident.id))
+          .toList(growable: false);
+      if (fresh.isEmpty) return;
+      for (final incident in fresh) {
+        _seenIncidentIds.add(incident.id);
+      }
+      setState(() => _incidentUnread += fresh.length);
+      final latest = fresh.first;
+      final title = latest.isGeneral
+          ? 'Aviso operativo: ${latest.type}'
+          : 'Incidencia en viaje ${latest.trip}';
+      final body = latest.description.trim().isEmpty
+          ? 'Prioridad ${latest.priority}'
+          : latest.description.trim();
+      pushNotification(title: title, body: body, id: latest.id.hashCode);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF0B1D4D),
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            '$title · $body',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: 'Acumin Pro',
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceFirst('Exception: ', '').trim();
+      if (message.isNotEmpty && message != _incidentError) {
+        setState(() => _incidentError = message);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudieron consultar incidencias: $message'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _checkRemoteSession() async {
@@ -161,6 +233,7 @@ class _HomeTabState extends State<_HomeTab> {
 
   @override
   void dispose() {
+    _incidentPoll?.cancel();
     origin.dispose();
     destination.dispose();
     refOrigin.dispose();
@@ -177,7 +250,8 @@ class _HomeTabState extends State<_HomeTab> {
     if (km == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    return roundFareCs(rate.baseFeeCs + km * rate.farePerKmCs + logisticsServiceFeeCs);
+    return roundFareCs(rate.baseFeeCs + km * rate.farePerKmCs + logisticsServiceFeeCs,
+        settings?.fareRoundingCs ?? 5);
   }
 
   static const _dayOptions = ['Hoy', 'Mañana'];
@@ -314,7 +388,10 @@ class _HomeTabState extends State<_HomeTab> {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () => showAppNotifications(context),
+                onTap: () {
+                  setState(() => _incidentUnread = 0);
+                  showAppNotifications(context);
+                },
                 customBorder: const CircleBorder(),
                 child: Container(
               width: 46,
@@ -339,11 +416,35 @@ class _HomeTabState extends State<_HomeTab> {
                       size: 22,
                     ),
                   ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(width: 5, height: 5, decoration: const BoxDecoration(color: cyan, shape: BoxShape.circle)),
-                  ),
+                  if (_incidentUnread > 0)
+                    Positioned(
+                      top: 3,
+                      right: 2,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 16),
+                        height: 16,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF5A5A),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Text(
+                          _incidentUnread > 9 ? '9+' : '$_incidentUnread',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(width: 5, height: 5, decoration: const BoxDecoration(color: cyan, shape: BoxShape.circle)),
+                    ),
                 ],
               ),
             ),
@@ -428,6 +529,7 @@ class _HomeTabState extends State<_HomeTab> {
           fare: _fareFor(transport),
           transportLabel: transport,
           rate: settings?.rateFor(transport),
+          fareRoundingCs: settings?.fareRoundingCs ?? 5,
           usdRate: settings?.dollarRate ?? 36.5,
         ),
         const SizedBox(height: 12),
@@ -641,6 +743,7 @@ class _FareCard extends StatelessWidget {
     required this.fare,
     required this.transportLabel,
     required this.rate,
+    required this.fareRoundingCs,
     required this.usdRate,
   });
 
@@ -648,6 +751,7 @@ class _FareCard extends StatelessWidget {
   final double? fare;
   final String transportLabel;
   final VehicleRate? rate;
+  final double fareRoundingCs;
   final double usdRate;
 
   @override
@@ -667,7 +771,7 @@ class _FareCard extends StatelessWidget {
             'C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} gestión';
     final priceLabel = priceValue == null
         ? 'C\$ —'
-        : formatFareCs(priceValue);
+        : formatFareCs(priceValue, fareRoundingCs);
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
