@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
@@ -64,7 +64,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                             color: Colors.white,
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
-                            fontFamily: 'Acumin Pro',
+                            fontFamily: 'Figtree',
                           ),
                         ),
                       ),
@@ -152,7 +152,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                                 color: Colors.white,
                                                 fontSize: 12.5,
                                                 fontWeight: FontWeight.w800,
-                                                fontFamily: 'Acumin Pro',
+                                                fontFamily: 'Figtree',
                                               ),
                                             ),
                                           ),
@@ -173,7 +173,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                   fontSize: 52,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -1,
-                                  fontFamily: 'Acumin Pro',
+                                  fontFamily: 'Figtree',
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -184,7 +184,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                 style: const TextStyle(
                                   color: Color(0xFFB9D4FF),
                                   fontSize: 13,
-                                  fontFamily: 'Acumin Pro',
+                                  fontFamily: 'Figtree',
                                 ),
                               ),
                               if (!loading && tab == 1 && invoiceTotal == 0)
@@ -195,7 +195,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                     style: TextStyle(
                                       color: Color(0xFFB9D4FF),
                                       fontSize: 10.5,
-                                      fontFamily: 'Acumin Pro',
+                                      fontFamily: 'Figtree',
                                     ),
                                   ),
                                 ),
@@ -223,7 +223,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                               color: Colors.white,
                                               fontSize: 14,
                                               fontWeight: FontWeight.w800,
-                                              fontFamily: 'Acumin Pro',
+                                              fontFamily: 'Figtree',
                                             ),
                                           ),
                                         ],
@@ -242,7 +242,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                             color: Colors.white,
                             fontSize: 15.5,
                             fontWeight: FontWeight.w800,
-                            fontFamily: 'Acumin Pro',
+                            fontFamily: 'Figtree',
                           ),
                         ),
                         const SizedBox(height: 11),
@@ -304,7 +304,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                       color: Colors.white,
                                       fontSize: 15.5,
                                       fontWeight: FontWeight.w800,
-                                      fontFamily: 'Acumin Pro',
+                                      fontFamily: 'Figtree',
                                     ),
                                   ),
                                   StatusPill(
@@ -326,7 +326,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                     style: TextStyle(
                                       color: Color(0xFFB9D4FF),
                                       fontSize: 10.5,
-                                      fontFamily: 'Acumin Pro',
+                                      fontFamily: 'Figtree',
                                     ),
                                   ),
                                   SizedBox(width: 16),
@@ -337,7 +337,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                     style: TextStyle(
                                       color: Color(0xFFB9D4FF),
                                       fontSize: 10.5,
-                                      fontFamily: 'Acumin Pro',
+                                      fontFamily: 'Figtree',
                                     ),
                                   ),
                                 ],
@@ -408,7 +408,7 @@ class _PeriodCard extends StatelessWidget {
               fontSize: 13,
               letterSpacing: .7,
               fontWeight: FontWeight.w800,
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
             ),
           ),
           const SizedBox(height: 6),
@@ -420,7 +420,7 @@ class _PeriodCard extends StatelessWidget {
               color: Colors.white,
               fontSize: small ? 13.5 : 16.5,
               fontWeight: FontWeight.w800,
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
             ),
           ),
           const SizedBox(height: 2),
@@ -431,7 +431,7 @@ class _PeriodCard extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xFFB9D4FF),
               fontSize: 10,
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
             ),
           ),
           const SizedBox(height: 6),
@@ -447,7 +447,7 @@ class _PeriodCard extends StatelessWidget {
                 color: mint,
                 fontSize: 9.5,
                 fontWeight: FontWeight.w800,
-                fontFamily: 'Acumin Pro',
+                fontFamily: 'Figtree',
               ),
             ),
           ),
@@ -491,7 +491,7 @@ class _WeeklyChart extends StatelessWidget {
                     style: const TextStyle(
                       color: Color(0xFF8FA0C4),
                       fontSize: 10,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                 ],

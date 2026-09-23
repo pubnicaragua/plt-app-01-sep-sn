@@ -111,7 +111,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
             behavior: SnackBarBehavior.floating,
             content: Text(
               'No se pudo tomar la foto.',
-              style: TextStyle(fontFamily: 'Acumin Pro'),
+              style: TextStyle(fontFamily: 'Figtree'),
             ),
           ),
         );
@@ -152,7 +152,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
             behavior: SnackBarBehavior.floating,
             content: Text(
               'No se pudo reportar. Verifica tu conexión.',
-              style: TextStyle(fontFamily: 'Acumin Pro'),
+              style: TextStyle(fontFamily: 'Figtree'),
             ),
           ),
         );
@@ -198,7 +198,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                       color: Colors.white,
                       fontSize: 17,
                       fontWeight: FontWeight.w800,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                 ],
@@ -209,7 +209,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                 style: const TextStyle(
                   color: Color(0xFFB9D4FF),
                   fontSize: 11.5,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
               const SizedBox(height: 15),
@@ -228,7 +228,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                   ),
                   items: [
                     for (final t in types)
@@ -262,7 +262,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                               fontSize: 9,
                               letterSpacing: .8,
                               fontWeight: FontWeight.w800,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -281,7 +281,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
-                                    fontFamily: 'Acumin Pro',
+                                    fontFamily: 'Figtree',
                                   ),
                                 ),
                               ),
@@ -296,7 +296,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                                 color: cyan,
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w700,
-                                fontFamily: 'Acumin Pro',
+                                fontFamily: 'Figtree',
                               ),
                             ),
                           ),
@@ -319,7 +319,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                               fontSize: 9,
                               letterSpacing: .8,
                               fontWeight: FontWeight.w800,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                           const SizedBox(height: 5),
@@ -354,7 +354,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                                             : Colors.white70,
                                         fontSize: 9.5,
                                         fontWeight: FontWeight.w700,
-                                        fontFamily: 'Acumin Pro',
+                                        fontFamily: 'Figtree',
                                       ),
                                     ),
                                   ),
@@ -412,7 +412,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                                 color: Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                fontFamily: 'Acumin Pro',
+                                fontFamily: 'Figtree',
                               ),
                             ),
                             const Text(
@@ -420,7 +420,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                               style: TextStyle(
                                 color: Color(0xFFB9D4FF),
                                 fontSize: 10.5,
-                                fontFamily: 'Acumin Pro',
+                                fontFamily: 'Figtree',
                               ),
                             ),
                           ],
@@ -464,7 +464,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                                 color: Colors.white,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
-                                fontFamily: 'Acumin Pro',
+                                fontFamily: 'Figtree',
                               ),
                             ),
                     ),
@@ -478,7 +478,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                 style: TextStyle(
                   color: Color(0xFF8FA0C4),
                   fontSize: 10.5,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
             ],

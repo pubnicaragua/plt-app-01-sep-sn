@@ -284,7 +284,7 @@ class GlassButton extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                   ],
@@ -376,7 +376,7 @@ class _GlassFieldState extends State<GlassField> {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 15.5,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                     fontWeight: FontWeight.w600,
                   ),
                   decoration: InputDecoration(
@@ -384,7 +384,7 @@ class _GlassFieldState extends State<GlassField> {
                     labelStyle: const TextStyle(
                       color: Color(0xFFE8F0FF),
                       fontSize: 12,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                       fontWeight: FontWeight.w600,
                     ),
                     hintText: widget.hint ??
@@ -392,7 +392,7 @@ class _GlassFieldState extends State<GlassField> {
                     hintStyle: const TextStyle(
                       color: Color(0x8CFFFFFF),
                       fontSize: 13,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                     helperText: widget.helper,
                     helperStyle: const TextStyle(
@@ -454,7 +454,7 @@ class StatusPill extends StatelessWidget {
           color: color,
           fontSize: 11,
           fontWeight: FontWeight.w800,
-          fontFamily: 'Acumin Pro',
+          fontFamily: 'Figtree',
         ),
       ),
     );
@@ -474,7 +474,7 @@ class SectionTitle extends StatelessWidget {
         color: Colors.white,
         fontSize: 19,
         fontWeight: FontWeight.w700,
-        fontFamily: 'Acumin Pro',
+        fontFamily: 'Figtree',
       ),
     );
   }

@@ -113,7 +113,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
               style: TextStyle(
                 color: Color(0xCCFFFFFF),
                 fontSize: 10,
-                fontFamily: 'Acumin Pro',
+                fontFamily: 'Figtree',
               ),
             ),
           ),
@@ -199,7 +199,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
                                         color: Colors.white,
                                         fontSize: 13,
                                         fontWeight: FontWeight.w700,
-                                        fontFamily: 'Acumin Pro',
+                                        fontFamily: 'Figtree',
                                       ),
                                     ),
                                     if (suggestion.secondary.isNotEmpty)
@@ -210,7 +210,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
                                         style: const TextStyle(
                                           color: Color(0xB3FFFFFF),
                                           fontSize: 10.5,
-                                          fontFamily: 'Acumin Pro',
+                                          fontFamily: 'Figtree',
                                         ),
                                       ),
                                   ],
@@ -272,7 +272,7 @@ class _BareRouteField extends StatelessWidget {
             fontSize: 9,
             letterSpacing: 1.1,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Acumin Pro',
+            fontFamily: 'Figtree',
           ),
         ),
         const SizedBox(height: 3),
@@ -283,7 +283,7 @@ class _BareRouteField extends StatelessWidget {
             color: Colors.white,
             fontSize: 16.5,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Acumin Pro',
+            fontFamily: 'Figtree',
           ),
           decoration: InputDecoration(
             hintText: hint,
@@ -291,7 +291,7 @@ class _BareRouteField extends StatelessWidget {
               color: Color(0xB3FFFFFF),
               fontSize: 15.5,
               fontWeight: FontWeight.w500,
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
             ),
             border: InputBorder.none,
             focusedBorder: InputBorder.none,

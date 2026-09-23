@@ -61,7 +61,7 @@ class WizardScaffold extends StatelessWidget {
         title: Text(
           title,
           style: const TextStyle(
-            fontFamily: 'Acumin Pro',
+            fontFamily: 'Figtree',
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -82,7 +82,7 @@ class WizardScaffold extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                   ),
                 ),
               ),
@@ -155,7 +155,7 @@ class WizardScaffold extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                     Text(
@@ -163,7 +163,7 @@ class WizardScaffold extends StatelessWidget {
                       style: const TextStyle(
                         color: Color(0xFFB9D4FF),
                         fontSize: 10.5,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                   ],
@@ -177,7 +177,7 @@ class WizardScaffold extends StatelessWidget {
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.5,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
               if (showDescription) ...[
@@ -187,7 +187,7 @@ class WizardScaffold extends StatelessWidget {
                   style: const TextStyle(
                     color: Color(0xFFB9D4FF),
                     fontSize: 12.5,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                   ),
                 ),
               ],
@@ -251,7 +251,7 @@ class TransportLine extends StatelessWidget {
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                       fontSize: 13.5,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                   Text(
@@ -259,7 +259,7 @@ class TransportLine extends StatelessWidget {
                     style: const TextStyle(
                       color: Color(0xFFB9D4FF),
                       fontSize: 10.5,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                 ],
@@ -321,7 +321,7 @@ class DetailRow extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xFFB9D4FF),
               fontSize: 12.5,
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
             ),
           ),
         ),
@@ -334,7 +334,7 @@ class DetailRow extends StatelessWidget {
               color: Colors.white,
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
             ),
           ),
         ),
@@ -356,7 +356,7 @@ class MiniTitle extends StatelessWidget {
         color: Colors.white,
         fontSize: 16,
         fontWeight: FontWeight.w700,
-        fontFamily: 'Acumin Pro',
+        fontFamily: 'Figtree',
       ),
     );
   }

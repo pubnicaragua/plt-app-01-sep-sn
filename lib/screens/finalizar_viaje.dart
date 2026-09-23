@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'dart:typed_data';
 
@@ -52,7 +52,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
           behavior: SnackBarBehavior.floating,
           content: Text(
             'No se pudo subir la evidencia.',
-            style: TextStyle(fontFamily: 'Acumin Pro'),
+            style: TextStyle(fontFamily: 'Figtree'),
           ),
         ),
       );
@@ -92,7 +92,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                   color: Colors.white,
                   fontSize: 19,
                   fontWeight: FontWeight.w800,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
               const SizedBox(height: 3),
@@ -102,7 +102,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                 style: TextStyle(
                   color: Color(0xFFB9D4FF),
                   fontSize: 11,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
               const SizedBox(height: 13),
@@ -133,7 +133,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                     const SizedBox(height: 7),
@@ -146,7 +146,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -173,7 +173,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                                   color: Colors.white,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
-                                  fontFamily: 'Acumin Pro')),
+                                  fontFamily: 'Figtree')),
                         ],
                       ),
                     ),
@@ -191,7 +191,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                               color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                         ),
@@ -217,7 +217,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                               color: Colors.white,
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -272,7 +272,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                           color: Colors.white,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          fontFamily: 'Acumin Pro',
+                          fontFamily: 'Figtree',
                         ),
                       ),
                     ),

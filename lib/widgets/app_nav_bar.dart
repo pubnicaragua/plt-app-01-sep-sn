@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
@@ -18,12 +16,12 @@ class AppNavBar extends StatelessWidget {
     required this.onChanged,
     this.items = const [
       AppNavBarItem(Icons.home_rounded, 'Inicio',
-          assetPath: 'assets/img/HomeCliente/HomeNavbar.png'),
+          assetPath: 'assets/img/HomeCliente/home_x.png'),
       AppNavBarItem(Icons.inventory_2_outlined, 'Envíos',
           assetPath: 'assets/img/HomeCliente/EnviosNavbar.png'),
-      AppNavBarItem(Icons.history_rounded, 'Historial',
+      AppNavBarItem(Icons.history_rounded, 'Resumen',
           assetPath: 'assets/img/HomeCliente/HistorialNavbar.png'),
-      AppNavBarItem(Icons.person_outline_rounded, 'Perfil'),
+      AppNavBarItem(Icons.person_outline_rounded, 'Tú'),
     ],
   });
 
@@ -37,55 +35,22 @@ class AppNavBar extends StatelessWidget {
     final navWidth = screenWidth > 384 ? 360.0 : screenWidth - 24;
     return Center(
       child: SizedBox(
-          width: navWidth,
-          height: 76,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(38),
-              boxShadow: const [
-                BoxShadow(color: Color(0x26000000), blurRadius: 18, offset: Offset(0, 8)),
-                BoxShadow(color: Color(0x180066FF), blurRadius: 24, offset: Offset(0, 8)),
+        width: navWidth,
+        height: 76,
+        child: CustomPaint(
+          painter: const _NavBorderPainter(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                _item(0, items[0]),
+                _item(1, items[1]),
+                _item(2, items[2]),
+                _item(3, items[3]),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(38),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                child: CustomPaint(
-                  painter: const _NavBorderPainter(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: const BoxDecoration(color: Colors.transparent),
-                    child: Row(
-                      children: [
-                        _item(0, items[0]),
-                        _item(1, items[1]),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: SizedBox(
-                            width: 54,
-                            height: 58,
-                            child: Image.asset(
-                              'assets/img/HomeCliente/Frame_LogoNavbar.png',
-                              fit: BoxFit.contain,
-                              semanticLabel: 'INCOEX',
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.close_rounded,
-                                color: Colors.white,
-                                size: 50,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _item(2, items[2]),
-                        _item(3, items[3]),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ),
+        ),
       ),
     );
   }
@@ -96,6 +61,9 @@ class AppNavBar extends StatelessWidget {
       child: InkWell(
         onTap: () => onChanged(index),
         borderRadius: BorderRadius.circular(14),
+        hoverColor: Colors.white.withValues(alpha: .10),
+        splashColor: Colors.white.withValues(alpha: .18),
+        highlightColor: Colors.white.withValues(alpha: .08),
         child: Center(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
@@ -134,16 +102,7 @@ class AppNavBar extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 11,
                     fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                    fontFamily: 'Acumin Pro',
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Container(
-                  width: 4,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                  color: active ? Colors.white : Colors.transparent,
+                    fontFamily: 'Figtree',
                   ),
                 ),
               ],

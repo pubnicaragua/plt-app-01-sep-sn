@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -99,7 +99,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 Expanded(
                   child: Text(
                     'El envío cambió a estado: ${data.status}',
-                    style: const TextStyle(fontFamily: 'Acumin Pro', fontWeight: FontWeight.w700),
+                    style: const TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
@@ -128,7 +128,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             behavior: SnackBarBehavior.floating,
             content: Text(
               'No se pudo generar el enlace.',
-              style: TextStyle(fontFamily: 'Acumin Pro'),
+              style: TextStyle(fontFamily: 'Figtree'),
             ),
           ),
         );
@@ -143,7 +143,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       SnackBar(
         backgroundColor: const Color(0xFF0B1D4D),
         behavior: SnackBarBehavior.floating,
-        content: Text(confirmation, style: const TextStyle(fontFamily: 'Acumin Pro')),
+        content: Text(confirmation, style: const TextStyle(fontFamily: 'Figtree')),
       ),
     );
   }
@@ -166,7 +166,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           behavior: SnackBarBehavior.floating,
           content: SelectableText(
             'Mensaje de WhatsApp:\n$message',
-            style: const TextStyle(fontFamily: 'Acumin Pro', fontSize: 12.5),
+            style: const TextStyle(fontFamily: 'Figtree', fontSize: 12.5),
           ),
           action: SnackBarAction(
             label: 'Copiar',
@@ -181,7 +181,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           const SnackBar(
             behavior: SnackBarBehavior.floating,
             content: Text('No se pudo preparar el mensaje.',
-                style: TextStyle(fontFamily: 'Acumin Pro')),
+                style: TextStyle(fontFamily: 'Figtree')),
           ),
         );
       }
@@ -204,7 +204,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text(message, style: const TextStyle(fontFamily: 'Acumin Pro')),
+        content: Text(message, style: const TextStyle(fontFamily: 'Figtree')),
       ),
     );
   }
@@ -593,7 +593,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                                 color: Colors.white,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
-                                fontFamily: 'Acumin Pro',
+                                fontFamily: 'Figtree',
                               ),
                             ),
                           ),
@@ -719,7 +719,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
             ]),
@@ -730,7 +730,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 color: Colors.white,
                 fontSize: 19,
                 fontWeight: FontWeight.w800,
-                fontFamily: 'Acumin Pro',
+                fontFamily: 'Figtree',
               ),
             ),
             const SizedBox(height: 3),
@@ -744,7 +744,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                 ),
@@ -775,9 +775,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Código de Seguimiento', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 10.5, letterSpacing: .6, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
+                        Text('Código de Seguimiento', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 10.5, letterSpacing: .6, fontWeight: FontWeight.w700, fontFamily: 'Figtree')),
                         SizedBox(height: 3),
-                        Text('Guía: ${trip.id}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+                        Text('Guía: ${trip.id}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
                       ],
                     ),
                   ),
@@ -810,9 +810,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                       children: [
                       Text(
                           driverName,
-                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
                         ),
-                        Text(driverVehicle, style: const TextStyle(color: Color(0xFFB9D4FF), fontSize: 12, fontFamily: 'Acumin Pro')),
+                        Text(driverVehicle, style: const TextStyle(color: Color(0xFFB9D4FF), fontSize: 12, fontFamily: 'Figtree')),
                         Container(
                           margin: const EdgeInsets.only(top: 3),
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -821,7 +821,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: glassBorder),
                           ),
-                          child: Text(driverPlate, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+                          child: Text(driverPlate, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
                         ),
                       ],
                     ),
@@ -833,7 +833,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text('Estado de envío', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
+            const Text('Estado de envío', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700, fontFamily: 'Figtree')),
             const SizedBox(height: 8),
             _StepsRow(status: currentStatus),
             const SizedBox(height: 12),
@@ -858,7 +858,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                           color: Colors.white,
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
-                          fontFamily: 'Acumin Pro',
+                          fontFamily: 'Figtree',
                         ),
                       ),
                     ),
@@ -881,7 +881,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     child: const Center(
                       child: Text(
                         'Ver detalle de entrega',
-                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
+                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
                       ),
                     ),
                   ),
@@ -982,7 +982,7 @@ class _DriverAvatar extends StatelessWidget {
                 color: Colors.white,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
-                fontFamily: 'Acumin Pro',
+                fontFamily: 'Figtree',
               ),
             )
           : Image.network(
@@ -997,7 +997,7 @@ class _DriverAvatar extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                   ),
                 ),
               ),
@@ -1044,7 +1044,7 @@ class _CardPill extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
+        style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
       ),
     );
   }
@@ -1077,7 +1077,7 @@ class _MiniBtn extends StatelessWidget {
                 ? _AssetIcon(asset!, size: 15)
                 : Icon(icon, color: Colors.white, size: 15),
             const SizedBox(width: 5),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700, fontFamily: 'Acumin Pro')),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700, fontFamily: 'Figtree')),
           ],
         ),
       ),
@@ -1188,7 +1188,7 @@ class _StepsRow extends StatelessWidget {
                       color: Colors.white,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      fontFamily: 'Acumin Pro'),
+                      fontFamily: 'Figtree'),
                 ),
               ),
           ],

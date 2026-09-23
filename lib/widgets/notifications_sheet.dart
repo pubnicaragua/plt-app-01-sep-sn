@@ -55,22 +55,22 @@ Future<void> showAppNotifications(BuildContext context) async {
             backgroundColor: const Color(0xFF12275D),
             title: Text(
               incident.isGeneral ? 'Aviso operativo' : 'Incidencia · ${incident.trip}',
-              style: const TextStyle(color: Colors.white, fontFamily: 'Acumin Pro'),
+              style: const TextStyle(color: Colors.white, fontFamily: 'Figtree'),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(incident.type, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+                Text(incident.type, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
                 const SizedBox(height: 8),
-                Text('Prioridad ${incident.priority} · ${incident.status}', style: const TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Acumin Pro')),
+                Text('Prioridad ${incident.priority} · ${incident.status}', style: const TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Figtree')),
                 if (!incident.isGeneral) ...[
                   const SizedBox(height: 6),
-                  Text('Cliente: ${incident.client}', style: const TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Acumin Pro')),
+                  Text('Cliente: ${incident.client}', style: const TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Figtree')),
                 ],
                 if (incident.description.trim().isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Text(incident.description, style: const TextStyle(color: Colors.white, fontFamily: 'Acumin Pro')),
+                  Text(incident.description, style: const TextStyle(color: Colors.white, fontFamily: 'Figtree')),
                 ],
               ],
             ),
@@ -145,7 +145,7 @@ class _NotificationsSheet extends StatelessWidget {
                           color: Colors.white,
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
-                          fontFamily: 'Acumin Pro',
+                          fontFamily: 'Figtree',
                         ),
                       ),
                     ],
@@ -156,7 +156,7 @@ class _NotificationsSheet extends StatelessWidget {
                     style: TextStyle(
                       color: Color(0xD9FFFFFF),
                       fontSize: 12,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -169,7 +169,7 @@ class _NotificationsSheet extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
-                          fontFamily: 'Acumin Pro',
+                          fontFamily: 'Figtree',
                         ),
                       ),
                     ),
@@ -183,7 +183,7 @@ class _NotificationsSheet extends StatelessWidget {
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 13,
-                          fontFamily: 'Acumin Pro',
+                          fontFamily: 'Figtree',
                         ),
                       ),
                     ),
@@ -251,14 +251,14 @@ class _IncidentNotificationRow extends StatelessWidget {
               children: [
                 Text(
                   incident.isGeneral ? 'Aviso general · ${incident.type}' : '${incident.type} · ${incident.trip}',
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro'),
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   incident.description.trim().isEmpty ? 'Prioridad ${incident.priority}' : incident.description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Color(0xD9FFFFFF), fontSize: 11, fontFamily: 'Acumin Pro'),
+                  style: const TextStyle(color: Color(0xD9FFFFFF), fontSize: 11, fontFamily: 'Figtree'),
                 ),
               ],
             ),
@@ -318,7 +318,7 @@ class _NotificationRow extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -329,7 +329,7 @@ class _NotificationRow extends StatelessWidget {
                   style: const TextStyle(
                     color: Color(0xD9FFFFFF),
                     fontSize: 11,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                   ),
                 ),
               ],

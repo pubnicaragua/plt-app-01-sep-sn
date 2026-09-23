@@ -1,5 +1,5 @@
-import 'dart:ui';
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -14,6 +14,7 @@ import '../widgets/glass.dart';
 import '../widgets/notifications_sheet.dart';
 import '../widgets/place_field.dart';
 import 'inicio.dart';
+import 'crear_envio1.dart';
 import 'pedido.dart';
 import 'mi_perfil_cliente.dart';
 import 'resumen_cliente.dart';
@@ -29,10 +30,17 @@ class _HomeClienteState extends State<HomeCliente> {
   int tab = 0;
   int _tripRefreshVersion = 0;
 
+  void _openShipments() {
+    setState(() {
+      tab = 1;
+      _tripRefreshVersion++;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final views = <Widget>[
-      const _HomeTab(),
+      _FigmaHomeTab(onOpenShipments: _openShipments),
       MisEnvios(
         key: ValueKey('mis-envios-$_tripRefreshVersion'),
         embedded: true,
@@ -97,6 +105,504 @@ class BrandMark extends StatelessWidget {
           borderRadius: BorderRadius.circular(11),
         ),
         child: const Icon(Icons.close_rounded, color: cyan, size: 26),
+      ),
+    );
+  }
+}
+
+class _FigmaHomeTab extends StatefulWidget {
+  const _FigmaHomeTab({this.onOpenShipments});
+
+  final VoidCallback? onOpenShipments;
+
+  @override
+  State<_FigmaHomeTab> createState() => _FigmaHomeTabState();
+}
+
+class _FigmaHomeTabState extends State<_FigmaHomeTab> {
+  String selectedVehicle = 'Moto';
+  List<Trip> activeTrips = const <Trip>[];
+  Timer? activeTripsTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadActiveTrips();
+    activeTripsTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => _loadActiveTrips(),
+    );
+  }
+
+  @override
+  void dispose() {
+    activeTripsTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadActiveTrips() async {
+    try {
+      final user = apiClient.currentUser;
+      final companyName = user?.companyName?.trim();
+      final client = user != null &&
+              (user.role == 'corporate' || user.role == 'company')
+          ? (companyName?.isNotEmpty == true
+              ? companyName
+              : user.displayName.trim())
+          : null;
+      final trips = await apiClient.getTrips(client: client);
+      if (!mounted) return;
+      setState(() {
+        activeTrips = trips.where((trip) => trip.isActive).toList();
+      });
+    } catch (_) {
+      // Keep the last successful list visible when the API is temporarily unavailable.
+    }
+  }
+
+  void _openCreateFlow(String vehicle) {
+    final transport = vehicle == 'Auto'
+        ? 'Vehículo'
+        : vehicle == 'Carga'
+            ? 'Camión'
+            : 'Moto';
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CrearEnvio1(startTransport: transport),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = apiClient.currentUser;
+    final name = user?.displayName.trim().isNotEmpty == true
+        ? user!.displayName.trim()
+        : 'Logística Nica SA';
+    final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 20.0;
+
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(horizontal, 18, horizontal, 22),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hola, $name',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  const Text(
+                    '¿Qué vas a enviar hoy?',
+                    style: TextStyle(
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 12,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _HeaderCircle(
+              icon: Icons.notifications_none_rounded,
+              onTap: () => showAppNotifications(context),
+            ),
+            const SizedBox(width: 9),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .16),
+                shape: BoxShape.circle,
+                border: Border.all(color: glassBorder),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                initials(name),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        const _LogisticsBanner(),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _VehicleShowcaseCard(
+                label: 'Moto',
+                subtitle: 'Envíos pequeños',
+                asset: 'assets/img/HomeCliente/figma_moto.png',
+                selected: selectedVehicle == 'Moto',
+                onTap: () {
+                  setState(() => selectedVehicle = 'Moto');
+                  _openCreateFlow('Moto');
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _VehicleShowcaseCard(
+                label: 'Auto',
+                subtitle: 'Espacios medianos',
+                asset: 'assets/img/HomeCliente/figma_auto.png',
+                selected: selectedVehicle == 'Auto',
+                onTap: () {
+                  setState(() => selectedVehicle = 'Auto');
+                  _openCreateFlow('Auto');
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _VehicleShowcaseCard(
+          label: 'Carga',
+          subtitle: 'Mayor espacio para todo tipo de envíos',
+          asset: 'assets/img/HomeCliente/figma_carga.png',
+          selected: selectedVehicle == 'Carga',
+          large: true,
+          onTap: () {
+            setState(() => selectedVehicle = 'Carga');
+            _openCreateFlow('Carga');
+          },
+        ),
+        const SizedBox(height: 13),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Envío activo:',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: widget.onOpenShipments,
+                borderRadius: BorderRadius.circular(18),
+                hoverColor: Colors.white.withValues(alpha: .12),
+                splashColor: Colors.white.withValues(alpha: .22),
+                highlightColor: Colors.white.withValues(alpha: .10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: accentBlue,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Text(
+                    'Ver todos envíos activos',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 7),
+            if (activeTrips.isEmpty)
+              const _EmptyActiveShipmentCard()
+            else
+              for (final trip in activeTrips.take(3))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _ActiveShipmentCard(trip: trip),
+                ),
+      ],
+    );
+  }
+}
+
+class _HeaderCircle extends StatelessWidget {
+  const _HeaderCircle({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .13),
+            shape: BoxShape.circle,
+            border: Border.all(color: glassBorder),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: Colors.white, size: 21),
+        ),
+      ),
+    );
+  }
+}
+
+class _LogisticsBanner extends StatelessWidget {
+  const _LogisticsBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(19),
+      child: AspectRatio(
+        aspectRatio: 392 / 120,
+        child: Image.asset(
+          'assets/img/HomeCliente/banner_logistica.png',
+          fit: BoxFit.cover,
+          semanticLabel: 'Tu logística en movimiento',
+        ),
+      ),
+    );
+  }
+}
+
+class _VehicleShowcaseCard extends StatelessWidget {
+  const _VehicleShowcaseCard({
+    required this.label,
+    required this.subtitle,
+    required this.asset,
+    required this.selected,
+    required this.onTap,
+    this.large = false,
+  });
+
+  final String label;
+  final String subtitle;
+  final String asset;
+  final bool selected;
+  final bool large;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(19),
+        hoverColor: Colors.white.withValues(alpha: .08),
+        splashColor: cyan.withValues(alpha: .22),
+        highlightColor: Colors.white.withValues(alpha: .06),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(19),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: large ? 160 : 166,
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xB5173698)
+                  : const Color(0x451B2E78),
+              borderRadius: BorderRadius.circular(19),
+              border: Border.all(
+                color: selected ? cyan.withValues(alpha: .85) : glassBorder,
+              ),
+            ),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Image.asset(
+                    asset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: Color(0xD9FFFFFF),
+                          fontSize: 11,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 5,
+                  child: Container(
+                    width: 29,
+                    height: 29,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .10),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withValues(alpha: .20)),
+                    ),
+                    child: const Icon(Icons.chevron_right, color: Colors.white, size: 20),
+                  ),
+                ),
+              ],
+            ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveShipmentCard extends StatelessWidget {
+  const _ActiveShipmentCard({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        height: 59,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF1555D1), Color(0xFF0D3DA7)],
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 35,
+              height: 35,
+              padding: const EdgeInsets.all(7),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x99FFFFFF),
+                    blurRadius: 13,
+                    spreadRadius: -2,
+                  ),
+                  BoxShadow(
+                    color: Color(0x663B8BFF),
+                    blurRadius: 12,
+                  ),
+                ],
+              ),
+              child: Image.asset(
+                'assets/img/HomeCliente/figma_box.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    trip.statusLabel,
+                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
+                  ),
+                  Text(
+                    '#${trip.id}',
+                    style: TextStyle(color: Color(0xD9FFFFFF), fontSize: 10, fontFamily: 'Figtree'),
+                  ),
+                  Text(
+                    trip.destination.isEmpty ? trip.origin : trip.destination,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Color(0xD9FFFFFF), fontSize: 9, fontFamily: 'Figtree'),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              width: 29,
+              height: 29,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x99FFFFFF),
+                    blurRadius: 13,
+                    spreadRadius: -2,
+                  ),
+                  BoxShadow(
+                    color: Color(0x663B8BFF),
+                    blurRadius: 12,
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.chevron_right, color: accentBlue, size: 20),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyActiveShipmentCard extends StatelessWidget {
+  const _EmptyActiveShipmentCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white.withValues(alpha: .16)),
+      ),
+      child: const Text(
+        'No tienes envíos activos',
+        style: TextStyle(
+          color: Color(0xD9FFFFFF),
+          fontSize: 11,
+          fontFamily: 'Figtree',
+        ),
       ),
     );
   }
@@ -197,7 +703,7 @@ class _HomeTabState extends State<_HomeTab> {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -277,7 +783,7 @@ class _HomeTabState extends State<_HomeTab> {
           behavior: SnackBarBehavior.floating,
           content: Text(
             'Esa hora ya pasó. Elige otra hora o elige Mañana.',
-            style: TextStyle(fontFamily: 'Acumin Pro'),
+            style: TextStyle(fontFamily: 'Figtree'),
           ),
         ),
       );
@@ -289,7 +795,7 @@ class _HomeTabState extends State<_HomeTab> {
           behavior: SnackBarBehavior.floating,
           content: Text(
             'Solo se puede programar dentro de las próximas 24 horas.',
-            style: TextStyle(fontFamily: 'Acumin Pro'),
+            style: TextStyle(fontFamily: 'Figtree'),
           ),
         ),
       );
@@ -372,7 +878,7 @@ class _HomeTabState extends State<_HomeTab> {
                       fontSize: 20.5,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.3,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                   const Text(
@@ -380,7 +886,7 @@ class _HomeTabState extends State<_HomeTab> {
                     style: TextStyle(
                       color: Color(0xFFB9D4FF),
                       fontSize: 12.5,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                 ],
@@ -467,7 +973,7 @@ class _HomeTabState extends State<_HomeTab> {
                     color: Colors.white,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w800,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                   ),
                 ),
               ),
@@ -482,7 +988,7 @@ class _HomeTabState extends State<_HomeTab> {
             fontSize: 20.5,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.3,
-            fontFamily: 'Acumin Pro',
+            fontFamily: 'Figtree',
           ),
         ),
         const SizedBox(height: 13),
@@ -692,7 +1198,7 @@ class _TransportTile extends StatelessWidget {
                       color: Colors.white,
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                 ],
@@ -806,7 +1312,7 @@ class _FareCard extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -816,7 +1322,7 @@ class _FareCard extends StatelessWidget {
                         color: Color(0xFFB9D4FF),
                         fontSize: 10.5,
                         height: 1.35,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                   ],
@@ -833,7 +1339,7 @@ class _FareCard extends StatelessWidget {
                         fontSize: 19,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.3,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                     Text(
@@ -841,7 +1347,7 @@ class _FareCard extends StatelessWidget {
                       style: const TextStyle(
                         color: Color(0xFFB9D4FF),
                         fontSize: 10,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                   ],
@@ -1033,7 +1539,7 @@ class _ReferencesCard extends StatelessWidget {
                       color: Colors.white,
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                 ],
@@ -1044,14 +1550,14 @@ class _ReferencesCard extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12.5,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
                 decoration: const InputDecoration(
                   hintText: 'Ej. Casa verde frente al parque...',
                   hintStyle: TextStyle(
                     color: Color(0xB3FFFFFF),
                     fontSize: 12.5,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                   ),
                   border: InputBorder.none,
                   isDense: true,
@@ -1123,7 +1629,7 @@ class _PriorityBar extends StatelessWidget {
               color: Colors.white,
               fontSize: 13.5,
               fontWeight: FontWeight.w800,
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
             ),
           ),
         ),
@@ -1191,7 +1697,7 @@ class _ScheduleCard extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w800,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                   ),
@@ -1209,7 +1715,7 @@ class _ScheduleCard extends StatelessWidget {
                           color: cyan,
                           fontSize: 10.5,
                           fontWeight: FontWeight.w800,
-                          fontFamily: 'Acumin Pro',
+                          fontFamily: 'Figtree',
                         ),
                       ),
                     ),
@@ -1221,7 +1727,7 @@ class _ScheduleCard extends StatelessWidget {
                 style: TextStyle(
                   color: Color(0xFFB9D4FF),
                   fontSize: 10.5,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
               const SizedBox(height: 12),
@@ -1247,7 +1753,7 @@ class _ScheduleCard extends StatelessWidget {
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                         ),
@@ -1283,7 +1789,7 @@ class _ScheduleCard extends StatelessWidget {
                             color: Colors.white,
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                            fontFamily: 'Acumin Pro',
+                            fontFamily: 'Figtree',
                           ),
                         ),
                       ),

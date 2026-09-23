@@ -272,7 +272,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                     color: Color(0xFFFFC3C3),
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro')),
+                    fontFamily: 'Figtree')),
           ],
           const SizedBox(height: 24),
           GlassButton(
@@ -336,7 +336,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                                     color: Colors.white,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w800,
-                                    fontFamily: 'Acumin Pro'))),
+                                    fontFamily: 'Figtree'))),
                       ],
                     ),
                     const SizedBox(height: 3),
@@ -344,13 +344,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10.5,
-                            fontFamily: 'Acumin Pro')),
+                            fontFamily: 'Figtree')),
                     Text(vehicle.$3,
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,
-                            fontFamily: 'Acumin Pro')),
+                            fontFamily: 'Figtree')),
                   ],
                 ),
               ),
@@ -364,13 +364,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                           color: Colors.white,
                           fontSize: 8,
                           fontWeight: FontWeight.w700,
-                          fontFamily: 'Acumin Pro')),
+                          fontFamily: 'Figtree')),
                   Text(_money(price),
                       style: const TextStyle(
                           color: Colors.white,
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          fontFamily: 'Acumin Pro')),
+                          fontFamily: 'Figtree')),
                 ],
               ),
             ],
@@ -398,7 +398,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        fontFamily: 'Acumin Pro'))),
+                        fontFamily: 'Figtree'))),
             _summaryPill(
                 '$selectedTransport (${widget.weight} ${widget.weightUnit})'),
           ],
@@ -414,7 +414,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -.5,
-                    fontFamily: 'Acumin Pro')),
+                    fontFamily: 'Figtree')),
             _summaryPill('Tarifa calculada al instante'),
           ],
         ),
@@ -440,13 +440,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        fontFamily: 'Acumin Pro')),
+                        fontFamily: 'Figtree')),
                 Text(_money(shipping),
                     style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        fontFamily: 'Acumin Pro')),
+                        fontFamily: 'Figtree')),
               ]),
         ),
         if (widget.invoiceAmount > 0) ...[
@@ -476,7 +476,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                               color: Colors.white,
                               fontSize: 11.5,
                               fontWeight: FontWeight.w800,
-                              fontFamily: 'Acumin Pro')),
+                              fontFamily: 'Figtree')),
                       Text(
                           _invoiceAlreadyPaid
                               ? '(Producto pagado por transferencia)'
@@ -484,7 +484,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 9.5,
-                              fontFamily: 'Acumin Pro')),
+                              fontFamily: 'Figtree')),
                     ])),
                 Text(
                     _invoiceAlreadyPaid
@@ -494,7 +494,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                         color: Colors.white,
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
-                        fontFamily: 'Acumin Pro')),
+                        fontFamily: 'Figtree')),
               ],
             ),
           ),
@@ -513,7 +513,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                           color: Colors.white,
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          fontFamily: 'Acumin Pro')),
+                          fontFamily: 'Figtree')),
                   Text(
                       _invoiceAlreadyPaid
                           ? 'Envío · producto pagado'
@@ -521,14 +521,14 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                       style: TextStyle(
                           color: Color(0xFFB9D4FF),
                           fontSize: 9.5,
-                          fontFamily: 'Acumin Pro')),
+                          fontFamily: 'Figtree')),
                 ]),
             Text(_money(total),
                 style: const TextStyle(
                     color: Colors.white,
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
-                    fontFamily: 'Acumin Pro')),
+                    fontFamily: 'Figtree')),
           ],
         ),
       ],
@@ -549,7 +549,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           color: Colors.white,
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          fontFamily: 'Acumin Pro',
+          fontFamily: 'Figtree',
         ),
       ),
     );
@@ -566,7 +566,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                 style: const TextStyle(
                     color: Color(0xFFB9D4FF),
                     fontSize: 11.5,
-                    fontFamily: 'Acumin Pro')),
+                    fontFamily: 'Figtree')),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -580,7 +580,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                     color: Colors.white,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
-                    fontFamily: 'Acumin Pro')),
+                    fontFamily: 'Figtree')),
           ),
         ],
       ),

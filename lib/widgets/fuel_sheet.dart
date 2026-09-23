@@ -180,9 +180,9 @@ class _FuelSheetState extends State<_FuelSheet> {
           children: [
             Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .25), borderRadius: BorderRadius.circular(5)))),
             const SizedBox(height: 16),
-            const Text('Registrar combustible', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, fontFamily: 'Acumin Pro')),
+            const Text('Registrar combustible', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
             const SizedBox(height: 4),
-            const Text('La evidencia del odómetro y la factura es obligatoria.', style: TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Acumin Pro')),
+            const Text('La evidencia del odómetro y la factura es obligatoria.', style: TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Figtree')),
             const SizedBox(height: 16),
             TextField(controller: plate, style: const TextStyle(color: Colors.white), decoration: _decoration('Placa del vehículo')),
             const SizedBox(height: 10),

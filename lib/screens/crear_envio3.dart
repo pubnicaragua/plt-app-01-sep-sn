@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
@@ -240,7 +240,7 @@ class _CrearEnvio3State extends State<CrearEnvio3>
                               color: Colors.white,
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                         ),
@@ -311,7 +311,7 @@ class _CrearEnvio3State extends State<CrearEnvio3>
                                     color: Colors.white,
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w700,
-                                    fontFamily: 'Acumin Pro',
+                                    fontFamily: 'Figtree',
                                   ),
                                 ),
                               ],
@@ -325,7 +325,7 @@ class _CrearEnvio3State extends State<CrearEnvio3>
                               color: Colors.white,
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -341,7 +341,7 @@ class _CrearEnvio3State extends State<CrearEnvio3>
                               color: Color(0xFFE1E8FF),
                               fontSize: 9.5,
                               height: 1.25,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                           const SizedBox(height: 18),
@@ -363,7 +363,7 @@ class _CrearEnvio3State extends State<CrearEnvio3>
                             style: const TextStyle(
                               color: Color(0xFFD4DCFA),
                               fontSize: 8.5,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                           if (failed) ...[

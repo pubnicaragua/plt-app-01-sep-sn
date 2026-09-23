@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
@@ -60,7 +60,7 @@ class _MisEnviosState extends State<MisEnvios> {
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.6,
-                    fontFamily: 'Acumin Pro',
+                    fontFamily: 'Figtree',
                   ),
                 ),
                 GestureDetector(
@@ -115,7 +115,7 @@ class _MisEnviosState extends State<MisEnvios> {
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 13,
-                            fontFamily: 'Acumin Pro',
+                            fontFamily: 'Figtree',
                           ),
                         ),
                       ],
@@ -135,7 +135,7 @@ class _MisEnviosState extends State<MisEnvios> {
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
-                            fontFamily: 'Acumin Pro',
+                            fontFamily: 'Figtree',
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -164,7 +164,7 @@ class _MisEnviosState extends State<MisEnvios> {
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 13,
-                          fontFamily: 'Acumin Pro',
+                          fontFamily: 'Figtree',
                         ),
                       ),
                     ),
@@ -244,7 +244,7 @@ class _TripCard extends StatelessWidget {
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -253,7 +253,7 @@ class _TripCard extends StatelessWidget {
                       style: const TextStyle(
                         color: Color(0xFFB9D4FF),
                         fontSize: 11,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                   ],
@@ -304,7 +304,7 @@ class _TripCard extends StatelessWidget {
                   color: cyan,
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
             ],
@@ -319,7 +319,7 @@ class _TripCard extends StatelessWidget {
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
               const SizedBox(width: 3),
@@ -365,7 +365,7 @@ class _RoutePoint extends StatelessWidget {
                   fontSize: 8.5,
                   letterSpacing: .7,
                   fontWeight: FontWeight.w800,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
               const SizedBox(height: 3),
@@ -378,7 +378,7 @@ class _RoutePoint extends StatelessWidget {
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   height: 1.1,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
               ),
             ],
@@ -415,7 +415,7 @@ class _TripMeta extends StatelessWidget {
               color: Colors.white,
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
             ),
           ),
         ],
@@ -453,7 +453,7 @@ class _OrderFilter extends StatelessWidget {
               color: Colors.white,
               fontSize: 11.5,
               fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-              fontFamily: 'Acumin Pro',
+              fontFamily: 'Figtree',
             ),
           ),
         ),

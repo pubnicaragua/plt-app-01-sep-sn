@@ -42,13 +42,24 @@ flutter:
     - assets/img/EstadosCrearEnvio/
     - assets/img/PantallaSeguimiento/
   fonts:
-    - family: Acumin Pro
+    - family: Figtree
       fonts:
-        - asset: assets/fonts/Acumin-RPro.otf
-        - asset: assets/fonts/Acumin-ItPro.otf
-          style: italic
-        - asset: assets/fonts/Acumin-BdPro.otf
+        - asset: assets/fonts/Figtree/Figtree-Light.ttf
           weight: 700
-        - asset: assets/fonts/Acumin-BdItPro.otf
+        - asset: assets/fonts/Figtree/Figtree-Regular.ttf
+          weight: 700
+        - asset: assets/fonts/Figtree/Figtree-Medium.ttf
+          weight: 700
+        - asset: assets/fonts/Figtree/Figtree-SemiBold.ttf
+          weight: 700
+        - asset: assets/fonts/Figtree/Figtree-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Figtree/Figtree-ExtraBold.ttf
+          weight: 700
+        - asset: assets/fonts/Figtree/Figtree-Black.ttf
+          weight: 700
+        - asset: assets/fonts/Figtree/Figtree-Italic.ttf
+          style: italic
+        - asset: assets/fonts/Figtree/Figtree-BoldItalic.ttf
           weight: 700
           style: italic

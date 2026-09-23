@@ -19,10 +19,10 @@ class IncoexApp extends StatelessWidget {
       title: 'INCOEX Logistics',
       theme: ThemeData(
         useMaterial3: true,
-        fontFamily: 'Acumin Pro',
+        fontFamily: 'Figtree',
         textTheme: ThemeData.light()
             .textTheme
-            .apply(fontFamily: 'Acumin Pro'),
+            .apply(fontFamily: 'Figtree'),
         scaffoldBackgroundColor: navy,
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,

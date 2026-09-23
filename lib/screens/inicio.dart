@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../widgets/glass.dart';
@@ -201,7 +201,7 @@ class _InicioState extends State<Inicio> {
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
-                      fontFamily: 'Acumin Pro',
+                      fontFamily: 'Figtree',
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -227,7 +227,7 @@ class _InicioState extends State<Inicio> {
                         color: Color(0xFFFFD2D2),
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                   ],
@@ -252,7 +252,7 @@ class _InicioState extends State<Inicio> {
                               color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w400,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                           TextSpan(
@@ -261,7 +261,7 @@ class _InicioState extends State<Inicio> {
                               color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
-                              fontFamily: 'Acumin Pro',
+                              fontFamily: 'Figtree',
                             ),
                           ),
                         ],
@@ -284,7 +284,7 @@ class _InicioState extends State<Inicio> {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 11.5,
-                        fontFamily: 'Acumin Pro',
+                        fontFamily: 'Figtree',
                       ),
                     ),
                   ),
@@ -334,14 +334,14 @@ class _LoginField extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 11,
-                fontFamily: 'Acumin Pro',
+                fontFamily: 'Figtree',
               ),
               decoration: InputDecoration(
                 hintText: label,
                 hintStyle: const TextStyle(
                   color: Color(0xD9FFFFFF),
                   fontSize: 11,
-                  fontFamily: 'Acumin Pro',
+                  fontFamily: 'Figtree',
                 ),
                 border: InputBorder.none,
                 isDense: true,
