@@ -1,7 +1,8 @@
-import 'dart:typed_data';
-
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
@@ -75,6 +76,13 @@ class Confirmarpedido extends StatefulWidget {
 
 class _ConfirmarpedidoState extends State<Confirmarpedido> {
   late String selectedTransport;
+  late final TextEditingController invoiceNumber;
+  late final TextEditingController invoicePrice;
+  String currency = 'C\$';
+  late String paymentStatus;
+  late String paymentMethod;
+  Uint8List? invoicePhoto;
+  String invoiceFileName = 'factura.jpg';
   AppSettings? settings;
   Timer? _settingsPoll;
   bool submitting = false;
@@ -112,6 +120,16 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     super.initState();
     selectedTransport =
         _validTransport(widget.transport) ? widget.transport : 'Moto';
+    invoiceNumber = TextEditingController(text: widget.invoiceNumber);
+    invoicePrice = TextEditingController(
+      text: widget.invoiceAmount > 0
+          ? widget.invoiceAmount.toStringAsFixed(2)
+          : '',
+    );
+    paymentStatus = widget.paymentStatus;
+    paymentMethod = widget.paymentMethod;
+    invoicePhoto = widget.invoicePhoto;
+    invoiceFileName = widget.invoiceFileName;
     apiClient.getSettings().then((value) {
       if (mounted) setState(() => settings = value);
     }).catchError((_) {});
@@ -131,7 +149,65 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   @override
   void dispose() {
     _settingsPoll?.cancel();
+    invoiceNumber.dispose();
+    invoicePrice.dispose();
     super.dispose();
+  }
+
+  double get _invoiceAmount {
+    final normalized = invoicePrice.text
+        .replaceAll(RegExp(r'[^0-9,.]'), '')
+        .replaceAll(',', '.');
+    return double.tryParse(normalized) ?? 0;
+  }
+
+  double get _invoiceAmountCs => currency == 'USD'
+      ? _invoiceAmount * (settings?.dollarRate ?? 36.5)
+      : _invoiceAmount;
+
+  Future<void> _pickInvoiceImage(ImageSource source) async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 84,
+        maxWidth: 1400,
+      );
+      if (image == null || !mounted) return;
+      setState(() {
+        invoicePhoto = null;
+        invoiceFileName = image.name;
+      });
+      invoicePhoto = await image.readAsBytes();
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo cargar la factura.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickInvoiceFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'],
+        withData: true,
+      );
+      final file = result?.files.single;
+      if (file == null || file.bytes == null || !mounted) return;
+      setState(() {
+        invoicePhoto = file.bytes;
+        invoiceFileName = file.name;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo seleccionar la factura.')),
+        );
+      }
+    }
   }
 
   bool _validTransport(String value) =>
@@ -155,10 +231,14 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           : widget.serviceType == 'Programado'
               ? settings?.scheduledSurchargePct ?? 0
               : 0;
-      final chargeableKm = (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
-      return roundFareCs((rate.baseFeeCs + chargeableKm * rate.farePerKmCs +
-              logisticsServiceFeeCs) *
-          (1 + surcharge / 100), settings?.fareRoundingCs ?? 5);
+      final chargeableKm =
+          (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
+      return roundFareCs(
+          (rate.baseFeeCs +
+                  chargeableKm * rate.farePerKmCs +
+                  logisticsServiceFeeCs) *
+              (1 + surcharge / 100),
+          settings?.fareRoundingCs ?? 5);
     }
     if (vehicle == widget.transport && widget.estimatedShipping != null) {
       return widget.estimatedShipping!;
@@ -167,13 +247,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   }
 
   bool get _invoiceAlreadyPaid =>
-      widget.paymentStatus.trim().toLowerCase() == 'pagado';
+      paymentStatus.trim().toLowerCase() == 'pagado';
 
-  double get _invoiceToCollect =>
-      _invoiceAlreadyPaid ? 0 : widget.invoiceAmount;
+  double get _invoiceToCollect => _invoiceAlreadyPaid ? 0 : _invoiceAmountCs;
 
   double _baseFor(String vehicle) =>
-      _rateFor(vehicle)?.baseFeeCs ?? _vehicle(vehicle).$6 - logisticsServiceFeeCs;
+      _rateFor(vehicle)?.baseFeeCs ??
+      _vehicle(vehicle).$6 - logisticsServiceFeeCs;
 
   (String, String, String, IconData, int, double) _vehicle(String value) =>
       _vehicles.firstWhere((item) => item.$1 == value,
@@ -202,13 +282,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           transport: selectedTransport,
           description: widget.description,
           fragile: widget.fragile,
-          invoiceNumber: widget.invoiceNumber,
-          invoiceAmount: widget.invoiceAmount,
-          paymentStatus: widget.paymentStatus,
-          paymentMethod: widget.paymentMethod,
+          invoiceNumber: invoiceNumber.text.trim(),
+          invoiceAmount: _invoiceAmountCs,
+          paymentStatus: paymentStatus,
+          paymentMethod: paymentMethod,
           productPhotos: widget.productPhotos,
-          invoicePhoto: widget.invoicePhoto,
-          invoiceFileName: widget.invoiceFileName,
+          invoicePhoto: invoicePhoto,
+          invoiceFileName: invoiceFileName,
           originRefs: widget.originRefs,
           destinationRefs: widget.destinationRefs,
           recipientName: widget.recipientName,
@@ -231,11 +311,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
         (shipping - base - service).clamp(0, double.infinity).toDouble();
     final total = shipping + _invoiceToCollect;
     return WizardScaffold(
-      title: 'Detalles de carga',
-      subtitle: 'Transporte recomendado',
-      description:
-          'Revisa el transporte, el valor a recaudar y confirma tu envío.',
-      step: 2,
+      title: 'Detalles',
+      subtitle: 'Detalles de facturación',
+      description: '',
+      step: 1,
       totalSteps: 3,
       onClose: () => Navigator.of(context).pop(),
       showNotification: false,
@@ -248,32 +327,108 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var index = 0; index < _vehicles.length; index++) ...[
-            _transportCard(_vehicles[index]),
-            if (index != _vehicles.length - 1) const SizedBox(height: 10),
-          ],
-          const SizedBox(height: 20),
-          GlassCard(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white.withValues(alpha: .22),
-            child: _totalCard(
-              shipping: shipping,
-              base: base,
-              additional: additional,
-              service: service,
-              total: total,
+          Transform.translate(
+            offset: const Offset(0, -18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Método de pago',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                const SizedBox(height: 7),
+                _billingSegment(
+                  options: const ['Efectivo', 'Transferencia'],
+                  value: paymentMethod,
+                  onChanged: (value) => setState(() => paymentMethod = value),
+                ),
+                const SizedBox(height: 10),
+                _billingInput(
+                  controller: invoiceNumber,
+                  hint: 'Número de factura',
+                  icon: Icons.tag_rounded,
+                  onChanged: (_) {},
+                ),
+                const SizedBox(height: 9),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _billingInput(
+                        controller: invoicePrice,
+                        hint: 'Precio de factura',
+                        icon: Icons.sell_outlined,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _billingCurrencySegment(),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(15, 14, 15, 13),
+                  decoration: BoxDecoration(
+                    color: const Color(0xD90A1B52),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: .10)),
+                  ),
+                  child: _billingTotalCard(
+                    shipping: shipping,
+                    base: base,
+                    additional: additional,
+                    service: service,
+                    total: total,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _invoiceUploadCard(),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Estado del pago',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                    SizedBox(
+                      width: 132,
+                      child: _billingSegment(
+                        options: const ['Pagado', 'Pendiente'],
+                        value: paymentStatus,
+                        onChanged: (value) =>
+                            setState(() => paymentStatus = value),
+                      ),
+                    ),
+                  ],
+                ),
+                if (errorMessage != null) ...[
+                  const SizedBox(height: 13),
+                  Text(errorMessage!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Color(0xFFFFC3C3),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Figtree')),
+                ],
+              ],
             ),
           ),
-          if (errorMessage != null) ...[
-            const SizedBox(height: 13),
-            Text(errorMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: Color(0xFFFFC3C3),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Figtree')),
-          ],
           const SizedBox(height: 24),
           GlassButton(
             label: submitting ? 'Creando envío…' : 'Confirmar envío',
@@ -283,6 +438,363 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
             onPressed: submitting ? () {} : _submit,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _billingSegment({
+    required List<String> options,
+    required String value,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .16)),
+      ),
+      child: Row(
+        children: options.map((option) {
+          final selected = value.trim().toLowerCase() == option.toLowerCase();
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(option),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected ? figmaBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Text(
+                  option,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _billingCurrencySegment() {
+    return SizedBox(
+      width: 82,
+      child: _billingSegment(
+        options: const ['C\$', 'USD'],
+        value: currency,
+        onChanged: (value) => setState(() => currency = value),
+      ),
+    );
+  }
+
+  Widget _billingInput({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    required ValueChanged<String> onChanged,
+    TextInputType? keyboardType,
+  }) {
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: .10)),
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        keyboardType: keyboardType,
+        textAlignVertical: TextAlignVertical.center,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'Figtree',
+        ),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(
+            color: Color(0xFFB9D4FF),
+            fontSize: 10.5,
+            fontFamily: 'Figtree',
+          ),
+          prefixIcon: Icon(icon, color: Colors.white, size: 18),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.only(right: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _billingTotalCard({
+    required double shipping,
+    required double base,
+    required double additional,
+    required double service,
+    required double total,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Total a cobrar al destinatario',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Figtree',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Divider(height: 1, color: Colors.white.withValues(alpha: .38)),
+        const SizedBox(height: 6),
+        _billingPriceLine('Factura', _invoiceAmountCs,
+            suffix: _invoiceAlreadyPaid ? 'Pagado' : null),
+        _billingPriceLine('Tarifa base de envío', base),
+        _billingPriceLine('Servicio y gestión logística', service),
+        _billingPriceLine(
+          'Carga adicional (${widget.weight} ${widget.weightUnit})',
+          additional,
+        ),
+        const SizedBox(height: 2),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .14),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withValues(alpha: .26)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Subtotal del envío',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              Text(
+                _money(shipping),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Divider(height: 1, color: Colors.white.withValues(alpha: .24)),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Total a pagar por el cliente',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                Text(
+                  'Envío + Producto',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 9,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              _money(total),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _billingPriceLine(String label, double value, {String? suffix}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFFB9D4FF),
+                fontSize: 10,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: .25)),
+            ),
+            child: Text(
+              suffix ?? _money(value),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _invoiceUploadCard() {
+    return GestureDetector(
+      onTap: _showInvoicePicker,
+      child: CustomPaint(
+        painter: _BillingDashedBorderPainter(
+          color: cyan,
+          radius: 16,
+          dashLength: 6,
+          gapLength: 4,
+        ),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 94),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          decoration: BoxDecoration(
+            color: const Color(0xAA082C70),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              if (invoicePhoto != null &&
+                  RegExp(r'\.(jpg|jpeg|png)$')
+                      .hasMatch(invoiceFileName.toLowerCase()))
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.memory(
+                    invoicePhoto!,
+                    width: 54,
+                    height: 54,
+                    fit: BoxFit.cover,
+                  ),
+                )
+              else
+                const Icon(Icons.image_outlined, color: Colors.white, size: 27),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      invoicePhoto == null
+                          ? 'Adjuntar factura del producto'
+                          : invoiceFileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Todos los formatos',
+                      style: TextStyle(
+                        color: Color(0xFFB9D4FF),
+                        fontSize: 9.5,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.add_circle_outline_rounded,
+                  color: Colors.white, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showInvoicePicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF102A68),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading:
+                  const Icon(Icons.photo_camera_outlined, color: Colors.white),
+              title: const Text('Tomar foto',
+                  style: TextStyle(color: Colors.white, fontFamily: 'Figtree')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickInvoiceImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.photo_library_outlined, color: Colors.white),
+              title: const Text('Elegir imagen',
+                  style: TextStyle(color: Colors.white, fontFamily: 'Figtree')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickInvoiceImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.attach_file_rounded, color: Colors.white),
+              title: const Text('Seleccionar archivo',
+                  style: TextStyle(color: Colors.white, fontFamily: 'Figtree')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickInvoiceFile();
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -300,12 +812,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
         height: 90,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected
-              ? figmaBlue
-              : Colors.white.withValues(alpha: .10),
+          color: selected ? figmaBlue : Colors.white.withValues(alpha: .10),
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-              color: selected ? figmaBlue : glassBorder, width: 1),
+          border:
+              Border.all(color: selected ? figmaBlue : glassBorder, width: 1),
         ),
         child: Opacity(
           opacity: blocked ? .45 : 1,
@@ -432,22 +942,21 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
               color: Colors.white.withValues(alpha: .13),
               borderRadius: BorderRadius.circular(9),
               border: Border.all(color: Colors.white.withValues(alpha: .30))),
-          child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Subtotal del envío',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Figtree')),
-                Text(_money(shipping),
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Figtree')),
-              ]),
+          child:
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            const Text('Subtotal del envío',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree')),
+            Text(_money(shipping),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree')),
+          ]),
         ),
         if (widget.invoiceAmount > 0) ...[
           const SizedBox(height: 11),
@@ -505,24 +1014,22 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Total a pagar por el cliente',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: 'Figtree')),
-                  Text(
-                      _invoiceAlreadyPaid
-                          ? 'Envío · producto pagado'
-                          : 'Envío + Producto',
-                      style: TextStyle(
-                          color: Color(0xFFB9D4FF),
-                          fontSize: 9.5,
-                          fontFamily: 'Figtree')),
-                ]),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Total a pagar por el cliente',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree')),
+              Text(
+                  _invoiceAlreadyPaid
+                      ? 'Envío · producto pagado'
+                      : 'Envío + Producto',
+                  style: TextStyle(
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 9.5,
+                      fontFamily: 'Figtree')),
+            ]),
             Text(_money(total),
                 style: const TextStyle(
                     color: Colors.white,
@@ -586,4 +1093,48 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       ),
     );
   }
+}
+
+class _BillingDashedBorderPainter extends CustomPainter {
+  const _BillingDashedBorderPainter({
+    required this.color,
+    required this.radius,
+    required this.dashLength,
+    required this.gapLength,
+  });
+
+  final Color color;
+  final double radius;
+  final double dashLength;
+  final double gapLength;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1;
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          Radius.circular(radius),
+        ),
+      );
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = (distance + dashLength).clamp(0, metric.length).toDouble();
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance += dashLength + gapLength;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BillingDashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.radius != radius ||
+      oldDelegate.dashLength != dashLength ||
+      oldDelegate.gapLength != gapLength;
 }

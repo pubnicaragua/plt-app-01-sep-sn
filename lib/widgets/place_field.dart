@@ -154,20 +154,20 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
                         onTap: () async {
                           widget.controller.text = suggestion.description;
                           var resolved = suggestion;
-                          if (suggestion.latitude == null ||
-                              suggestion.longitude == null) {
-                            final detail =
-                                await apiClient.placeDetail(suggestion.placeId);
-                            if (detail != null && detail.latitude != null) {
-                              resolved = PlaceSuggestion(
-                                placeId: suggestion.placeId,
-                                description: suggestion.description,
-                                main: suggestion.main,
-                                secondary: suggestion.secondary,
-                                latitude: detail.latitude,
-                                longitude: detail.longitude,
-                              );
-                            }
+                          // Autocomplete puede devolver un centro aproximado.
+                          // Siempre resolvemos el detalle para que el pin y la
+                          // ruta se calculen con el lugar exacto seleccionado.
+                          final detail =
+                              await apiClient.placeDetail(suggestion.placeId);
+                          if (detail != null && detail.latitude != null) {
+                            resolved = PlaceSuggestion(
+                              placeId: suggestion.placeId,
+                              description: suggestion.description,
+                              main: suggestion.main,
+                              secondary: suggestion.secondary,
+                              latitude: detail.latitude,
+                              longitude: detail.longitude,
+                            );
                           }
                           widget.onSelected?.call(resolved);
                           if (!mounted) return;

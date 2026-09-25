@@ -232,6 +232,7 @@ class GlassButton extends StatelessWidget {
     this.filled = false,
     this.height = 56,
     this.width = double.infinity,
+    this.fontSize = 17,
     this.textColor,
   });
 
@@ -241,6 +242,7 @@ class GlassButton extends StatelessWidget {
   final bool filled;
   final double height;
   final double width;
+  final double fontSize;
   final Color? textColor;
 
   @override
@@ -280,9 +282,9 @@ class GlassButton extends StatelessWidget {
                     Text(
                       label,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 17,
+                        fontSize: fontSize,
                         fontWeight: FontWeight.w700,
                         fontFamily: 'Figtree',
                       ),

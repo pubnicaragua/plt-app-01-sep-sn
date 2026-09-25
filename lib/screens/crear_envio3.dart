@@ -153,6 +153,7 @@ class _CrearEnvio3State extends State<CrearEnvio3>
           destinationPlace,
         ),
         transport: widget.transport,
+        fragile: widget.fragile,
         autoAssign: true,
         originRefs: widget.originRefs.isEmpty ? null : widget.originRefs,
         destinationRefs: widget.destinationRefs.isEmpty ? null : widget.destinationRefs,

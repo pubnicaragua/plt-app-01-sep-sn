@@ -61,8 +61,14 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   late final TextEditingController description;
   late final TextEditingController invoicePrice;
   late final TextEditingController invoiceNumber;
+  late final TextEditingController recipient;
+  late final TextEditingController phone;
+  late final TextEditingController references;
+  late final TextEditingController additionalNotes;
   String currency = 'C\$';
-  bool fragile = true;
+  bool fragile = false;
+  bool needsAdditional = false;
+  String additionalOption = '';
   String paymentStatus = 'Pendiente';
   String paymentMethod = 'Efectivo';
   final productPhotos = <Uint8List>[];
@@ -80,6 +86,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     description = TextEditingController();
     invoicePrice = TextEditingController();
     invoiceNumber = TextEditingController();
+    recipient = TextEditingController(text: widget.recipientName);
+    phone = TextEditingController(text: widget.recipientPhone);
+    references = TextEditingController(text: widget.destinationRefs);
+    additionalNotes = TextEditingController();
     apiClient.getSettings().then((value) {
       if (mounted) setState(() => settings = value);
     }).catchError((_) {});
@@ -102,6 +112,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     description.dispose();
     invoicePrice.dispose();
     invoiceNumber.dispose();
+    recipient.dispose();
+    phone.dispose();
+    references.dispose();
+    additionalNotes.dispose();
     super.dispose();
   }
 
@@ -185,18 +199,23 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       _pickImage(invoice: true, source: ImageSource.gallery);
 
   void _continue() {
-    if (invoiceAmount <= 0) {
+    if (recipient.text.trim().isEmpty || phone.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           behavior: SnackBarBehavior.floating,
           content: Text(
-            'Ingresa el precio de la factura para continuar.',
+            'Completa el nombre del destinatario y el teléfono.',
             style: TextStyle(fontFamily: 'Figtree'),
           ),
         ),
       );
       return;
     }
+    final extraDescription = [
+      if (needsAdditional) 'Servicio adicional: $additionalOption',
+      if (additionalNotes.text.trim().isNotEmpty)
+        'Indicaciones: ${additionalNotes.text.trim()}',
+    ].join(' · ');
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Confirmarpedido(
@@ -209,7 +228,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           destinationPlace: widget.destinationPlace,
           transport: widget.transport,
           estimatedShipping: widget.estimatedShipping,
-          description: description.text.trim(),
+          description: [
+            if (description.text.trim().isNotEmpty) description.text.trim(),
+            if (extraDescription.isNotEmpty) extraDescription,
+          ].join(' · '),
           fragile: fragile,
           invoiceNumber: invoiceNumber.text.trim(),
           invoiceAmount: invoiceAmountCs,
@@ -219,9 +241,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           invoicePhoto: invoicePhoto,
           invoiceFileName: invoiceFileName,
           originRefs: widget.originRefs,
-          destinationRefs: widget.destinationRefs,
-          recipientName: widget.recipientName,
-          recipientPhone: widget.recipientPhone,
+          destinationRefs: references.text.trim(),
+          recipientName: recipient.text.trim(),
+          recipientPhone: phone.text.trim(),
           serviceType: widget.startScheduled ? 'Programado' : 'Express',
           scheduledDate: widget.startDate,
           scheduledTime: widget.startTime,
@@ -236,50 +258,186 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     return Scaffold(
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
-        darken: 0,
-        backgroundLogoOpacity: .86,
-        backgroundLogoOffsetY: -58,
-        backgroundLogoScale: 1.08,
+        darken: .04,
+        backgroundLogoOpacity: .62,
+        backgroundLogoOffsetY: -30,
+        backgroundLogoScale: 1.02,
         child: SafeArea(
-          child: ListView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+          child: Column(
             children: [
-              _PageHeader(onBack: () => Navigator.of(context).pop()),
-              const SizedBox(height: 28),
-              const _PageSectionTitle(
-                title: 'Peso y dimensiones',
-                subtitle: 'Para calcular el transporte adecuado',
+              Expanded(
+                child: ListView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(12, 9, 12, 18),
+                  children: [
+                    _PageHeader(onBack: () => Navigator.of(context).pop()),
+                    const SizedBox(height: 14),
+                    const _FormSectionTitle(
+                      icon: Icons.inventory_2_outlined,
+                      title: 'Detalles de envío',
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _InputPill(
+                            controller: recipient,
+                            label: 'Destinatario(s)',
+                            iconAsset:
+                                'assets/img/HomeCliente/detalle_destinatario.png',
+                            textInputAction: TextInputAction.next,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _InputPill(
+                            controller: phone,
+                            label: 'Teléfono(s)',
+                            iconAsset:
+                                'assets/img/HomeCliente/detalle_telefono.png',
+                            keyboardType: TextInputType.phone,
+                            textInputAction: TextInputAction.next,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _InputPill(
+                      controller: references,
+                      label: 'Referencias',
+                      iconAsset: 'assets/img/HomeCliente/detalle_lista.png',
+                      textInputAction: TextInputAction.done,
+                    ),
+                    const SizedBox(height: 8),
+                    _InputPill(
+                      controller: additionalNotes,
+                      label: 'Indicaciones adicionales (Opcional)',
+                      iconAsset: 'assets/img/HomeCliente/detalle_lista.png',
+                      enabled: true,
+                      maxLines: 1,
+                      compact: true,
+                    ),
+                    const SizedBox(height: 14),
+                    _additionalBlock(),
+                    const SizedBox(height: 12),
+                    _productPhotosBlock(),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              _dimensionBlock(),
-              const SizedBox(height: 27),
-              const _PageSectionTitle(title: 'Detalles de envío'),
-              const SizedBox(height: 14),
-              _detailsBlock(),
-              const SizedBox(height: 28),
-              const _PageSectionTitle(
-                title: '¿Qué tipo de carga enviarás?',
-                subtitle:
-                    'Indica las características de tu carga y te recomendaremos el transporte adecuado.',
-              ),
-              const SizedBox(height: 17),
-              _fragileBlock(),
-              const SizedBox(height: 14),
-              _productPhotosBlock(),
-              const SizedBox(height: 18),
-              _paymentBlock(),
-              const SizedBox(height: 26),
-              GlassButton(
-                label: 'Siguiente',
-                filled: true,
-                textColor: Colors.white,
-                onPressed: _continue,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+                child: GlassButton(
+                  label: 'Siguiente',
+                  filled: true,
+                  height: 42,
+                  fontSize: 14,
+                  textColor: Colors.white,
+                  onPressed: _continue,
+                ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _additionalBlock() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _FormSectionTitle(
+                icon: Icons.settings_outlined,
+                title: '¿Necesitas algo adicional?',
+              ),
+            ),
+            const Text(
+              '(Opcional)',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 9),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_destinos.png',
+                title: 'Varios destinos',
+                price: 'C\$40 USD',
+                subtitle: 'Múltiples destinos',
+                selected:
+                    needsAdditional && additionalOption == 'Varios destinos',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = 'Varios destinos';
+                }),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_regreso.png',
+                title: 'Ida y vuelta',
+                subtitle: 'Regreso al origen',
+                price: 'C\$40 USD',
+                selected:
+                    needsAdditional && additionalOption == 'Ida y vuelta',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = 'Ida y vuelta';
+                }),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_seguro.png',
+                title: 'Seguro',
+                subtitle: 'Asegura tu producto',
+                price: 'C\$40 USD',
+                selected:
+                    needsAdditional && additionalOption == 'Seguro',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = 'Seguro';
+                }),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_espera.png',
+                title: 'Espera en destino',
+                subtitle: '6 horas espera',
+                price: 'C\$40 USD',
+                selected:
+                    needsAdditional && additionalOption == 'Espera en destino',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = 'Espera en destino';
+                }),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -410,7 +568,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         const Text(
-          '¿Carga frágil?',
+          '¿El producto es frágil?',
           style: TextStyle(
             color: Colors.white,
             fontSize: 12,
@@ -418,10 +576,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             fontFamily: 'Figtree',
           ),
         ),
-        _BinaryToggle(
+        _AdditionalSwitch(
           value: fragile,
-          first: 'Sí',
-          second: 'No',
           onChanged: (value) => setState(() => fragile = value),
         ),
       ],
@@ -429,50 +585,83 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   Widget _productPhotosBlock() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _ActionUploadCard(
-          icon: Icons.photo_library_outlined,
-          title: 'Subir fotos del paquete',
-          subtitle: 'Formatos soportados: JPG, PNG (Max 5MB)',
-          onTap: () => _pickImage(invoice: false, source: ImageSource.camera),
-        ),
-        if (productPhotos.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final photo in productPhotos)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Image.memory(photo,
-                      width: 66, height: 66, fit: BoxFit.cover),
-                ),
-              if (productPhotos.length < 5)
-                _AddPhotoButton(onTap: _chooseProductSource),
-            ],
-          ),
-        ],
-        Align(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Align(
           alignment: Alignment.center,
-          child: TextButton.icon(
-            onPressed: productPhotos.length >= 5 ? null : _chooseProductSource,
-            icon: const Icon(Icons.photo_library_outlined,
-                color: Colors.white, size: 18),
-            label: const Text(
-              'Seleccionar de galería',
-              style: TextStyle(
-                color: Colors.white,
-                decoration: TextDecoration.underline,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Figtree',
-              ),
+          child: SizedBox(
+            width: constraints.maxWidth,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                GestureDetector(
+                  onTap: productPhotos.length >= 5 ? null : _chooseProductSource,
+                  child: CustomPaint(
+                    foregroundPainter: _DashedBorderPainter(
+                      color: cyan.withValues(alpha: .78),
+                      radius: 20,
+                    ),
+                    child: Container(
+                      height: 105,
+                      decoration: BoxDecoration(
+                        color: figmaBlue.withValues(alpha: .48),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            'assets/img/HomeCliente/subir_fotos.png',
+                            width: 34,
+                            height: 34,
+                            fit: BoxFit.contain,
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Subir fotos del paquete',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                          SizedBox(height: 3),
+                          Text(
+                            'Formatos soportados: JPG, PNG (Max 5MB)',
+                            style: TextStyle(
+                              color: Color(0xD9FFFFFF),
+                              fontSize: 9,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (productPhotos.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final photo in productPhotos)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.memory(photo,
+                              width: 66, height: 66, fit: BoxFit.cover),
+                        ),
+                      if (productPhotos.length < 5)
+                        _AddPhotoButton(onTap: _chooseProductSource),
+                    ],
+                  ),
+                ],
+              ],
             ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -662,6 +851,312 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 }
 
+class _FormSectionTitle extends StatelessWidget {
+  const _FormSectionTitle({required this.icon, required this.title});
+
+  final IconData icon;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white, size: 17),
+        const SizedBox(width: 7),
+        Flexible(
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Figtree',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InputPill extends StatelessWidget {
+  const _InputPill({
+    required this.controller,
+    required this.label,
+    this.icon,
+    this.iconAsset,
+    this.enabled = true,
+    this.keyboardType,
+    this.textInputAction,
+    this.maxLines = 1,
+    this.compact = false,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final IconData? icon;
+  final String? iconAsset;
+  final bool enabled;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final int maxLines;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 180),
+      opacity: enabled ? 1 : .48,
+      child: Container(
+        constraints: BoxConstraints(minHeight: compact ? 38 : (maxLines > 1 ? 52 : 45)),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 2 : 4),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .10),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: .20)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (iconAsset != null)
+              Image.asset(
+                iconAsset!,
+                width: 21,
+                height: 21,
+                fit: BoxFit.contain,
+              )
+            else
+              Icon(icon, color: Colors.white, size: 19),
+            const SizedBox(width: 7),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                enabled: enabled,
+                maxLines: maxLines,
+                keyboardType: keyboardType,
+                textInputAction: textInputAction,
+                textAlignVertical: TextAlignVertical.center,
+                strutStyle: const StrutStyle(
+                  height: 1,
+                  forceStrutHeight: true,
+                ),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: compact ? 10.5 : 11.5,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Figtree',
+                ),
+                decoration: InputDecoration(
+                  hintText: label,
+                  hintStyle: const TextStyle(
+                    color: Color(0xD9FFFFFF),
+                    fontSize: 10,
+                    fontFamily: 'Figtree',
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  isCollapsed: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdditionalSwitch extends StatelessWidget {
+  const _AdditionalSwitch({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: .25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _switchChoice('Sí', value),
+            _switchChoice('No', !value),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _switchChoice(String label, bool selected) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: selected ? accentBlue : Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Figtree',
+        ),
+      ),
+    );
+  }
+}
+
+class _AdditionalOptionCard extends StatelessWidget {
+  const _AdditionalOptionCard({
+    this.icon,
+    this.iconAsset,
+    required this.title,
+    required this.subtitle,
+    required this.price,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData? icon;
+  final String? iconAsset;
+  final String title;
+  final String subtitle;
+  final String price;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 180),
+        opacity: enabled ? 1 : .42,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 58,
+          padding: const EdgeInsets.fromLTRB(9, 7, 7, 7),
+          decoration: BoxDecoration(
+            color: selected
+                ? accentBlue.withValues(alpha: .78)
+                : Colors.white.withValues(alpha: .10),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(
+              color: selected ? cyan : Colors.white.withValues(alpha: .15),
+            ),
+          ),
+          child: Row(
+            children: [
+              if (iconAsset != null)
+                Image.asset(
+                  iconAsset!,
+                  width: 23,
+                  height: 23,
+                  fit: BoxFit.contain,
+                )
+              else
+                Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xD9FFFFFF),
+                        fontSize: 7.2,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                    Text(
+                      price,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 7.5,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: Colors.white.withValues(alpha: enabled ? .95 : .25),
+                size: 15,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  const _DashedBorderPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          Radius.circular(radius),
+        ),
+      );
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = (distance + 7).clamp(0, metric.length).toDouble();
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance += 12;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
+}
+
 class _PageHeader extends StatelessWidget {
   const _PageHeader({required this.onBack});
 
@@ -681,7 +1176,7 @@ class _PageHeader extends StatelessWidget {
         const SizedBox(width: 5),
         const Expanded(
           child: Text(
-            'Detalles de carga',
+            'Detalles',
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -690,7 +1185,7 @@ class _PageHeader extends StatelessWidget {
             ),
           ),
         ),
-        const _StepPill(text: 'Paso 2'),
+         const _StepPill(text: 'Paso 1'),
       ],
     );
   }

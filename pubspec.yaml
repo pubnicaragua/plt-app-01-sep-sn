@@ -37,6 +37,9 @@ flutter:
     - assets/img/HomeCliente/moto.png
     - assets/img/HomeCliente/notificaciones.png
     - assets/img/HomeCliente/vehiculo.png
+    - assets/img/HomeCliente/crear_moto.png
+    - assets/img/HomeCliente/crear_auto.png
+    - assets/img/HomeCliente/crear_carga.png
     - assets/img/brand-x.png
     - assets/img/PantallaInicio/
     - assets/img/EstadosCrearEnvio/

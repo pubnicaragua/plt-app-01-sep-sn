@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
 
 import '../core/api_client.dart';
 import '../core/location_service.dart';
@@ -13,9 +18,1042 @@ import '../widgets/glass.dart';
 import '../widgets/place_field.dart';
 import '../widgets/wizard.dart';
 import 'confirmar_pedido.dart';
+import 'crear_envio2.dart';
+import 'seleccionar_puntos_envio.dart';
 
+/// Primera vista del flujo de creación de envío.
+///
+/// El formulario de carga se conserva en [_CargaDetailsPage] como el paso
+/// siguiente. Así, CrearEnvio1 queda alineado con el diseño de Figma sin
+/// perder la información que ya se enviaba al confirmar el pedido.
 class CrearEnvio1 extends StatefulWidget {
   const CrearEnvio1({
+    super.key,
+    this.startOrigin = '',
+    this.startDestination = '',
+    this.startOriginPlace,
+    this.startDestinationPlace,
+    this.startTransport = 'Moto',
+    this.startOriginRefs = '',
+    this.startDestinationRefs = '',
+    this.startRecipientName = '',
+    this.startRecipientPhone = '',
+    this.startScheduled = false,
+    this.startDate,
+    this.startTime,
+    this.returnToPointSelection = false,
+  });
+
+  final String startOrigin;
+  final String startDestination;
+  final PlaceSuggestion? startOriginPlace;
+  final PlaceSuggestion? startDestinationPlace;
+  final String startTransport;
+  final String startOriginRefs;
+  final String startDestinationRefs;
+  final String startRecipientName;
+  final String startRecipientPhone;
+  final bool startScheduled;
+  final String? startDate;
+  final String? startTime;
+  final bool returnToPointSelection;
+
+  @override
+  State<CrearEnvio1> createState() => _CrearEnvio1State();
+}
+
+class _CrearEnvio1State extends State<CrearEnvio1> {
+  late final TextEditingController origin;
+  late final TextEditingController destination;
+  PlaceSuggestion? originPlace;
+  PlaceSuggestion? destinationPlace;
+  late String transport;
+  String serviceTab = 'Envíos';
+  AppSettings? settings;
+  Timer? _settingsPoll;
+  GoogleMapController? _mapController;
+  List<LatLng> _roadRoute = const [];
+  double? _routeDistanceKm;
+  int? _routeDurationSeconds;
+  bool _routeLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    origin = TextEditingController(text: widget.startOrigin);
+    destination = TextEditingController(text: widget.startDestination);
+    originPlace = widget.startOriginPlace;
+    destinationPlace = widget.startDestinationPlace;
+    transport = _normalizeTransport(widget.startTransport);
+
+    apiClient.getSettings().then((data) {
+      if (mounted) setState(() => settings = data);
+    }).catchError((_) {});
+    _settingsPoll = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _refreshSettings(),
+    );
+
+    if (originPlace == null) {
+      requestCurrentLocation().then((location) {
+        if (!mounted || location == null || origin.text.trim().isNotEmpty) {
+          return;
+        }
+        final current = PlaceSuggestion(
+          placeId: 'current',
+          description: location.label,
+          main: location.label,
+          secondary: 'Managua',
+          latitude: location.latitude,
+          longitude: location.longitude,
+        );
+        setState(() {
+          originPlace = current;
+          origin.text = location.label;
+        });
+        _loadRoadRoute();
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadRoadRoute());
+  }
+
+  String _normalizeTransport(String value) {
+    if (value == 'Auto') return 'Vehículo';
+    if (value == 'Carga') return 'Camión';
+    return value == 'Vehículo' || value == 'Camión' ? value : 'Moto';
+  }
+
+  Future<void> _refreshSettings() async {
+    try {
+      final data = await apiClient.getSettings();
+      if (mounted) setState(() => settings = data);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _settingsPoll?.cancel();
+    origin.dispose();
+    destination.dispose();
+    super.dispose();
+  }
+
+  double? get _straightDistanceKm {
+    final from = originPlace;
+    final to = destinationPlace;
+    if (from?.latitude == null ||
+        from?.longitude == null ||
+        to?.latitude == null ||
+        to?.longitude == null) {
+      return null;
+    }
+    return haversineKm(
+      from!.latitude!,
+      from.longitude!,
+      to!.latitude!,
+      to.longitude!,
+    );
+  }
+
+  double? get _distanceKm => _routeDistanceKm ?? _straightDistanceKm;
+
+  VehicleRate _rateFor(String vehicle) =>
+      settings?.rateFor(vehicle) ??
+      const VehicleRate(baseFeeCs: 80, farePerKmCs: 8.5, includedKm: 4);
+
+  double? _priceFor(String vehicle) {
+    final distance = _distanceKm;
+    if (distance == null) return null;
+    final rate = _rateFor(vehicle);
+    final chargeableKm =
+        (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
+    return roundFareCs(
+      rate.baseFeeCs + chargeableKm * rate.farePerKmCs + logisticsServiceFeeCs,
+      settings?.fareRoundingCs ?? 5,
+    );
+  }
+
+  Future<void> _selectPlace(
+      {required bool isOrigin, required PlaceSuggestion place}) async {
+    setState(() {
+      if (isOrigin) {
+        originPlace = place;
+        origin.text = place.description;
+      } else {
+        destinationPlace = place;
+        destination.text = place.description;
+      }
+      _roadRoute = const [];
+      _routeDistanceKm = null;
+      _routeDurationSeconds = null;
+    });
+    await _loadRoadRoute();
+  }
+
+  Future<void> _loadRoadRoute() async {
+    final from = originPlace;
+    final to = destinationPlace;
+    if (from?.latitude == null ||
+        from?.longitude == null ||
+        to?.latitude == null ||
+        to?.longitude == null) {
+      return;
+    }
+    if (_routeLoading) return;
+    setState(() => _routeLoading = true);
+    final fromLat = from!.latitude!;
+    final fromLng = from.longitude!;
+    final toLat = to!.latitude!;
+    final toLng = to.longitude!;
+    final requests = <Uri>[];
+    const mapsKey = String.fromEnvironment(
+      'GOOGLE_MAPS_API_KEY',
+      defaultValue: 'AIzaSyCMwxArmM-BEJuxgbjOiON8KdH_IsNH1F4',
+    );
+    // En web se usa OSRM directamente porque Directions de Google bloquea
+    // el fetch del navegador por CORS. En Android/iOS Google queda primero.
+    if (!kIsWeb && mapsKey.isNotEmpty) {
+      requests
+          .add(Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
+        'origin': '$fromLat,$fromLng',
+        'destination': '$toLat,$toLng',
+        'mode': 'driving',
+        'alternatives': 'false',
+        'key': mapsKey,
+      }));
+    }
+    requests.add(Uri.https(
+      'router.project-osrm.org',
+      '/route/v1/driving/$fromLng,$fromLat;$toLng,$toLat',
+      {'overview': 'full', 'geometries': 'geojson'},
+    ));
+
+    try {
+      for (final uri in requests) {
+        try {
+          final response = await http.get(uri);
+          if (response.statusCode < 200 || response.statusCode >= 300) continue;
+          final payload = jsonDecode(response.body);
+          List<LatLng> points = const [];
+          double? distanceKm;
+          int? durationSeconds;
+          if (uri.host == 'maps.googleapis.com') {
+            if (payload is! Map || payload['status'] != 'OK') continue;
+            final routes = payload['routes'];
+            if (routes is! List || routes.isEmpty) continue;
+            final route = routes.first;
+            points = _decodeGoogleRoute(route);
+            final legs = route is Map ? route['legs'] : null;
+            if (legs is List) {
+              var meters = 0.0;
+              var seconds = 0;
+              for (final leg in legs.whereType<Map>()) {
+                final legDistance = leg['distance'];
+                final legDuration =
+                    leg['duration_in_traffic'] ?? leg['duration'];
+                meters += (legDistance is Map
+                        ? (legDistance['value'] as num?)?.toDouble()
+                        : null) ??
+                    0;
+                seconds += (legDuration is Map
+                        ? (legDuration['value'] as num?)?.toInt()
+                        : null) ??
+                    0;
+              }
+              if (meters > 0) distanceKm = meters / 1000;
+              if (seconds > 0) durationSeconds = seconds;
+            }
+          } else {
+            if (payload is! Map || payload['code'] != 'Ok') continue;
+            final routes = payload['routes'];
+            final route =
+                routes is List && routes.isNotEmpty ? routes.first : null;
+            final geometry = route is Map ? route['geometry'] : null;
+            final coordinates =
+                geometry is Map ? geometry['coordinates'] : null;
+            if (coordinates is! List) continue;
+            points = coordinates
+                .whereType<List>()
+                .where((pair) => pair.length >= 2)
+                .map((pair) => LatLng(
+                      (pair[1] as num).toDouble(),
+                      (pair[0] as num).toDouble(),
+                    ))
+                .toList();
+            if (route is Map) {
+              final meters = (route['distance'] as num?)?.toDouble();
+              distanceKm = meters == null ? null : meters / 1000;
+              durationSeconds = (route['duration'] as num?)?.toInt();
+            }
+          }
+          if (points.length < 2) continue;
+          if (!mounted) return;
+          setState(() {
+            _roadRoute = points;
+            _routeDistanceKm = distanceKm;
+            _routeDurationSeconds = durationSeconds;
+          });
+          _fitRoute(points);
+          return;
+        } catch (_) {
+          // Prueba el proveedor siguiente.
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _routeLoading = false);
+    }
+  }
+
+  List<LatLng> _decodeGoogleRoute(dynamic route) {
+    final points = <LatLng>[];
+    final legs = route is Map ? route['legs'] : null;
+    if (legs is List) {
+      for (final leg in legs.whereType<Map>()) {
+        final steps = leg['steps'];
+        if (steps is! List) continue;
+        for (final step in steps.whereType<Map>()) {
+          final polyline = step['polyline'];
+          final encoded =
+              polyline is Map ? polyline['points']?.toString() : null;
+          if (encoded == null || encoded.isEmpty) continue;
+          final decoded = _decodePolyline(encoded);
+          points.addAll(points.isNotEmpty && decoded.isNotEmpty
+              ? decoded.skip(1)
+              : decoded);
+        }
+      }
+    }
+    if (points.length >= 2) return points;
+    final overview = route is Map ? route['overview_polyline'] : null;
+    final encoded = overview is Map ? overview['points']?.toString() : null;
+    return encoded == null || encoded.isEmpty
+        ? const []
+        : _decodePolyline(encoded);
+  }
+
+  List<LatLng> _decodePolyline(String encoded) {
+    final points = <LatLng>[];
+    var index = 0;
+    var latitude = 0;
+    var longitude = 0;
+    while (index < encoded.length) {
+      var result = 0;
+      var shift = 0;
+      int byte;
+      do {
+        byte = encoded.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20 && index < encoded.length);
+      latitude += (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+      result = 0;
+      shift = 0;
+      do {
+        byte = encoded.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20 && index < encoded.length);
+      longitude += (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+      points.add(LatLng(latitude / 1e5, longitude / 1e5));
+    }
+    return points;
+  }
+
+  void _fitRoute(List<LatLng> points) {
+    if (_mapController == null || points.length < 2) return;
+    final latitudes = points.map((point) => point.latitude).toList();
+    final longitudes = points.map((point) => point.longitude).toList();
+    final bounds = LatLngBounds(
+      southwest: LatLng(
+        latitudes.reduce((a, b) => a < b ? a : b),
+        longitudes.reduce((a, b) => a < b ? a : b),
+      ),
+      northeast: LatLng(
+        latitudes.reduce((a, b) => a > b ? a : b),
+        longitudes.reduce((a, b) => a > b ? a : b),
+      ),
+    );
+    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 54));
+  }
+
+  LatLng get _mapCenter {
+    final place = originPlace;
+    if (place?.latitude != null && place?.longitude != null) {
+      return LatLng(place!.latitude!, place.longitude!);
+    }
+    return const LatLng(12.1364, -86.2514);
+  }
+
+  Set<Marker> get _markers {
+    final markers = <Marker>{};
+    final from = originPlace;
+    final to = destinationPlace;
+    if (from?.latitude != null && from?.longitude != null) {
+      markers.add(Marker(
+        markerId: const MarkerId('pickup'),
+        position: LatLng(from!.latitude!, from.longitude!),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+      ));
+    }
+    if (to?.latitude != null && to?.longitude != null) {
+      markers.add(Marker(
+        markerId: const MarkerId('dropoff'),
+        position: LatLng(to!.latitude!, to.longitude!),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+      ));
+    }
+    return markers;
+  }
+
+  Set<Polyline> get _polylines => _roadRoute.length < 2
+      ? const {}
+      : {
+          Polyline(
+            polylineId: const PolylineId('delivery-route'),
+            points: _roadRoute,
+            color: const Color(0xFF1677FF),
+            width: 6,
+            jointType: JointType.round,
+          ),
+        };
+
+  Future<void> _editRoutePoints() async {
+    final result = await Navigator.of(context).push<RouteSelectionResult>(
+      MaterialPageRoute(
+        builder: (_) => SeleccionarPuntosEnvio(
+          startOrigin: origin.text.trim(),
+          startDestination: destination.text.trim(),
+          startOriginPlace: originPlace,
+          startDestinationPlace: destinationPlace,
+          startTransport: transport,
+          selectionOnly: true,
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      origin.text = result.origin;
+      destination.text = result.destination;
+      originPlace = result.originPlace;
+      destinationPlace = result.destinationPlace;
+      _roadRoute = const [];
+      _routeDistanceKm = null;
+      _routeDurationSeconds = null;
+    });
+    await _loadRoadRoute();
+  }
+
+  void _handleMapBack() {
+    if (!widget.returnToPointSelection) {
+      Navigator.of(context).pop();
+      return;
+    }
+    Navigator.of(context).pop(
+      RouteSelectionResult(
+        origin: origin.text.trim(),
+        destination: destination.text.trim(),
+        originPlace: originPlace,
+        destinationPlace: destinationPlace,
+      ),
+    );
+  }
+
+  Future<void> _continueToDetails() async {
+    if (originPlace == null || destinationPlace == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Selecciona el lugar de recogida y entrega.')),
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CrearEnvio2(
+          origin: origin.text.trim(),
+          destination: destination.text.trim(),
+          originPlace: originPlace,
+          destinationPlace: destinationPlace,
+          transport: transport,
+          estimatedShipping: _priceFor(transport),
+          originRefs: widget.startOriginRefs,
+          destinationRefs: widget.startDestinationRefs,
+          recipientName: widget.startRecipientName,
+          recipientPhone: widget.startRecipientPhone,
+          startScheduled: widget.startScheduled,
+          startDate: widget.startDate,
+          startTime: widget.startTime,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final sheetHeight = (size.height * .54).clamp(390.0, 540.0).toDouble();
+    return Scaffold(
+      backgroundColor: const Color(0xFF082B66),
+      body: Stack(
+        children: [
+          GoogleMap(
+            initialCameraPosition:
+                CameraPosition(target: _mapCenter, zoom: 12.5),
+            padding: EdgeInsets.only(bottom: sheetHeight * .80),
+            markers: _markers,
+            polylines: _polylines,
+            mapType: MapType.normal,
+            zoomControlsEnabled: false,
+            myLocationButtonEnabled: false,
+            compassEnabled: false,
+            mapToolbarEnabled: false,
+            rotateGesturesEnabled: false,
+            tiltGesturesEnabled: false,
+            onMapCreated: (controller) {
+              _mapController = controller;
+              _fitRoute(_roadRoute);
+            },
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 12,
+            left: 12,
+            child: _MapBackButton(onTap: _handleMapBack),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: sheetHeight,
+            child: _buildBottomSheet(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomSheet(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xD91F477F), Color(0xC2173264)],
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x45000000),
+                blurRadius: 26,
+                offset: Offset(0, -8),
+              ),
+            ],
+            border: Border(
+              top: BorderSide(color: Colors.white.withValues(alpha: .28)),
+            ),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(15, 12, 15, 15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Enviar paquete',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {},
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: accentBlue,
+                        minimumSize: const Size(84, 32),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 8),
+                        shape: const StadiumBorder(),
+                      ),
+                      child: const Text(
+                        'Programar',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                _RouteEditor(
+                  origin: origin,
+                  destination: destination,
+                  onOriginSelected: (place) =>
+                      _selectPlace(isOrigin: true, place: place),
+                  onDestinationSelected: (place) =>
+                      _selectPlace(isOrigin: false, place: place),
+                  loading: _routeLoading,
+                  durationSeconds: _routeDurationSeconds,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (final label in ['Envíos', 'Taxi Privado'])
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 5),
+                          child: _ServiceTab(
+                            label: label,
+                            selected: serviceTab == label,
+                            enabled: true,
+                            onTap: () => setState(() => serviceTab = label),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _ImageVehicleCard(
+                      label: 'Moto',
+                      subtitle: 'Envíos en moto',
+                      asset: 'assets/img/HomeCliente/crear_moto.png',
+                      selected: transport == 'Moto',
+                      onTap: () => setState(() => transport = 'Moto'),
+                    ),
+                    const SizedBox(width: 7),
+                    _ImageVehicleCard(
+                      label: 'Auto',
+                      subtitle: 'Envíos en auto',
+                      asset: 'assets/img/HomeCliente/crear_auto.png',
+                      selected: transport == 'Vehículo',
+                      onTap: () => setState(() => transport = 'Vehículo'),
+                    ),
+                    const SizedBox(width: 7),
+                    _ImageVehicleCard(
+                      label: 'Carga',
+                      subtitle: 'Carga',
+                      asset: 'assets/img/HomeCliente/crear_carga.png',
+                      selected: transport == 'Camión',
+                      onTap: () => setState(() => transport = 'Camión'),
+                    ),
+                  ],
+                ),
+                if (_distanceKm != null) ...[
+                  const SizedBox(height: 8),
+                  _SelectedRateSummary(
+                    vehicle: transport == 'Moto'
+                        ? 'Moto'
+                        : transport == 'Vehículo'
+                            ? 'Auto'
+                            : 'Carga',
+                    distanceKm: _distanceKm!,
+                    routeDistanceKm: _routeDistanceKm,
+                    price: _priceFor(transport)!,
+                    rate: _rateFor(transport),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 43,
+                  child: ElevatedButton(
+                    onPressed: _continueToDetails,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentBlue,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: const StadiumBorder(),
+                    ),
+                    child: const Text(
+                      'Completar formulario de envío',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapBackButton extends StatelessWidget {
+  const _MapBackButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xCC123E68),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: const SizedBox(
+          width: 42,
+          height: 42,
+          child: Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteEditor extends StatelessWidget {
+  const _RouteEditor({
+    required this.origin,
+    required this.destination,
+    required this.onOriginSelected,
+    required this.onDestinationSelected,
+    required this.loading,
+    required this.durationSeconds,
+  });
+
+  final TextEditingController origin;
+  final TextEditingController destination;
+  final ValueChanged<PlaceSuggestion> onOriginSelected;
+  final ValueChanged<PlaceSuggestion> onDestinationSelected;
+  final bool loading;
+  final int? durationSeconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final minutes = durationSeconds == null
+        ? null
+        : (durationSeconds! / 60).ceil().clamp(1, 999);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(11, 7, 11, 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .11),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Colors.white.withValues(alpha: .24)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Image.asset(
+                  'assets/img/HomeCliente/punto_desde.png',
+                  width: 24,
+                  height: 24,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: PlaceAutocompleteField(
+                  controller: origin,
+                  label: 'Desde',
+                  hint: 'Selecciona el punto de recogida',
+                  bare: true,
+                  onSelected: onOriginSelected,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            height: 1,
+            margin:
+                const EdgeInsets.only(left: 31, right: 1, top: 2, bottom: 2),
+            color: Colors.white.withValues(alpha: .26),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Image.asset(
+                  'assets/img/HomeCliente/punto_hasta.png',
+                  width: 24,
+                  height: 24,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: PlaceAutocompleteField(
+                  controller: destination,
+                  label: 'Hacia',
+                  hint: 'Selecciona el punto de entrega',
+                  bare: true,
+                  onSelected: onDestinationSelected,
+                ),
+              ),
+              if (minutes != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    '$minutes min',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.only(left: 26, right: 1, top: 2),
+              child: LinearProgressIndicator(
+                minHeight: 2,
+                backgroundColor: Colors.transparent,
+                color: cyan,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceTab extends StatelessWidget {
+  const _ServiceTab({
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 25,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected
+                  ? accentBlue.withValues(alpha: .86)
+                  : enabled
+                      ? Colors.white.withValues(alpha: .08)
+                      : Colors.black.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected
+                    ? cyan
+                    : enabled
+                        ? Colors.white.withValues(alpha: .24)
+                        : Colors.white.withValues(alpha: .12),
+              ),
+            ),
+            child: Opacity(
+              opacity: enabled ? 1 : .55,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageVehicleCard extends StatelessWidget {
+  const _ImageVehicleCard({
+    required this.label,
+    required this.subtitle,
+    required this.asset,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String subtitle;
+  final String asset;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(13),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              height: 104,
+              padding: const EdgeInsets.fromLTRB(7, 4, 7, 6),
+              decoration: BoxDecoration(
+                color: selected
+                    ? accentBlue.withValues(alpha: .40)
+                    : Colors.white.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: selected ? cyan : Colors.white.withValues(alpha: .22),
+                  width: selected ? 1.2 : 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Image.asset(
+                      asset,
+                      width: double.infinity,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.local_shipping_outlined,
+                        color: Colors.white70,
+                        size: 30,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xBFFFFFFF),
+                      fontSize: 8,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedRateSummary extends StatelessWidget {
+  const _SelectedRateSummary({
+    required this.vehicle,
+    required this.distanceKm,
+    required this.routeDistanceKm,
+    required this.price,
+    required this.rate,
+  });
+
+  final String vehicle;
+  final double distanceKm;
+  final double? routeDistanceKm;
+  final double price;
+  final VehicleRate rate;
+
+  @override
+  Widget build(BuildContext context) {
+    final routeKm = routeDistanceKm ?? distanceKm;
+    final extraKm = (routeKm - rate.includedKm).clamp(0, double.infinity);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(13),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .13),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: Colors.white.withValues(alpha: .28)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.payments_outlined, color: cyan, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Tarifa estimada · $vehicle',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'C\$ ${price.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${routeKm.toStringAsFixed(1)} km · base C\$ ${rate.baseFeeCs.toStringAsFixed(0)} + ${extraKm.toStringAsFixed(1)} km adicionales × C\$ ${rate.farePerKmCs.toStringAsFixed(1)} + C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} servicio',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xD9FFFFFF),
+                    fontSize: 8.8,
+                    height: 1.2,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CargaDetailsPage extends StatefulWidget {
+  const _CargaDetailsPage({
     super.key,
     this.startOrigin = '',
     this.startDestination = '',
@@ -45,10 +1083,10 @@ class CrearEnvio1 extends StatefulWidget {
   final String? startTime;
 
   @override
-  State<CrearEnvio1> createState() => _CrearEnvio1State();
+  State<_CargaDetailsPage> createState() => _CargaDetailsState();
 }
 
-class _CrearEnvio1State extends State<CrearEnvio1> {
+class _CargaDetailsState extends State<_CargaDetailsPage> {
   int weight = 10;
   String weightUnit = 'kg';
   int bundles = 1;
@@ -224,8 +1262,12 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     if (distance == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    final chargeableKm = (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
-    return roundFareCs(rate.baseFeeCs + chargeableKm * rate.farePerKmCs + logisticsServiceFeeCs,
+    final chargeableKm =
+        (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
+    return roundFareCs(
+        rate.baseFeeCs +
+            chargeableKm * rate.farePerKmCs +
+            logisticsServiceFeeCs,
         settings?.fareRoundingCs ?? 5);
   }
 
@@ -301,9 +1343,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   children: [
                     RoundStep(
                       icon: Icons.remove,
-                      onTap: weight > 1
-                          ? () => setState(() => weight -= 1)
-                          : null,
+                      onTap:
+                          weight > 1 ? () => setState(() => weight -= 1) : null,
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -392,8 +1433,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                 Wrap(
                   spacing: 9,
                   children: [
-                    for (final value in [5, 10, 40, 405])
-                      _weightChip(value),
+                    for (final value in [5, 10, 40, 405]) _weightChip(value),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -580,8 +1620,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: .08),
                     borderRadius: BorderRadius.circular(15),
@@ -817,8 +1857,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                       child: _PaymentChoice(
                         label: 'Pendiente',
                         selected: paymentStatus == 'Pendiente',
-                        onTap: () => setState(
-                            () => paymentStatus = 'Pendiente'),
+                        onTap: () =>
+                            setState(() => paymentStatus = 'Pendiente'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -859,8 +1899,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                         label: 'Transferencia',
                         icon: Icons.account_balance_outlined,
                         selected: paymentMethod == 'Transferencia',
-                        onTap: () => setState(
-                            () => paymentMethod = 'Transferencia'),
+                        onTap: () =>
+                            setState(() => paymentMethod = 'Transferencia'),
                       ),
                     ),
                   ],
@@ -899,13 +1939,14 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   hint: 'Busca un lugar de Managua…',
                   icon: Icons.location_on_outlined,
                   controller: destination,
-                  onSelected: (place) => setState(() => destinationPlace = place),
+                  onSelected: (place) =>
+                      setState(() => destinationPlace = place),
                 ),
                 if (distance != null) ...[
                   const SizedBox(height: 14),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: cyan.withValues(alpha: .12),
                       borderRadius: BorderRadius.circular(11),
@@ -944,8 +1985,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.auto_awesome,
-                              color: cyan, size: 12),
+                          const Icon(Icons.auto_awesome, color: cyan, size: 12),
                           const SizedBox(width: 4),
                           Text(
                             'RECOMENDADO: ${_recommended}',
@@ -975,8 +2015,18 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   children: [
                     for (final (label, cap, icon, maxKg) in [
                       ('Moto', 'Hasta 20 kg', Icons.two_wheeler, 20),
-                      ('Vehículo', 'Hasta 300 kg', Icons.directions_car_filled, 300),
-                      ('Camión', 'Hasta 1,500 kg', Icons.local_shipping_outlined, 1500),
+                      (
+                        'Vehículo',
+                        'Hasta 300 kg',
+                        Icons.directions_car_filled,
+                        300
+                      ),
+                      (
+                        'Camión',
+                        'Hasta 1,500 kg',
+                        Icons.local_shipping_outlined,
+                        1500
+                      ),
                     ])
                       Expanded(
                         child: Padding(
@@ -996,7 +2046,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                                         behavior: SnackBarBehavior.floating,
                                         content: Text(
                                           '$label no soporta $weight $weightUnit. Cambia el peso o usa otro vehículo.',
-                                          style: const TextStyle(fontFamily: 'Figtree'),
+                                          style: const TextStyle(
+                                              fontFamily: 'Figtree'),
                                         ),
                                       ),
                                     );
@@ -1072,9 +2123,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         decoration: BoxDecoration(
-          color: active
-              ? figmaBlue
-              : Colors.white.withValues(alpha: .10),
+          color: active ? figmaBlue : Colors.white.withValues(alpha: .10),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
             color: active ? cyan : Colors.transparent,
@@ -1148,7 +2197,9 @@ class _CompactVehicleTile extends StatelessWidget {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: selected ? figmaBlue : Colors.white.withValues(alpha: .12),
+                      color: selected
+                          ? figmaBlue
+                          : Colors.white.withValues(alpha: .12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(icon, color: Colors.white, size: 17),
@@ -1188,7 +2239,8 @@ class _CompactVehicleTile extends StatelessWidget {
               const Spacer(),
               if (recommended)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                   decoration: BoxDecoration(
                     color: mint.withValues(alpha: .18),
                     borderRadius: BorderRadius.circular(10),
@@ -1373,118 +2425,118 @@ class _VehicleRateTile extends StatelessWidget {
             Opacity(
               opacity: blocked ? 0.55 : 1,
               child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: selected
-                    ? figmaBlue
-                    : Colors.white.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: Colors.white, size: 21),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          fontFamily: 'Figtree',
-                        ),
-                      ),
-                      if (recommended) ...[
-                        const SizedBox(width: 7),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: mint.withValues(alpha: .18),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'RECOMENDADO',
-                            style: TextStyle(
-                              color: mint,
-                              fontSize: 8,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'Figtree',
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? figmaBlue
+                          : Colors.white.withValues(alpha: .10),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 21),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              label,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                fontFamily: 'Figtree',
+                              ),
                             ),
+                            if (recommended) ...[
+                              const SizedBox(width: 7),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: mint.withValues(alpha: .18),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  'RECOMENDADO',
+                                  style: TextStyle(
+                                    color: mint,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w800,
+                                    fontFamily: 'Figtree',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: Color(0xFFB9D4FF),
+                            fontSize: 10,
+                            fontFamily: 'Figtree',
+                          ),
+                        ),
+                        Text(
+                          'Capacidad: $capacity',
+                          style: const TextStyle(
+                            color: Color(0xFFB9D4FF),
+                            fontSize: 10,
+                            fontFamily: 'Figtree',
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'ENVÍO DESDE',
+                        style: TextStyle(
+                          color: Color(0xFF8FA0C4),
+                          fontSize: 8,
+                          letterSpacing: .6,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        price == null
+                            ? 'C\$ —'
+                            : 'C\$${price!.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFFB9D4FF),
-                      fontSize: 10,
-                      fontFamily: 'Figtree',
-                    ),
-                  ),
-                  Text(
-                    'Capacidad: $capacity',
-                    style: const TextStyle(
-                      color: Color(0xFFB9D4FF),
-                      fontSize: 10,
-                      fontFamily: 'Figtree',
-                    ),
+                  const SizedBox(width: 9),
+                  Icon(
+                    selected && !blocked
+                        ? Icons.radio_button_checked
+                        : blocked
+                            ? Icons.not_interested_rounded
+                            : Icons.radio_button_unchecked,
+                    color: blocked
+                        ? const Color(0xFFE5484D)
+                        : selected
+                            ? cyan
+                            : Colors.white38,
+                    size: 21,
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const Text(
-                  'ENVÍO DESDE',
-                  style: TextStyle(
-                    color: Color(0xFF8FA0C4),
-                    fontSize: 8,
-                    letterSpacing: .6,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  price == null
-                      ? 'C\$ —'
-                      : 'C\$${price!.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 9),
-            Icon(
-              selected && !blocked
-                  ? Icons.radio_button_checked
-                  : blocked
-                      ? Icons.not_interested_rounded
-                      : Icons.radio_button_unchecked,
-              color: blocked
-                  ? const Color(0xFFE5484D)
-                  : selected
-                      ? cyan
-                      : Colors.white38,
-              size: 21,
-            ),
-          ],
               ),
             ),
             if (blockedNote != null)
@@ -1560,8 +2612,7 @@ class _PriceBreakdown extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: mint.withValues(alpha: .15),
                   borderRadius: BorderRadius.circular(20),

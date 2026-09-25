@@ -15,6 +15,7 @@ import '../widgets/notifications_sheet.dart';
 import '../widgets/place_field.dart';
 import 'inicio.dart';
 import 'crear_envio1.dart';
+import 'seleccionar_puntos_envio.dart';
 import 'pedido.dart';
 import 'mi_perfil_cliente.dart';
 import 'resumen_cliente.dart';
@@ -168,7 +169,23 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
             : 'Moto';
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CrearEnvio1(startTransport: transport),
+        builder: (_) => SeleccionarPuntosEnvio(
+          startTransport: transport,
+          onOpenMap: (result) async {
+            return Navigator.of(context).push<RouteSelectionResult>(
+              MaterialPageRoute(
+                builder: (_) => CrearEnvio1(
+                  startOrigin: result.origin,
+                  startDestination: result.destination,
+                  startOriginPlace: result.originPlace,
+                  startDestinationPlace: result.destinationPlace,
+                  startTransport: transport,
+                  returnToPointSelection: true,
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -240,8 +257,67 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
           ],
         ),
         const SizedBox(height: 14),
-        const _LogisticsBanner(),
-        const SizedBox(height: 12),
+        if (activeTrips.isNotEmpty) ...[
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Envíos activos:',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: widget.onOpenShipments,
+                  borderRadius: BorderRadius.circular(18),
+                  hoverColor: Colors.white.withValues(alpha: .12),
+                  splashColor: Colors.white.withValues(alpha: .22),
+                  highlightColor: Colors.white.withValues(alpha: .10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: accentBlue,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Text(
+                      'Ver todos envíos activos',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          for (final trip in activeTrips.take(3))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _ActiveShipmentCard(trip: trip),
+            ),
+          const SizedBox(height: 5),
+        ],
+        const Text(
+          'Envíos',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Figtree',
+          ),
+        ),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
@@ -283,57 +359,10 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
             _openCreateFlow('Carga');
           },
         ),
-        const SizedBox(height: 13),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Envío activo:',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-              ),
-            ),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: widget.onOpenShipments,
-                borderRadius: BorderRadius.circular(18),
-                hoverColor: Colors.white.withValues(alpha: .12),
-                splashColor: Colors.white.withValues(alpha: .22),
-                highlightColor: Colors.white.withValues(alpha: .10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: accentBlue,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Text(
-                    'Ver todos envíos activos',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'Figtree',
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 7),
-            if (activeTrips.isEmpty)
-              const _EmptyActiveShipmentCard()
-            else
-              for (final trip in activeTrips.take(3))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _ActiveShipmentCard(trip: trip),
-                ),
+        const SizedBox(height: 12),
+        const _NeedLocationButton(),
+        const SizedBox(height: 10),
+        const _LogisticsBanner(),
       ],
     );
   }
@@ -376,11 +405,85 @@ class _LogisticsBanner extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(19),
       child: AspectRatio(
-        aspectRatio: 392 / 120,
+        aspectRatio: 398 / 163,
         child: Image.asset(
-          'assets/img/HomeCliente/banner_logistica.png',
+          'assets/img/HomeCliente/banner_seguro.png',
           fit: BoxFit.cover,
-          semanticLabel: 'Tu logística en movimiento',
+          semanticLabel: 'Seguro para tus envíos',
+        ),
+      ),
+    );
+  }
+}
+
+class _NeedLocationButton extends StatelessWidget {
+  const _NeedLocationButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {},
+        borderRadius: BorderRadius.circular(13),
+        child: Container(
+          height: 47,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1555D1), Color(0xFF0D3DA7)],
+            ),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: cyan.withValues(alpha: .24)),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: Image.asset(
+                  'assets/img/HomeCliente/necesitas_ir.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.directions_walk_rounded,
+                    color: Colors.white,
+                    size: 21,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  '¿Necesitas ir a algún lugar?',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x664D8FFF),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: accentBlue,
+                  size: 21,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -577,31 +680,6 @@ class _ActiveShipmentCard extends StatelessWidget {
               child: const Icon(Icons.chevron_right, color: accentBlue, size: 20),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyActiveShipmentCard extends StatelessWidget {
-  const _EmptyActiveShipmentCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 54,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white.withValues(alpha: .16)),
-      ),
-      child: const Text(
-        'No tienes envíos activos',
-        style: TextStyle(
-          color: Color(0xD9FFFFFF),
-          fontSize: 11,
-          fontFamily: 'Figtree',
         ),
       ),
     );
