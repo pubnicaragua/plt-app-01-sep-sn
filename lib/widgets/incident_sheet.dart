@@ -66,11 +66,9 @@ class _IncidentSheetState extends State<_IncidentSheet> {
   final description = TextEditingController();
   double? latitude;
   double? longitude;
-  String? evidenceUrl;
-  String? evidenceFile;
-  Uint8List? evidenceBytes;
+  final List<Uint8List> evidenceBytes = <Uint8List>[];
+  final List<String> evidenceNames = <String>[];
   bool locating = false;
-  bool uploading = false;
   bool sending = false;
 
   @override
@@ -91,7 +89,30 @@ class _IncidentSheetState extends State<_IncidentSheet> {
     });
   }
 
-  Future<void> _pickPhoto() async {
+  Future<void> _pickPhotos() async {
+    try {
+      final images = await ImagePicker().pickMultiImage(
+        imageQuality: 70,
+        maxWidth: 1200,
+      );
+      if (images.isEmpty) return;
+      final bytes = <Uint8List>[];
+      final names = <String>[];
+      for (final image in images) {
+        bytes.add(await image.readAsBytes());
+        names.add(image.name);
+      }
+      if (!mounted) return;
+      setState(() {
+        evidenceBytes.addAll(bytes);
+        evidenceNames.addAll(names);
+      });
+    } catch (_) {
+      _showPhotoError();
+    }
+  }
+
+  Future<void> _takePhoto() async {
     try {
       final image = await ImagePicker().pickImage(
         source: ImageSource.camera,
@@ -100,36 +121,38 @@ class _IncidentSheetState extends State<_IncidentSheet> {
       );
       if (image == null) return;
       final bytes = await image.readAsBytes();
+      if (!mounted) return;
       setState(() {
-        evidenceBytes = bytes;
-        evidenceFile = image.name;
+        evidenceBytes.add(bytes);
+        evidenceNames.add(image.name);
       });
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            content: Text(
-              'No se pudo tomar la foto.',
-              style: TextStyle(fontFamily: 'Figtree'),
-            ),
-          ),
-        );
-      }
+      _showPhotoError();
     }
+  }
+
+  void _showPhotoError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('No se pudo adjuntar la evidencia.', style: TextStyle(fontFamily: 'Figtree')),
+      ),
+    );
   }
 
   Future<void> _submit() async {
     if (sending) return;
     setState(() => sending = true);
     try {
-      if (evidenceBytes != null) {
+      final uploadedEvidence = <String>[];
+      for (var index = 0; index < evidenceBytes.length; index++) {
         final uploaded = await apiClient.uploadEvidence(
-          evidenceBytes!,
-          evidenceFile ?? 'evidencia.jpg',
+          evidenceBytes[index],
+          index < evidenceNames.length ? evidenceNames[index] : 'evidencia-$index.jpg',
         );
-        evidenceFile = uploaded['evidence']?.toString();
-        evidenceUrl = uploaded['url']?.toString();
+        final storedName = uploaded['evidence']?.toString();
+        if (storedName != null && storedName.isNotEmpty) uploadedEvidence.add(storedName);
       }
       await apiClient.reportIncident(
         type: type,
@@ -140,7 +163,7 @@ class _IncidentSheetState extends State<_IncidentSheet> {
         description: description.text.trim(),
         latitude: latitude,
         longitude: longitude,
-        evidence: evidenceFile,
+        evidence: uploadedEvidence.isEmpty ? null : uploadedEvidence.join('|'),
       );
       if (!mounted) return;
       Navigator.of(context).pop(const IncidentResult(id: ''));
@@ -368,75 +391,78 @@ class _IncidentSheetState extends State<_IncidentSheet> {
                 ],
               ),
               const SizedBox(height: 11),
-              // Evidencia
-              InkWell(
-                onTap: _pickPhoto,
-                borderRadius: BorderRadius.circular(15),
-                child: Container(
-                  padding: const EdgeInsets.all(13),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .08),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: glassBorder),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: figmaBlue.withValues(alpha: .45),
-                          borderRadius: BorderRadius.circular(12),
+              // Evidencia múltiple: galería sin límite + cámara.
+              GlassCard(
+                padding: const EdgeInsets.all(13),
+                color: Colors.white.withValues(alpha: .08),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.photo_library_outlined, color: Colors.white, size: 21),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'Evidencia fotográfica',
+                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700, fontFamily: 'Figtree'),
+                          ),
                         ),
-                        child: evidenceBytes == null
-                            ? const Icon(Icons.add_a_photo_outlined,
-                                color: Colors.white, size: 22)
-                            : ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.memory(
-                                  evidenceBytes!,
-                                  fit: BoxFit.cover,
+                        Text('${evidenceBytes.length}', style: const TextStyle(color: cyan, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text('Puedes adjuntar todas las fotos necesarias.', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 10.5, fontFamily: 'Figtree')),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _pickPhotos,
+                            icon: const Icon(Icons.collections_outlined, size: 17),
+                            label: const Text('Galería', style: TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w700)),
+                            style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: BorderSide(color: glassBorder), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(42.75))),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _takePhoto,
+                            icon: const Icon(Icons.photo_camera_outlined, size: 17),
+                            label: const Text('Cámara', style: TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w700)),
+                            style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: BorderSide(color: glassBorder), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(42.75))),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (evidenceBytes.isNotEmpty) ...[
+                      const SizedBox(height: 11),
+                      SizedBox(
+                        height: 68,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: evidenceBytes.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (_, index) => Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(11),
+                                child: Image.memory(evidenceBytes[index], width: 68, height: 68, fit: BoxFit.cover),
+                              ),
+                              Positioned(
+                                top: 3,
+                                right: 3,
+                                child: InkWell(
+                                  onTap: () => setState(() { evidenceBytes.removeAt(index); if (index < evidenceNames.length) evidenceNames.removeAt(index); }),
+                                  child: Container(width: 21, height: 21, decoration: const BoxDecoration(color: Color(0xCC0B1D4D), shape: BoxShape.circle), child: const Icon(Icons.close_rounded, color: Colors.white, size: 14)),
                                 ),
                               ),
-                      ),
-                      const SizedBox(width: 13),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              evidenceBytes == null
-                                  ? 'Subir evidencia (foto)'
-                                  : 'Evidencia lista para envío',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'Figtree',
-                              ),
-                            ),
-                            const Text(
-                              'Toma una foto con la cámara del problema',
-                              style: TextStyle(
-                                color: Color(0xFFB9D4FF),
-                                fontSize: 10.5,
-                                fontFamily: 'Figtree',
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                      if (evidenceBytes != null)
-                        InkWell(
-                          onTap: () => setState(() {
-                            evidenceBytes = null;
-                            evidenceFile = null;
-                          }),
-                          child: const Icon(Icons.close_rounded,
-                              color: Colors.white70, size: 18),
-                        ),
                     ],
-                  ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),

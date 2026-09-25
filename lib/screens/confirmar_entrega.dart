@@ -7,6 +7,7 @@ import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
+import '../widgets/incident_sheet.dart';
 import 'home_conductor.dart';
 
 class ConfirmarEntrega extends StatefulWidget {
@@ -40,6 +41,19 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
     }
     setState(() => updating = true);
     try {
+      if (picked == 'No entregado') {
+        final incident = await showIncidentSheet(
+          context,
+          tripId: widget.trip.id,
+          driverName: widget.trip.driver,
+          clientName: widget.trip.client,
+        );
+        if (!mounted) return;
+        if (incident == null) {
+          setState(() => updating = false);
+          return;
+        }
+      }
       await apiClient.updateTripStatus(
         widget.trip.id,
         picked == 'Entregado con éxito' ? 'Completado' : 'Cancelado',
