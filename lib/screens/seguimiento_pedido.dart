@@ -19,7 +19,8 @@ import 'finalizar_viaje.dart';
 import 'inicio.dart';
 
 class SeguimientoPedido extends StatefulWidget {
-  const SeguimientoPedido({super.key, required this.trip, this.closeable = true});
+  const SeguimientoPedido(
+      {super.key, required this.trip, this.closeable = true});
 
   final Trip trip;
   final bool closeable;
@@ -94,12 +95,14 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             behavior: SnackBarBehavior.floating,
             content: Row(
               children: [
-                const Icon(Icons.notifications_active_rounded, color: cyan, size: 19),
+                const Icon(Icons.notifications_active_rounded,
+                    color: cyan, size: 19),
                 const SizedBox(width: 9),
                 Expanded(
                   child: Text(
                     'El envío cambió a estado: ${data.status}',
-                    style: const TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                        fontFamily: 'Figtree', fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
@@ -143,7 +146,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       SnackBar(
         backgroundColor: const Color(0xFF0B1D4D),
         behavior: SnackBarBehavior.floating,
-        content: Text(confirmation, style: const TextStyle(fontFamily: 'Figtree')),
+        content:
+            Text(confirmation, style: const TextStyle(fontFamily: 'Figtree')),
       ),
     );
   }
@@ -153,10 +157,16 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       final data = await apiClient.getTracking(widget.trip.id);
       final url = data.shareUrl ??
           'https://plt-webadmin23-testing.vercel.app/track/${Uri.encodeComponent(widget.trip.id)}';
-      final phone = (widget.trip.contactPhone ?? '').replaceAll(RegExp(r'\D'), '');
-      final message = 'Hola, te comparto el seguimiento de mi envío ${widget.trip.id} (${widget.trip.origin} → ${widget.trip.destination}). Ubicación en vivo: $url';
-      final waTarget = phone.isEmpty ? 'https://wa.me/?text=' : 'https://wa.me/${phone.startsWith('505') ? phone : '505$phone'}?text=';
-      if (!kIsWeb && (await launchUrl(Uri.parse('$waTarget${Uri.encodeComponent(message)}')))) {
+      final phone =
+          (widget.trip.contactPhone ?? '').replaceAll(RegExp(r'\D'), '');
+      final message =
+          'Hola, te comparto el seguimiento de mi envío ${widget.trip.id} (${widget.trip.origin} → ${widget.trip.destination}). Ubicación en vivo: $url';
+      final waTarget = phone.isEmpty
+          ? 'https://wa.me/?text='
+          : 'https://wa.me/${phone.startsWith('505') ? phone : '505$phone'}?text=';
+      if (!kIsWeb &&
+          (await launchUrl(
+              Uri.parse('$waTarget${Uri.encodeComponent(message)}')))) {
         return;
       }
       if (!mounted) return;
@@ -254,11 +264,14 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
 
   Future<BitmapDescriptor> _buildDriverMarkerIcon(String? value) async {
     final normalized = (value ?? '').toLowerCase();
-    final vehicleIcon = normalized.contains('moto') || normalized.contains('scooter')
-        ? Icons.two_wheeler_rounded
-        : normalized.contains('camion') || normalized.contains('camión') || normalized.contains('truck')
-            ? Icons.local_shipping_rounded
-            : Icons.directions_car_filled_rounded;
+    final vehicleIcon =
+        normalized.contains('moto') || normalized.contains('scooter')
+            ? Icons.two_wheeler_rounded
+            : normalized.contains('camion') ||
+                    normalized.contains('camión') ||
+                    normalized.contains('truck')
+                ? Icons.local_shipping_rounded
+                : Icons.directions_car_filled_rounded;
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
     const center = Offset(64, 64);
@@ -278,13 +291,17 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    painter.paint(canvas, Offset(center.dx - painter.width / 2, center.dy - painter.height / 2));
-    canvas.drawCircle(const Offset(103, 22), 11, Paint()..color = const Color(0xFF21C88A));
+    painter.paint(canvas,
+        Offset(center.dx - painter.width / 2, center.dy - painter.height / 2));
+    canvas.drawCircle(
+        const Offset(103, 22), 11, Paint()..color = const Color(0xFF21C88A));
     canvas.drawCircle(const Offset(103, 22), 7, Paint()..color = Colors.white);
     final image = await recorder.endRecording().toImage(128, 128);
     final bytes = await image.toByteData(format: ImageByteFormat.png);
-    if (bytes == null) return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
-    return BitmapDescriptor.fromBytes(bytes.buffer.asUint8List(), size: const Size(56, 56));
+    if (bytes == null)
+      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+    return BitmapDescriptor.fromBytes(bytes.buffer.asUint8List(),
+        size: const Size(56, 56));
   }
 
   Future<void> _loadRoadRoute() async {
@@ -303,8 +320,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     var routingOriginLng = trip.originLng!;
     try {
       final serverTracking = await tracking;
-      routingOriginLat = serverTracking.driverLocation?.latitude ?? routingOriginLat;
-      routingOriginLng = serverTracking.driverLocation?.longitude ?? routingOriginLng;
+      routingOriginLat =
+          serverTracking.driverLocation?.latitude ?? routingOriginLat;
+      routingOriginLng =
+          serverTracking.driverLocation?.longitude ?? routingOriginLng;
       if (serverTracking.routeProvider == 'google' &&
           serverTracking.route.length >= 2) {
         final points = serverTracking.route
@@ -335,7 +354,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     );
     final requests = <Uri>[];
     if (mapsKey.isNotEmpty) {
-      requests.add(Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
+      requests
+          .add(Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
         'origin': '$routingOriginLat,$routingOriginLng',
         'destination': '${trip.destinationLat},${trip.destinationLng}',
         'mode': 'driving',
@@ -369,8 +389,14 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             for (final leg in legs.whereType<Map>()) {
               final distance = leg['distance'];
               final duration = leg['duration_in_traffic'] ?? leg['duration'];
-              meters += (distance is Map ? (distance['value'] as num?)?.toDouble() : null) ?? 0;
-              seconds += (duration is Map ? (duration['value'] as num?)?.toInt() : null) ?? 0;
+              meters += (distance is Map
+                      ? (distance['value'] as num?)?.toDouble()
+                      : null) ??
+                  0;
+              seconds += (duration is Map
+                      ? (duration['value'] as num?)?.toInt()
+                      : null) ??
+                  0;
             }
             if (meters > 0) _routeDistanceKm = meters / 1000;
             if (seconds > 0) _routeDurationSeconds = seconds;
@@ -391,7 +417,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     (pair[0] as num).toDouble(),
                   ))
               .toList();
-          final route = routes is List && routes.isNotEmpty ? routes.first : null;
+          final route =
+              routes is List && routes.isNotEmpty ? routes.first : null;
           if (route is Map) {
             _routeDistanceKm = (route['distance'] as num?)?.toDouble() == null
                 ? null
@@ -449,10 +476,13 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         if (steps is! List) continue;
         for (final step in steps.whereType<Map>()) {
           final polyline = step['polyline'];
-          final encoded = polyline is Map ? polyline['points']?.toString() : null;
+          final encoded =
+              polyline is Map ? polyline['points']?.toString() : null;
           if (encoded == null || encoded.isEmpty) continue;
           final decoded = _decodePolyline(encoded);
-          if (points.isNotEmpty && decoded.isNotEmpty && points.last == decoded.first) {
+          if (points.isNotEmpty &&
+              decoded.isNotEmpty &&
+              points.last == decoded.first) {
             points.addAll(decoded.skip(1));
           } else {
             points.addAll(decoded);
@@ -463,7 +493,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     if (points.length >= 2) return points;
     final overview = route['overview_polyline'];
     final encoded = overview is Map ? overview['points']?.toString() : null;
-    return encoded == null || encoded.isEmpty ? const [] : _decodePolyline(encoded);
+    return encoded == null || encoded.isEmpty
+        ? const []
+        : _decodePolyline(encoded);
   }
 
   void _fitRoute(List<LatLng> points) {
@@ -616,7 +648,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(22),
                   ),
-                    child: BackdropFilter(
+                  child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 34, sigmaY: 34),
                     child: Container(
                       decoration: BoxDecoration(
@@ -654,7 +686,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   Widget _buildGoogleMap() {
     final height = MediaQuery.sizeOf(context).height;
     return GoogleMap(
-      initialCameraPosition: CameraPosition(target: _initialMapCenter, zoom: 12.8),
+      initialCameraPosition:
+          CameraPosition(target: _initialMapCenter, zoom: 12.8),
       // La hoja inferior ocupa la parte baja del mapa. Este padding hace que
       // la ruta quede centrada en el área visible y no detrás del glass.
       padding: EdgeInsets.only(top: 116, bottom: height * .59),
@@ -688,7 +721,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         final driverVehicle = liveData?.driverVehicle ?? 'Vehículo asignado';
         final driverPlate = liveData?.driverPlate ?? 'Placa pendiente';
         final driverPhoto = liveData?.driverPhoto ?? trip.driverPhoto;
-        final currentLocation = liveData?.currentLocationLabel ?? trip.destination;
+        final currentLocation =
+            liveData?.currentLocationLabel ?? trip.destination;
         if (liveData != null) _syncMapData(liveData);
         return ListView(
           controller: scrollController,
@@ -710,7 +744,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
               Container(
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                    color: Colors.white, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
               Text(
@@ -765,9 +800,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             Container(
               padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
               decoration: BoxDecoration(
-                 color: Colors.transparent,
+                color: Colors.transparent,
                 borderRadius: BorderRadius.circular(13),
-                 border: Border.all(color: Colors.transparent),
+                border: Border.all(color: Colors.transparent),
               ),
               child: Row(
                 children: [
@@ -775,19 +810,35 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Código de Seguimiento', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 10.5, letterSpacing: .6, fontWeight: FontWeight.w700, fontFamily: 'Figtree')),
+                        Text('Código de Seguimiento',
+                            style: TextStyle(
+                                color: Color(0xFFB9D4FF),
+                                fontSize: 10.5,
+                                letterSpacing: .6,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'Figtree')),
                         SizedBox(height: 3),
-                        Text('Guía: ${trip.id}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+                        Text('Guía: ${trip.id}',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Figtree')),
                       ],
                     ),
                   ),
                   _MiniBtn(
                     asset: 'copiar.png',
                     label: 'Copiar',
-                    onTap: () => _copyText(trip.id, 'Código de seguimiento copiado'),
+                    onTap: () =>
+                        _copyText(trip.id, 'Código de seguimiento copiado'),
                   ),
                   const SizedBox(width: 6),
-                  _MiniBtn(asset: 'compartir.png', label: 'Compartir', filled: true, onTap: () => _shareTracking()),
+                  _MiniBtn(
+                      asset: 'compartir.png',
+                      label: 'Compartir',
+                      filled: true,
+                      onTap: () => _shareTracking()),
                 ],
               ),
             ),
@@ -796,9 +847,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             Container(
               padding: const EdgeInsets.symmetric(vertical: 4),
               decoration: BoxDecoration(
-                 color: Colors.transparent,
+                color: Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
-                 border: Border.all(color: Colors.transparent),
+                border: Border.all(color: Colors.transparent),
               ),
               child: Row(
                 children: [
@@ -808,38 +859,64 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                      Text(
+                        Text(
                           driverName,
-                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree'),
                         ),
-                        Text(driverVehicle, style: const TextStyle(color: Color(0xFFB9D4FF), fontSize: 12, fontFamily: 'Figtree')),
+                        Text(driverVehicle,
+                            style: const TextStyle(
+                                color: Color(0xFFB9D4FF),
+                                fontSize: 12,
+                                fontFamily: 'Figtree')),
                         Container(
                           margin: const EdgeInsets.only(top: 3),
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: .10),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: glassBorder),
                           ),
-                          child: Text(driverPlate, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+                          child: Text(driverPlate,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Figtree')),
                         ),
                       ],
                     ),
                   ),
-                  RoundBtn(asset: 'llamada.png', onTap: () => _callDriver(liveData?.driverPhone ?? trip.contactPhone)),
+                  RoundBtn(
+                      asset: 'llamada.png',
+                      onTap: () => _callDriver(
+                          liveData?.driverPhone ?? trip.contactPhone)),
                   const SizedBox(width: 7),
-                  RoundBtn(asset: 'mensaje.png', filled: true, onTap: () => _shareWhatsApp()),
+                  RoundBtn(
+                      asset: 'mensaje.png',
+                      filled: true,
+                      onTap: () => _shareWhatsApp()),
                 ],
               ),
             ),
             const SizedBox(height: 8),
-            const Text('Estado de envío', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700, fontFamily: 'Figtree')),
+            const Text('Estado de envío',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Figtree')),
             const SizedBox(height: 8),
             _StepsRow(status: currentStatus),
             const SizedBox(height: 12),
             if (isActive)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(14),
@@ -847,7 +924,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline_rounded, color: cyan, size: 19),
+                    const Icon(Icons.info_outline_rounded,
+                        color: cyan, size: 19),
                     const SizedBox(width: 9),
                     Expanded(
                       child: Text(
@@ -865,8 +943,36 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                   ],
                 ),
               ),
-            if (currentStatus == 'Completado')
-              const SizedBox(height: 12),
+
+            // --- CAMBIO PARA PRUEBAS: 'true' hace que el botón siempre sea visible ---
+            if (true) const SizedBox(height: 12),
+            if (true)
+              SizedBox(
+                height: 48,
+                child: Material(
+                  color: accentBlue,
+                  borderRadius: BorderRadius.circular(26),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(26),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => FinalizarViaje(trip: trip)),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Ver detalle de entrega',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree'),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            if (currentStatus == 'Completado') const SizedBox(height: 12),
             if (currentStatus == 'Completado')
               SizedBox(
                 height: 48,
@@ -876,12 +982,17 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(26),
                     onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => FinalizarViaje(trip: trip)),
+                      MaterialPageRoute(
+                          builder: (_) => FinalizarViaje(trip: trip)),
                     ),
                     child: const Center(
                       child: Text(
                         'Ver detalle de entrega',
-                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree'),
                       ),
                     ),
                   ),
@@ -973,7 +1084,8 @@ class _DriverAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(colors: [Color(0xFF0D47D9), Color(0xFF083EC0)]),
+        gradient:
+            LinearGradient(colors: [Color(0xFF0D47D9), Color(0xFF083EC0)]),
       ),
       child: photo == null || photo.isEmpty
           ? Text(
@@ -1044,14 +1156,23 @@ class _CardPill extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
+        style: TextStyle(
+            color: color,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Figtree'),
       ),
     );
   }
 }
 
 class _MiniBtn extends StatelessWidget {
-  const _MiniBtn({this.icon, this.asset, required this.label, this.filled = false, this.onTap});
+  const _MiniBtn(
+      {this.icon,
+      this.asset,
+      required this.label,
+      this.filled = false,
+      this.onTap});
   final IconData? icon;
   final String? asset;
   final String label;
@@ -1063,22 +1184,29 @@ class _MiniBtn extends StatelessWidget {
     return InkWell(
       onTap: onTap ?? () {},
       borderRadius: BorderRadius.circular(9),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: filled ? figmaBlue : Colors.white.withValues(alpha: .08),
-          borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: filled ? figmaBlue : glassBorder),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            asset != null
-                ? _AssetIcon(asset!, size: 15)
-                : Icon(icon, color: Colors.white, size: 15),
-            const SizedBox(width: 5),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700, fontFamily: 'Figtree')),
-          ],
+      child: CustomPaint(
+        foregroundPainter: _TrackingGlassBorderPainter(selected: filled),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: filled ? figmaBlue : Colors.white.withValues(alpha: .08),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              asset != null
+                  ? _AssetIcon(asset!, size: 15)
+                  : Icon(icon, color: Colors.white, size: 15),
+              const SizedBox(width: 5),
+              Text(label,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree')),
+            ],
+          ),
         ),
       ),
     );
@@ -1086,7 +1214,8 @@ class _MiniBtn extends StatelessWidget {
 }
 
 class RoundBtn extends StatelessWidget {
-  const RoundBtn({this.icon, this.asset, required this.onTap, this.filled = false});
+  const RoundBtn(
+      {this.icon, this.asset, required this.onTap, this.filled = false});
   final IconData? icon;
   final String? asset;
   final VoidCallback onTap;
@@ -1106,26 +1235,68 @@ class RoundBtn extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: filled ? accentBlue : Colors.white.withValues(alpha: .09),
-              border: Border.all(
-                  color: filled ? accentBlue : glassBorder),
             ),
-             child: asset != null
-                 ? Center(
-                     child: SizedBox(
-                       width: asset == 'mensaje.png' ? 17 : 18,
-                       height: asset == 'mensaje.png' ? 17 : 18,
-                       child: _AssetIcon(
-                         asset!,
-                         size: asset == 'mensaje.png' ? 17 : 18,
-                       ),
-                     ),
-                   )
-                : Icon(icon, color: Colors.white, size: 21),
+            child: CustomPaint(
+              foregroundPainter:
+                  const _TrackingGlassBorderPainter(circular: true),
+              child: asset != null
+                  ? Center(
+                      child: SizedBox(
+                        width: asset == 'mensaje.png' ? 17 : 18,
+                        height: asset == 'mensaje.png' ? 17 : 18,
+                        child: _AssetIcon(
+                          asset!,
+                          size: asset == 'mensaje.png' ? 17 : 18,
+                        ),
+                      ),
+                    )
+                  : Icon(icon, color: Colors.white, size: 21),
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+class _TrackingGlassBorderPainter extends CustomPainter {
+  const _TrackingGlassBorderPainter(
+      {this.selected = false, this.circular = false});
+
+  final bool selected;
+  final bool circular;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: selected
+            ? [
+                Colors.white.withValues(alpha: .68),
+                cyan.withValues(alpha: .86),
+                Colors.white.withValues(alpha: .42),
+              ]
+            : [
+                Colors.white.withValues(alpha: .52),
+                Colors.white.withValues(alpha: .18),
+                const Color(0x667EA5D8),
+              ],
+      ).createShader(rect);
+    final radius = circular ? size.shortestSide / 2 : 9.0;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect.deflate(.55), Radius.circular(radius)),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrackingGlassBorderPainter oldDelegate) =>
+      oldDelegate.selected != selected || oldDelegate.circular != circular;
 }
 
 class _StepsRow extends StatelessWidget {
@@ -1158,8 +1329,8 @@ class _StepsRow extends StatelessWidget {
                   color: i < _done
                       ? figmaBlue
                       : Colors.white.withValues(alpha: .10),
-                  border: Border.all(
-                      color: i < _done ? figmaBlue : Colors.white24),
+                  border:
+                      Border.all(color: i < _done ? figmaBlue : Colors.white24),
                 ),
                 child: const Icon(Icons.circle, color: Colors.white, size: 7),
               ),
@@ -1215,8 +1386,11 @@ class _LiveMapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFE8ECF2));
-    final streetThin = Paint()..color = Colors.white..strokeWidth = 13;
+    canvas.drawRect(
+        Offset.zero & size, Paint()..color = const Color(0xFFE8ECF2));
+    final streetThin = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 13;
     final grid = [
       (Offset(0, size.height * .20), Offset(size.width, size.height * .18)),
       (Offset(0, size.height * .56), Offset(size.width, size.height * .60)),
@@ -1225,7 +1399,8 @@ class _LiveMapPainter extends CustomPainter {
       (Offset(size.width * .82, 0), Offset(size.width * .78, size.height)),
     ];
     for (final (from, to) in grid) canvas.drawLine(from, to, streetThin);
-    canvas.drawLine(Offset(-20, size.height * .86), Offset(size.width * .8, size.height * .82), streetThin);
+    canvas.drawLine(Offset(-20, size.height * .86),
+        Offset(size.width * .8, size.height * .82), streetThin);
 
     final points = route.length >= 2
         ? _projectRoute(route, size)
@@ -1239,7 +1414,14 @@ class _LiveMapPainter extends CustomPainter {
           ];
     final path = Path()..moveTo(points.first.dx, points.first.dy);
     for (final p in points.skip(1)) path.lineTo(p.dx, p.dy);
-    canvas.drawPath(path, Paint()..color = const Color(0xFF1D5CFF)..style = PaintingStyle.stroke..strokeWidth = 6..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = const Color(0xFF1D5CFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round);
 
     // Conductor: posición real del GPS reportado, o animación de respaldo
     Offset pos;
@@ -1254,19 +1436,31 @@ class _LiveMapPainter extends CustomPainter {
     } else {
       pos = points[1 + ((progress * 4).round().clamp(0, 4))];
     }
-    canvas.drawCircle(pos, 26, Paint()..color = const Color(0xFF1D5CFF).withValues(alpha: .16));
+    canvas.drawCircle(pos, 26,
+        Paint()..color = const Color(0xFF1D5CFF).withValues(alpha: .16));
     canvas.drawCircle(pos, 14, Paint()..color = const Color(0xFF1D5CFF));
-    canvas.drawCircle(pos, 14, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 3);
+    canvas.drawCircle(
+        pos,
+        14,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3);
     final arrow = Path()
       ..moveTo(pos.dx, pos.dy - 7)
       ..lineTo(pos.dx - 5.5, pos.dy + 5)
       ..lineTo(pos.dx, pos.dy + 2)
       ..lineTo(pos.dx + 5.5, pos.dy + 5)
       ..close();
-    canvas.drawPath(arrow, Paint()..color = Colors.white..style = PaintingStyle.fill);
+    canvas.drawPath(
+        arrow,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.fill);
     // Destino
     final dest = points.last;
-    canvas.drawCircle(dest, 15, Paint()..color = const Color(0xFFE5484D).withValues(alpha: .18));
+    canvas.drawCircle(dest, 15,
+        Paint()..color = const Color(0xFFE5484D).withValues(alpha: .18));
     canvas.drawCircle(dest, 9, Paint()..color = const Color(0xFFE5484D));
     canvas.drawCircle(dest, 3.5, Paint()..color = Colors.white);
   }
@@ -1280,10 +1474,14 @@ class _LiveMapPainter extends CustomPainter {
       oldDelegate.live != live;
 
   List<Offset> _projectRoute(List<TrackingPoint> points, Size size) {
-    return points.map((point) => _projectRoutePoint(points, point.latitude, point.longitude, size)).toList();
+    return points
+        .map((point) =>
+            _projectRoutePoint(points, point.latitude, point.longitude, size))
+        .toList();
   }
 
-  Offset _projectRoutePoint(List<TrackingPoint> points, double latitude, double longitude, Size size) {
+  Offset _projectRoutePoint(List<TrackingPoint> points, double latitude,
+      double longitude, Size size) {
     final latitudes = points.map((point) => point.latitude).toList();
     final longitudes = points.map((point) => point.longitude).toList();
     final minLat = latitudes.reduce(math.min);

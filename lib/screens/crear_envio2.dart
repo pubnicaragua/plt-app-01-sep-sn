@@ -58,6 +58,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   late int weight;
   late String weightUnit;
   late int bundles;
+  late String truckType;
   late final TextEditingController description;
   late final TextEditingController invoicePrice;
   late final TextEditingController invoiceNumber;
@@ -83,6 +84,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     weight = widget.weight.clamp(1, 1500).toInt();
     weightUnit = widget.weightUnit == 'lb' ? 'lb' : 'kg';
     bundles = widget.bundles.clamp(1, 99).toInt();
+    truckType = _truckTypes.first.label;
+    fragile = widget.transport == 'Vehículo' || widget.transport == 'Camión';
     description = TextEditingController();
     invoicePrice = TextEditingController();
     invoiceNumber = TextEditingController();
@@ -212,6 +215,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       return;
     }
     final extraDescription = [
+      if (widget.transport == 'Camión') 'Tipo de camión: $truckType',
       if (needsAdditional) 'Servicio adicional: $additionalOption',
       if (additionalNotes.text.trim().isNotEmpty)
         'Indicaciones: ${additionalNotes.text.trim()}',
@@ -271,7 +275,22 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(12, 9, 12, 18),
                   children: [
-                    _PageHeader(onBack: () => Navigator.of(context).pop()),
+                    _PageHeader(
+                      title: widget.transport == 'Moto'
+                          ? 'Motos'
+                          : widget.transport == 'Vehículo'
+                              ? 'Autos'
+                              : 'Carga',
+                      onBack: () => Navigator.of(context).pop(),
+                    ),
+                    if (widget.transport == 'Camión') ...[
+                      const SizedBox(height: 12),
+                      _TruckTypeSelector(
+                        selected: truckType,
+                        onChanged: (value) => setState(() => truckType = value),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     const SizedBox(height: 14),
                     const _FormSectionTitle(
                       icon: Icons.inventory_2_outlined,
@@ -320,6 +339,11 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                     ),
                     const SizedBox(height: 14),
                     _additionalBlock(),
+                    if (widget.transport == 'Vehículo' ||
+                        widget.transport == 'Camión') ...[
+                      const SizedBox(height: 14),
+                      _fragileBlock(),
+                    ],
                     const SizedBox(height: 12),
                     _productPhotosBlock(),
                   ],
@@ -344,6 +368,14 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   Widget _additionalBlock() {
+    if (widget.transport == 'Camión') {
+      return _cargoAdditionalBlock();
+    }
+
+    return _standardAdditionalBlock();
+  }
+
+  Widget _standardAdditionalBlock() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -390,8 +422,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: 'Ida y vuelta',
                 subtitle: 'Regreso al origen',
                 price: 'C\$40 USD',
-                selected:
-                    needsAdditional && additionalOption == 'Ida y vuelta',
+                selected: needsAdditional && additionalOption == 'Ida y vuelta',
                 enabled: true,
                 onTap: () => setState(() {
                   needsAdditional = true;
@@ -410,8 +441,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: 'Seguro',
                 subtitle: 'Asegura tu producto',
                 price: 'C\$40 USD',
-                selected:
-                    needsAdditional && additionalOption == 'Seguro',
+                selected: needsAdditional && additionalOption == 'Seguro',
                 enabled: true,
                 onTap: () => setState(() {
                   needsAdditional = true;
@@ -432,6 +462,137 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 onTap: () => setState(() {
                   needsAdditional = true;
                   additionalOption = 'Espera en destino';
+                }),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _cargoAdditionalBlock() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _FormSectionTitle(
+                icon: Icons.settings_outlined,
+                title: '¿Necesitas algo adicional?',
+              ),
+            ),
+            const Text(
+              '(Opcional)',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 9),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/carga_ayudante.png',
+                title: 'Ayudante',
+                subtitle: 'Para carga y descarga',
+                price: 'C\$40 USD',
+                selected: needsAdditional && additionalOption == 'Ayudante',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = 'Ayudante';
+                }),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_destinos.png',
+                title: 'Varios destinos',
+                subtitle: 'Múltiples destinos',
+                price: 'C\$40 USD',
+                selected:
+                    needsAdditional && additionalOption == 'Varios destinos',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = 'Varios destinos';
+                }),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_regreso.png',
+                title: 'Ida y vuelta',
+                subtitle: 'Regreso al origen',
+                price: 'C\$40 USD',
+                selected: needsAdditional && additionalOption == 'Ida y vuelta',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = 'Ida y vuelta';
+                }),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_espera.png',
+                title: 'Espera en destino',
+                subtitle: '6 horas espera',
+                price: 'C\$40 USD',
+                selected:
+                    needsAdditional && additionalOption == 'Espera en destino',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = 'Espera en destino';
+                }),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_seguro.png',
+                title: 'Seguro',
+                subtitle: 'Asegura tu producto',
+                price: 'C\$40 USD',
+                selected: needsAdditional && additionalOption == 'Seguro',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = 'Seguro';
+                }),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/carga_mas_camiones.png',
+                title: '¿Más camiones?',
+                subtitle: 'Escoge tu producto',
+                price: 'C\$40 USD',
+                selected:
+                    needsAdditional && additionalOption == '¿Más camiones?',
+                enabled: true,
+                onTap: () => setState(() {
+                  needsAdditional = true;
+                  additionalOption = '¿Más camiones?';
                 }),
               ),
             ),
@@ -567,14 +728,25 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          '¿El producto es frágil?',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            fontFamily: 'Figtree',
-          ),
+        Row(
+          children: [
+            Image.asset(
+              'assets/img/HomeCliente/carga_fragil.png',
+              width: 15,
+              height: 15,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              '¿El producto es frágil?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ],
         ),
         _AdditionalSwitch(
           value: fragile,
@@ -595,7 +767,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 GestureDetector(
-                  onTap: productPhotos.length >= 5 ? null : _chooseProductSource,
+                  onTap:
+                      productPhotos.length >= 5 ? null : _chooseProductSource,
                   child: CustomPaint(
                     foregroundPainter: _DashedBorderPainter(
                       color: cyan.withValues(alpha: .78),
@@ -851,6 +1024,171 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 }
 
+class _TruckTypeData {
+  const _TruckTypeData({
+    required this.label,
+    required this.asset,
+    required this.description,
+  });
+
+  final String label;
+  final String asset;
+  final String description;
+}
+
+const _truckTypes = [
+  _TruckTypeData(
+    label: 'Camión extra pequeño',
+    asset: 'assets/img/HomeCliente/carga_extra_pequeno.png',
+    description: 'Ideal para cuando transportas múltiples cajas. Máx. 300 kg',
+  ),
+  _TruckTypeData(
+    label: 'Minivan/pickup',
+    asset: 'assets/img/HomeCliente/carga_minivan.png',
+    description: 'Para muebles pequeños y cargas medianas.',
+  ),
+  _TruckTypeData(
+    label: 'Camión mediano',
+    asset: 'assets/img/HomeCliente/carga_mediano.png',
+    description: 'Más espacio para electrodomésticos y mobiliario.',
+  ),
+  _TruckTypeData(
+    label: 'Camión grande',
+    asset: 'assets/img/HomeCliente/carga_grande.png',
+    description: 'Para cargas voluminosas y pesadas.',
+  ),
+];
+
+class _TruckTypeSelector extends StatelessWidget {
+  const _TruckTypeSelector({required this.selected, required this.onChanged});
+
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedType = _truckTypes.firstWhere(
+      (type) => type.label == selected,
+      orElse: () => _truckTypes.first,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Image.asset(
+              'assets/img/HomeCliente/carga_tipo_camion.png',
+              width: 21,
+              height: 21,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Tipo de camiones',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        CustomPaint(
+          foregroundPainter: const _FormGlassEdgePainter(radius: 14),
+          child: Container(
+            height: 286,
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: Image.asset(
+                    selectedType.asset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+                Text(
+                  selectedType.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    height: 1.15,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        for (final type in _truckTypes) ...[
+          GestureDetector(
+            onTap: () => onChanged(type.label),
+            child: CustomPaint(
+              foregroundPainter: _FormGlassEdgePainter(
+                radius: 12,
+                selected: type.label == selected,
+              ),
+              child: Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: type.label == selected
+                      ? accentBlue.withValues(alpha: .78)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        type.label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                    ),
+                    const Text(
+                      'C\$40 USD',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Icon(
+                      type.label == selected
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (type != _truckTypes.last) const SizedBox(height: 7),
+        ],
+      ],
+    );
+  }
+}
+
 class _FormSectionTitle extends StatelessWidget {
   const _FormSectionTitle({required this.icon, required this.title});
 
@@ -877,6 +1215,44 @@ class _FormSectionTitle extends StatelessWidget {
       ],
     );
   }
+}
+
+class _FormGlassEdgePainter extends CustomPainter {
+  const _FormGlassEdgePainter({required this.radius, this.selected = false});
+
+  final double radius;
+  final bool selected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.15
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: selected
+            ? [
+                cyan.withValues(alpha: .95),
+                Colors.white.withValues(alpha: .42),
+                cyan.withValues(alpha: .75)
+              ]
+            : [
+                Colors.white.withValues(alpha: .48),
+                Colors.white.withValues(alpha: .10),
+                const Color(0x667EA5D8)
+              ],
+      ).createShader(rect);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect.deflate(.6), Radius.circular(radius)),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _FormGlassEdgePainter oldDelegate) =>
+      oldDelegate.radius != radius || oldDelegate.selected != selected;
 }
 
 class _InputPill extends StatelessWidget {
@@ -907,60 +1283,64 @@ class _InputPill extends StatelessWidget {
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 180),
       opacity: enabled ? 1 : .48,
-      child: Container(
-        constraints: BoxConstraints(minHeight: compact ? 38 : (maxLines > 1 ? 52 : 45)),
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 2 : 4),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .10),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: Colors.white.withValues(alpha: .20)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            if (iconAsset != null)
-              Image.asset(
-                iconAsset!,
-                width: 21,
-                height: 21,
-                fit: BoxFit.contain,
-              )
-            else
-              Icon(icon, color: Colors.white, size: 19),
-            const SizedBox(width: 7),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                enabled: enabled,
-                maxLines: maxLines,
-                keyboardType: keyboardType,
-                textInputAction: textInputAction,
-                textAlignVertical: TextAlignVertical.center,
-                strutStyle: const StrutStyle(
-                  height: 1,
-                  forceStrutHeight: true,
-                ),
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: compact ? 10.5 : 11.5,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Figtree',
-                ),
-                decoration: InputDecoration(
-                  hintText: label,
-                  hintStyle: const TextStyle(
-                    color: Color(0xD9FFFFFF),
-                    fontSize: 10,
+      child: CustomPaint(
+        foregroundPainter: const _FormGlassEdgePainter(radius: 22),
+        child: Container(
+          constraints: BoxConstraints(
+              minHeight: compact ? 38 : (maxLines > 1 ? 52 : 45)),
+          padding:
+              EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 2 : 4),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (iconAsset != null)
+                Image.asset(
+                  iconAsset!,
+                  width: 21,
+                  height: 21,
+                  fit: BoxFit.contain,
+                )
+              else
+                Icon(icon, color: Colors.white, size: 19),
+              const SizedBox(width: 7),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  enabled: enabled,
+                  maxLines: maxLines,
+                  keyboardType: keyboardType,
+                  textInputAction: textInputAction,
+                  textAlignVertical: TextAlignVertical.center,
+                  strutStyle: const StrutStyle(
+                    height: 1,
+                    forceStrutHeight: true,
+                  ),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: compact ? 10.5 : 11.5,
+                    fontWeight: FontWeight.w700,
                     fontFamily: 'Figtree',
                   ),
-                  border: InputBorder.none,
-                  isDense: true,
-                  isCollapsed: true,
-                  contentPadding: EdgeInsets.zero,
+                  decoration: InputDecoration(
+                    hintText: label,
+                    hintStyle: const TextStyle(
+                      color: Color(0xD9FFFFFF),
+                      fontSize: 10,
+                      fontFamily: 'Figtree',
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    isCollapsed: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1045,77 +1425,80 @@ class _AdditionalOptionCard extends StatelessWidget {
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 180),
         opacity: enabled ? 1 : .42,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          height: 58,
-          padding: const EdgeInsets.fromLTRB(9, 7, 7, 7),
-          decoration: BoxDecoration(
-            color: selected
-                ? accentBlue.withValues(alpha: .78)
-                : Colors.white.withValues(alpha: .10),
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(
-              color: selected ? cyan : Colors.white.withValues(alpha: .15),
-            ),
+        child: CustomPaint(
+          foregroundPainter: _FormGlassEdgePainter(
+            radius: 11,
+            selected: selected,
           ),
-          child: Row(
-            children: [
-              if (iconAsset != null)
-                Image.asset(
-                  iconAsset!,
-                  width: 23,
-                  height: 23,
-                  fit: BoxFit.contain,
-                )
-              else
-                Icon(icon, color: Colors.white, size: 20),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Figtree',
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 58,
+            padding: const EdgeInsets.fromLTRB(9, 7, 7, 7),
+            decoration: BoxDecoration(
+              color: selected
+                  ? accentBlue.withValues(alpha: .78)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Row(
+              children: [
+                if (iconAsset != null)
+                  Image.asset(
+                    iconAsset!,
+                    width: 23,
+                    height: 23,
+                    fit: BoxFit.contain,
+                  )
+                else
+                  Icon(icon, color: Colors.white, size: 20),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        ),
                       ),
-                    ),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xD9FFFFFF),
-                        fontSize: 7.2,
-                        fontFamily: 'Figtree',
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xD9FFFFFF),
+                          fontSize: 7.2,
+                          fontFamily: 'Figtree',
+                        ),
                       ),
-                    ),
-                    Text(
-                      price,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 7.5,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Figtree',
+                      Text(
+                        price,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 7.5,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Figtree',
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Icon(
-                selected
-                    ? Icons.check_circle_rounded
-                    : Icons.radio_button_unchecked_rounded,
-                color: Colors.white.withValues(alpha: enabled ? .95 : .25),
-                size: 15,
-              ),
-            ],
+                Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  color: Colors.white.withValues(alpha: enabled ? .95 : .25),
+                  size: 15,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1158,8 +1541,9 @@ class _DashedBorderPainter extends CustomPainter {
 }
 
 class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.onBack});
+  const _PageHeader({required this.title, required this.onBack});
 
+  final String title;
   final VoidCallback onBack;
 
   @override
@@ -1174,9 +1558,9 @@ class _PageHeader extends StatelessWidget {
               color: Colors.white, size: 23),
         ),
         const SizedBox(width: 5),
-        const Expanded(
+        Expanded(
           child: Text(
-            'Detalles',
+            title,
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -1185,7 +1569,7 @@ class _PageHeader extends StatelessWidget {
             ),
           ),
         ),
-         const _StepPill(text: 'Paso 1'),
+        const _StepPill(text: 'Paso 1'),
       ],
     );
   }

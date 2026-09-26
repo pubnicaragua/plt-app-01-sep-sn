@@ -61,7 +61,7 @@ class _HomeClienteState extends State<HomeCliente> {
             SafeArea(
               bottom: false,
               child: Padding(
-                padding: EdgeInsets.only(bottom: 110 + safeBottom),
+                padding: EdgeInsets.only(bottom: 24 + safeBottom),
                 child: Column(
                   children: [
                     const CorteBanner(),
@@ -121,7 +121,7 @@ class _FigmaHomeTab extends StatefulWidget {
 }
 
 class _FigmaHomeTabState extends State<_FigmaHomeTab> {
-  String selectedVehicle = 'Moto';
+  String? selectedVehicle;
   List<Trip> activeTrips = const <Trip>[];
   Timer? activeTripsTimer;
 
@@ -145,20 +145,18 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
     try {
       final user = apiClient.currentUser;
       final companyName = user?.companyName?.trim();
-      final client = user != null &&
-              (user.role == 'corporate' || user.role == 'company')
-          ? (companyName?.isNotEmpty == true
-              ? companyName
-              : user.displayName.trim())
-          : null;
+      final client =
+          user != null && (user.role == 'corporate' || user.role == 'company')
+              ? (companyName?.isNotEmpty == true
+                  ? companyName
+                  : user.displayName.trim())
+              : null;
       final trips = await apiClient.getTrips(client: client);
       if (!mounted) return;
       setState(() {
         activeTrips = trips.where((trip) => trip.isActive).toList();
       });
-    } catch (_) {
-      // Keep the last successful list visible when the API is temporarily unavailable.
-    }
+    } catch (_) {}
   }
 
   void _openCreateFlow(String vehicle) {
@@ -199,7 +197,9 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
     final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 20.0;
 
     return ListView(
-      physics: const BouncingScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       padding: EdgeInsets.fromLTRB(horizontal, 18, horizontal, 22),
       children: [
         Row(
@@ -280,8 +280,8 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
                   splashColor: Colors.white.withValues(alpha: .22),
                   highlightColor: Colors.white.withValues(alpha: .10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                     decoration: BoxDecoration(
                       color: accentBlue,
                       borderRadius: BorderRadius.circular(18),
@@ -304,7 +304,10 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
           for (final trip in activeTrips.take(3))
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: _ActiveShipmentCard(trip: trip),
+              child: SizedBox(
+                width: double.infinity,
+                child: _ActiveShipmentCard(trip: trip),
+              ),
             ),
           const SizedBox(height: 5),
         ],
@@ -360,7 +363,10 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
           },
         ),
         const SizedBox(height: 12),
-        const _NeedLocationButton(),
+        const SizedBox(
+          width: double.infinity,
+          child: _NeedLocationButton(),
+        ),
         const SizedBox(height: 10),
         const _LogisticsBanner(),
       ],
@@ -519,78 +525,111 @@ class _VehicleShowcaseCard extends StatelessWidget {
         highlightColor: Colors.white.withValues(alpha: .06),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(19),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: CustomPaint(
+            foregroundPainter: _GlassEdgePainter(selected: selected),
             child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: large ? 160 : 166,
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-            decoration: BoxDecoration(
-              color: selected
-                  ? const Color(0xB5173698)
-                  : const Color(0x451B2E78),
-              borderRadius: BorderRadius.circular(19),
-              border: Border.all(
-                color: selected ? cyan.withValues(alpha: .85) : glassBorder,
-              ),
-            ),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Image.asset(
-                    asset,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  bottom: 0,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          fontFamily: 'Figtree',
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          color: Color(0xD9FFFFFF),
-                          fontSize: 11,
-                          fontFamily: 'Figtree',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 5,
-                  child: Container(
-                    width: 29,
-                    height: 29,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .10),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withValues(alpha: .20)),
+                duration: const Duration(milliseconds: 180),
+                height: large ? 160 : 166,
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                decoration: BoxDecoration(
+                color: selected
+                    ? const Color(0x4D1E5FD4)
+                    : Colors.transparent,
+                  borderRadius: BorderRadius.circular(19),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x40000000),
+                      offset: Offset(1, 5),
+                      blurRadius: 4.7,
                     ),
-                    child: const Icon(Icons.chevron_right, color: Colors.white, size: 20),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+                child: Stack(
+                  children: [
+                  Positioned.fill(
+                    child: Image.asset(
+                      asset,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    bottom: 0,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Figtree',
+                          ),
+                        ),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: Color(0xD9FFFFFF),
+                            fontSize: 11,
+                            fontFamily: 'Figtree',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 5,
+                    child: Container(
+                      width: 29,
+                      height: 29,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .10),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: .20)),
+                      ),
+                      child: const Icon(Icons.chevron_right,
+                          color: Colors.white, size: 20),
+                    ),
+                  ),
+                  ],
+                ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+class _GlassEdgePainter extends CustomPainter {
+  const _GlassEdgePainter({required this.selected});
+
+  final bool selected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final radius = Radius.circular(19);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.15
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: selected
+            ? [cyan.withValues(alpha: .95), Colors.white.withValues(alpha: .42), cyan.withValues(alpha: .75)]
+            : [Colors.white.withValues(alpha: .48), Colors.white.withValues(alpha: .10), const Color(0x667EA5D8)],
+      ).createShader(rect);
+    canvas.drawRRect(RRect.fromRectAndRadius(rect.deflate(.6), radius), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GlassEdgePainter oldDelegate) =>
+      oldDelegate.selected != selected;
 }
 
 class _ActiveShipmentCard extends StatelessWidget {
@@ -644,17 +683,27 @@ class _ActiveShipmentCard extends StatelessWidget {
                 children: [
                   Text(
                     trip.statusLabel,
-                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree'),
                   ),
                   Text(
                     '#${trip.id}',
-                    style: TextStyle(color: Color(0xD9FFFFFF), fontSize: 10, fontFamily: 'Figtree'),
+                    style: TextStyle(
+                        color: Color(0xD9FFFFFF),
+                        fontSize: 10,
+                        fontFamily: 'Figtree'),
                   ),
                   Text(
                     trip.destination.isEmpty ? trip.origin : trip.destination,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Color(0xD9FFFFFF), fontSize: 9, fontFamily: 'Figtree'),
+                    style: TextStyle(
+                        color: Color(0xD9FFFFFF),
+                        fontSize: 9,
+                        fontFamily: 'Figtree'),
                   ),
                 ],
               ),
@@ -677,7 +726,8 @@ class _ActiveShipmentCard extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(Icons.chevron_right, color: accentBlue, size: 20),
+              child:
+                  const Icon(Icons.chevron_right, color: accentBlue, size: 20),
             ),
           ],
         ),
@@ -834,8 +884,12 @@ class _HomeTabState extends State<_HomeTab> {
     if (km == null) return null;
     final rate = settings?.rateFor(vehicle);
     if (rate == null) return null;
-    final chargeableKm = (km - rate.includedKm).clamp(0, double.infinity).toDouble();
-    return roundFareCs(rate.baseFeeCs + chargeableKm * rate.farePerKmCs + logisticsServiceFeeCs,
+    final chargeableKm =
+        (km - rate.includedKm).clamp(0, double.infinity).toDouble();
+    return roundFareCs(
+        rate.baseFeeCs +
+            chargeableKm * rate.farePerKmCs +
+            logisticsServiceFeeCs,
         settings?.fareRoundingCs ?? 5);
   }
 
@@ -845,11 +899,10 @@ class _HomeTabState extends State<_HomeTab> {
   DateTime _slot(int dayIndex, String hour) {
     final now = DateTime.now();
     final parts = hour.split(':');
-    final base = DateTime(now.year, now.month, now.day)
-        .add(Duration(days: dayIndex));
-    return DateTime(
-        base.year, base.month, base.day,
-        int.parse(parts[0]), int.parse(parts[1]));
+    final base =
+        DateTime(now.year, now.month, now.day).add(Duration(days: dayIndex));
+    return DateTime(base.year, base.month, base.day, int.parse(parts[0]),
+        int.parse(parts[1]));
   }
 
   void _pickSlot(int dayIndex, String hour) {
@@ -979,60 +1032,65 @@ class _HomeTabState extends State<_HomeTab> {
                 },
                 customBorder: const CircleBorder(),
                 child: Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .10),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: .25)),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Image.asset(
-                    'assets/img/HomeCliente/notificaciones.png',
-                    width: 24,
-                    height: 24,
-                    fit: BoxFit.contain,
-                    semanticLabel: 'Notificaciones',
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.notifications_none_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .10),
+                    shape: BoxShape.circle,
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: .25)),
                   ),
-                  if (_incidentUnread > 0)
-                    Positioned(
-                      top: 3,
-                      right: 2,
-                      child: Container(
-                        constraints: const BoxConstraints(minWidth: 16),
-                        height: 16,
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF5A5A),
-                          borderRadius: BorderRadius.circular(9),
-                        ),
-                        child: Text(
-                          _incidentUnread > 9 ? '9+' : '$_incidentUnread',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                          ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/img/HomeCliente/notificaciones.png',
+                        width: 24,
+                        height: 24,
+                        fit: BoxFit.contain,
+                        semanticLabel: 'Notificaciones',
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.notifications_none_rounded,
+                          color: Colors.white,
+                          size: 22,
                         ),
                       ),
-                    )
-                  else
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(width: 5, height: 5, decoration: const BoxDecoration(color: cyan, shape: BoxShape.circle)),
-                    ),
-                ],
-              ),
-            ),
+                      if (_incidentUnread > 0)
+                        Positioned(
+                          top: 3,
+                          right: 2,
+                          child: Container(
+                            constraints: const BoxConstraints(minWidth: 16),
+                            height: 16,
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF5A5A),
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: Text(
+                              _incidentUnread > 9 ? '9+' : '$_incidentUnread',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                              width: 5,
+                              height: 5,
+                              decoration: const BoxDecoration(
+                                  color: cyan, shape: BoxShape.circle)),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -1354,9 +1412,8 @@ class _FareCard extends StatelessWidget {
             '${(distanceValue - rateValue.includedKm).clamp(0, double.infinity).toStringAsFixed(1)} adicionales × C\$ '
             '${rateValue.farePerKmCs.toStringAsFixed(2)} + '
             'C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} gestión';
-    final priceLabel = priceValue == null
-        ? 'C\$ —'
-        : formatFareCs(priceValue, fareRoundingCs);
+    final priceLabel =
+        priceValue == null ? 'C\$ —' : formatFareCs(priceValue, fareRoundingCs);
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
@@ -1539,7 +1596,8 @@ class _RouteMark extends StatelessWidget {
           decoration: BoxDecoration(
             color: accentBlue,
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: .55), width: 1.4),
+            border: Border.all(
+                color: Colors.white.withValues(alpha: .55), width: 1.4),
           ),
           child: Icon(icon, color: Colors.white, size: size * .52),
         ),
@@ -1572,8 +1630,8 @@ class _DottedLinePainter extends CustomPainter {
     } else {
       var y = 0.0;
       while (y < size.height) {
-        canvas.drawLine(Offset(size.width / 2, y),
-            Offset(size.width / 2, y + dash), paint);
+        canvas.drawLine(
+            Offset(size.width / 2, y), Offset(size.width / 2, y + dash), paint);
         y += dash + gap;
       }
     }
@@ -1609,7 +1667,8 @@ class _ReferencesCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.notes_rounded, color: Colors.white, size: 18),
+                  const Icon(Icons.notes_rounded,
+                      color: Colors.white, size: 18),
                   const SizedBox(width: 9),
                   const Text(
                     'Referencias:',
@@ -1729,8 +1788,18 @@ class _ScheduleCard extends StatelessWidget {
 
   String _fmt(DateTime date) {
     const months = [
-      'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-      'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sep',
+      'oct',
+      'nov',
+      'dic',
     ];
     return '${date.day} ${months[date.month - 1]}';
   }
@@ -1846,7 +1915,8 @@ class _ScheduleCard extends StatelessWidget {
                 children: [
                   for (final hour in _HomeTabState._hourOptions)
                     GestureDetector(
-                      onTap: () => onPick(_dayIndex(selectedDate ?? DateTime.now()), hour),
+                      onTap: () => onPick(
+                          _dayIndex(selectedDate ?? DateTime.now()), hour),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 9),

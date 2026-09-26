@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
@@ -36,18 +38,35 @@ class AppNavBar extends StatelessWidget {
     return Center(
       child: SizedBox(
         width: navWidth,
-        height: 76,
-        child: CustomPaint(
-          painter: const _NavBorderPainter(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                _item(0, items[0]),
-                _item(1, items[1]),
-                _item(2, items[2]),
-                _item(3, items[3]),
-              ],
+        height: 64,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(34),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0x3D4B5563),
+                borderRadius: BorderRadius.circular(34),
+                border: Border.all(color: Colors.white.withValues(alpha: .28)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x40000000),
+                    offset: Offset(0, 4),
+                    blurRadius: 12,
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    _item(0, items[0]),
+                    _item(1, items[1]),
+                    _item(2, items[2]),
+                    _item(3, items[3]),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -67,23 +86,24 @@ class AppNavBar extends StatelessWidget {
         child: Center(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            width: active ? 70 : 62,
-            height: 68,
+            width: active ? 62 : 56,
+            height: 56,
             decoration: active
                 ? BoxDecoration(
                     color: Colors.white.withValues(alpha: .14),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withValues(alpha: .24)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: .24)),
                   )
                 : null,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 SizedBox(
-                  width: 32,
-                  height: 32,
+                  width: 27,
+                  height: 27,
                   child: item.assetPath == null
-                      ? Icon(item.icon, color: Colors.white, size: 25)
+                      ? Icon(item.icon, color: Colors.white, size: 22)
                       : Image.asset(
                           item.assetPath!,
                           fit: BoxFit.contain,
@@ -91,16 +111,16 @@ class AppNavBar extends StatelessWidget {
                           errorBuilder: (_, __, ___) => Icon(
                             item.icon,
                             color: Colors.white,
-                            size: 25,
+                            size: 22,
                           ),
                         ),
-                      ),
-                const SizedBox(height: 2),
+                ),
+                const SizedBox(height: 0),
                 Text(
                   item.label,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                     fontFamily: 'Figtree',
                   ),
@@ -129,15 +149,6 @@ class _NavBorderPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
         ..color = const Color(0x33FFFFFF),
-    );
-    canvas.drawLine(
-      Offset(size.height / 2, .9),
-      Offset(size.width - size.height / 2, .9),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..strokeCap = StrokeCap.round
-        ..color = const Color(0x66FFFFFF),
     );
   }
 

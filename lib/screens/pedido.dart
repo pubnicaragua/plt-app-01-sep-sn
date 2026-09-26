@@ -4,7 +4,6 @@ import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
-import 'crear_envio1.dart';
 import 'crear_envio2.dart';
 import 'seguimiento_pedido.dart';
 import 'resumen_cliente.dart';
@@ -21,7 +20,7 @@ class MisEnvios extends StatefulWidget {
 
 class _MisEnviosState extends State<MisEnvios> {
   late Future<List<Trip>> trips;
-  String filter = 'Todos';
+  String filter = 'Activos';
 
   @override
   void initState() {
@@ -54,34 +53,30 @@ class _MisEnviosState extends State<MisEnvios> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Mis envíos',
+                  'Envíos',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 24,
+                    fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: -0.6,
                     fontFamily: 'Figtree',
                   ),
                 ),
-                GestureDetector(
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CrearEnvio1(),
-                    ),
-                  ),
-                  child: GlassCard(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                    child: const Icon(Icons.add_rounded,
-                        color: Colors.white, size: 22),
-                  ),
-                ),
+                const SizedBox.shrink(),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 4),
+            const Text(
+              'Todos los envíos en un solo lugar',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontFamily: 'Figtree',
+              ),
+            ),
+            const SizedBox(height: 14),
             Row(
               children: [
-                for (final option in ['Todos', 'Activos', 'Completados']) ...[
+                for (final option in ['Activos', 'Enviados']) ...[
                   Expanded(
                     child: _OrderFilter(
                       label: option,
@@ -89,7 +84,7 @@ class _MisEnviosState extends State<MisEnvios> {
                       onTap: () => setState(() => filter = option),
                     ),
                   ),
-                  if (option != 'Completados') const SizedBox(width: 8),
+                  if (option != 'Enviados') const SizedBox(width: 8),
                 ],
               ],
             ),
@@ -150,7 +145,7 @@ class _MisEnviosState extends State<MisEnvios> {
                 final items = snapshot.data ?? const <Trip>[];
                 final visibleItems = switch (filter) {
                   'Activos' => items.where((trip) => trip.isActive).toList(),
-                  'Completados' => items.where((trip) => trip.isCompleted).toList(),
+                  'Enviados' => items.where((trip) => !trip.isActive).toList(),
                   _ => items,
                 };
                 if (visibleItems.isEmpty) {
@@ -203,130 +198,98 @@ class _TripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (color, icon, note) = switch (trip.status) {
-      'Completado' => (mint, Icons.check_rounded, 'Entregado'),
-      'En entrega' => (cyan, Icons.local_shipping_rounded, 'Con camino'),
-      'En camino' => (cyan, Icons.near_me_rounded, 'En movimiento'),
-      'Asignado' => (const Color(0xFFFFC64D), Icons.person_pin_rounded, 'Conductor asignado'),
-      'Cancelado' => (const Color(0xFFB4BCC9), Icons.close_rounded, 'Cancelado'),
-      _ => (const Color(0xFFFFC64D), Icons.timelapse_rounded, 'Pendiente'),
+    final transport = trip.transport?.trim().toLowerCase() ?? '';
+    final description = trip.description?.trim().toLowerCase() ?? '';
+    final vehicleAsset = switch (transport) {
+      'moto' || 'motocicleta' || 'motorcycle' =>
+        'assets/img/HomeCliente/crear_moto.png',
+      'vehículo' || 'vehiculo' || 'auto' || 'automóvil' || 'automovil' ||
+      'carro' || 'car' || 'vehicle' =>
+        'assets/img/HomeCliente/crear_auto.png',
+      'camión' || 'camion' || 'carga' || 'camioneta' || 'truck' =>
+        'assets/img/HomeCliente/crear_carga.png',
+      _ when description.contains('tipo de camión') ||
+          description.contains('tipo de camion') ||
+          description.contains('carga') =>
+        'assets/img/HomeCliente/crear_carga.png',
+      _ when description.contains('moto') =>
+        'assets/img/HomeCliente/crear_moto.png',
+      _ => 'assets/img/HomeCliente/crear_auto.png',
     };
+    final destination = trip.destination.trim().isEmpty
+        ? 'Destino pendiente'
+        : trip.destination.trim();
+    final tripId = trip.id.startsWith('#') ? trip.id : '#${trip.id}';
+    final arrival = trip.pickupTime?.trim().isNotEmpty == true
+        ? trip.pickupTime!.trim()
+        : (trip.scheduledTime?.trim().isNotEmpty == true
+            ? trip.scheduledTime!.trim()
+            : 'Pendiente');
     return GlassCard(
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => SeguimientoPedido(trip: trip),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(15, 14, 15, 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
+      color: Colors.white.withValues(alpha: .08),
+      blur: 18,
+      borderRadius: 14,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: .16),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: color.withValues(alpha: .38)),
-                ),
-                child: Icon(icon, color: color, size: 21),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Viaje ${trip.id}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        fontFamily: 'Figtree',
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      trip.date,
-                      style: const TextStyle(
-                        color: Color(0xFFB9D4FF),
-                        fontSize: 11,
-                        fontFamily: 'Figtree',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              StatusPill(text: note, color: color),
-            ],
+          SizedBox(
+            width: 48,
+            height: 36,
+            child: Image.asset(
+              vehicleAsset,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.local_shipping_outlined, color: Colors.white),
+            ),
           ),
-          const SizedBox(height: 15),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _RoutePoint(
-                  label: 'DESDE',
-                  value: trip.origin,
-                  color: cyan,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Envío a $destination',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.only(top: 14, left: 5, right: 5),
-                child: Icon(Icons.arrow_forward_rounded,
-                    color: Colors.white54, size: 18),
-              ),
-              Expanded(
-                child: _RoutePoint(
-                  label: 'HACIA',
-                  value: trip.destination,
-                  color: const Color(0xFF8FA0C4),
+                const SizedBox(height: 1),
+                Text(
+                  tripId,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: Color(0x2FFFFFFF), height: 1),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _TripMeta(icon: Icons.inventory_2_outlined, text: '${trip.packages} bultos'),
-              if (trip.serviceType != null) ...[
-                const SizedBox(width: 7),
-                _TripMeta(icon: Icons.bolt_rounded, text: trip.serviceType!),
+                Text(
+                  'Llegada estimada: $arrival',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xC7FFFFFF),
+                    fontSize: 9,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
               ],
-              const Spacer(),
-              Text(
-                formatFareCs(trip.estimatedCostCs ?? 0),
-                style: const TextStyle(
-                  color: cyan,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              const Text(
-                'Ver detalle',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-              ),
-              const SizedBox(width: 3),
-              Icon(Icons.chevron_right_rounded,
-                  color: color, size: 19),
-            ],
-          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 27),
         ],
       ),
     );
