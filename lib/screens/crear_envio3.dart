@@ -37,6 +37,13 @@ class CrearEnvio3 extends StatefulWidget {
     this.scheduledDate,
     this.scheduledTime,
     this.isScheduled = false,
+    this.serviceMode = 'Envíos',
+    this.vehicleVariant,
+    this.truckType,
+    this.passengerCount,
+    this.returnTrip = false,
+    this.stops = const [],
+    this.options = const [],
   });
 
   final String origin;
@@ -64,6 +71,13 @@ class CrearEnvio3 extends StatefulWidget {
   final String? scheduledDate;
   final String? scheduledTime;
   final bool isScheduled;
+  final String serviceMode;
+  final String? vehicleVariant;
+  final String? truckType;
+  final int? passengerCount;
+  final bool returnTrip;
+  final List<TripStop> stops;
+  final List<TripOptionSelection> options;
 
   @override
   State<CrearEnvio3> createState() => _CrearEnvio3State();
@@ -165,6 +179,13 @@ class _CrearEnvio3State extends State<CrearEnvio3>
         isScheduled: widget.isScheduled || widget.serviceType == 'Programado',
         weight: widget.weight.toDouble(),
         weightUnit: widget.weightUnit == 'lb' ? 'lb' : 'kg',
+        serviceMode: widget.serviceMode,
+        vehicleVariant: widget.vehicleVariant,
+        truckType: widget.truckType,
+        passengerCount: widget.passengerCount,
+        returnTrip: widget.returnTrip,
+        stops: widget.stops,
+        options: widget.options,
       );
       if (widget.paymentStatus == 'Pagado' || widget.paymentMethod.isNotEmpty) {
         await apiClient.updateTripPayment(

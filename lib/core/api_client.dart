@@ -205,6 +205,13 @@ class ApiClient {
     bool isScheduled = false,
     double? weight,
     String? weightUnit = 'kg',
+    String? serviceMode,
+    String? vehicleVariant,
+    String? truckType,
+    int? passengerCount,
+    bool returnTrip = false,
+    List<TripStop> stops = const [],
+    List<TripOptionSelection> options = const [],
   }) async {
     final json = (await _send(
       'POST',
@@ -233,6 +240,21 @@ class ApiClient {
         'isScheduled': isScheduled,
         'weight': weight,
         'weightUnit': weightUnit,
+        'serviceMode': serviceMode,
+        'vehicleVariant': vehicleVariant,
+        'truckType': truckType,
+        'passengerCount': passengerCount,
+        'returnTrip': returnTrip,
+        'stops': stops.map((stop) => {
+              'id': stop.id,
+              'label': stop.label,
+              'address': stop.address,
+              'latitude': stop.latitude,
+              'longitude': stop.longitude,
+              'refs': stop.refs,
+              'order': stop.order,
+            }).toList(),
+        'options': options.map((option) => option.toJson()).toList(),
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);

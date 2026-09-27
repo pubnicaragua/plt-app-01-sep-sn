@@ -613,7 +613,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                             label: label,
                             selected: serviceTab == label,
                             enabled: true,
-                            onTap: () => setState(() => serviceTab = label),
+                            onTap: () => setState(() {
+                              serviceTab = label;
+                              if (label == 'Taxi Privado') transport = 'Vehículo';
+                            }),
                           ),
                         ),
                       ),
@@ -2089,6 +2092,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                   originPlace: originPlace,
                   destinationPlace: destinationPlace,
                   transport: transport,
+          serviceMode: serviceTab,
                   estimatedShipping: price,
                   description: description.text.trim(),
                   fragile: fragile,

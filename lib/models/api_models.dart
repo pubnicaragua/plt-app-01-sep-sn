@@ -126,6 +126,14 @@ class Trip {
     this.isScheduled = false,
     this.weight,
     this.weightUnit,
+    this.serviceMode,
+    this.vehicleVariant,
+    this.truckType,
+    this.passengerCount,
+    this.returnTrip = false,
+    this.stops = const [],
+    this.options = const [],
+    this.optionsTotalCs = 0,
   });
 
   final String id;
@@ -158,6 +166,14 @@ class Trip {
   final bool isScheduled;
   final double? weight;
   final String? weightUnit;
+  final String? serviceMode;
+  final String? vehicleVariant;
+  final String? truckType;
+  final int? passengerCount;
+  final bool returnTrip;
+  final List<TripStop> stops;
+  final List<TripOptionSelection> options;
+  final double optionsTotalCs;
 
   bool get isPending => status == 'Pendiente';
   bool get isAssigned => status == 'Asignado';
@@ -219,8 +235,109 @@ class Trip {
       isScheduled: json['isScheduled']?.toString() == 'true',
       weight: (json['weight'] as num?)?.toDouble(),
       weightUnit: json['weightUnit']?.toString(),
+      serviceMode: json['serviceMode']?.toString(),
+      vehicleVariant: json['vehicleVariant']?.toString(),
+      truckType: json['truckType']?.toString(),
+      passengerCount: (json['passengerCount'] as num?)?.toInt(),
+      returnTrip: json['returnTrip'] == true || json['returnTrip']?.toString() == 'true',
+      stops: (json['stops'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => TripStop.fromJson(item.cast<String, dynamic>()))
+          .toList(),
+      options: (json['options'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => TripOptionSelection.fromJson(item.cast<String, dynamic>()))
+          .toList(),
+      optionsTotalCs: (json['optionsTotalCs'] as num?)?.toDouble() ?? 0,
     );
   }
+}
+
+class TripStop {
+  const TripStop({required this.label, required this.address, required this.order, this.id, this.latitude, this.longitude, this.refs});
+
+  final String? id;
+  final String label;
+  final String address;
+  final int order;
+  final double? latitude;
+  final double? longitude;
+  final String? refs;
+
+  factory TripStop.fromJson(Map<String, dynamic> json) => TripStop(
+        id: json['id']?.toString(),
+        label: json['label']?.toString() ?? 'Parada',
+        address: json['address']?.toString() ?? '',
+        order: (json['order'] as num?)?.toInt() ?? 1,
+        latitude: (json['latitude'] as num?)?.toDouble(),
+        longitude: (json['longitude'] as num?)?.toDouble(),
+        refs: json['refs']?.toString(),
+      );
+}
+
+class TripOptionSelection {
+  const TripOptionSelection({required this.code, required this.title, required this.priceCs, this.description, this.currency = 'NIO', this.quantity = 1});
+
+  final String code;
+  final String title;
+  final String? description;
+  final double priceCs;
+  final String currency;
+  final int quantity;
+
+  factory TripOptionSelection.fromJson(Map<String, dynamic> json) => TripOptionSelection(
+        code: json['code']?.toString() ?? '',
+        title: json['title']?.toString() ?? '',
+        description: json['description']?.toString(),
+        priceCs: (json['priceCs'] as num?)?.toDouble() ?? 0,
+        currency: json['currency']?.toString() ?? 'NIO',
+        quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'title': title,
+        'description': description,
+        'priceCs': priceCs,
+        'currency': currency,
+        'quantity': quantity,
+      };
+}
+
+class ServiceCatalogItem {
+  const ServiceCatalogItem({required this.id, required this.code, required this.kind, required this.service, required this.transport, required this.title, required this.description, required this.priceCs, required this.currency, required this.pricingMode, required this.enabled, required this.sortOrder, this.maxWeightKg, this.maxPassengers});
+
+  final String id;
+  final String code;
+  final String kind;
+  final String service;
+  final String transport;
+  final String title;
+  final String description;
+  final double priceCs;
+  final String currency;
+  final String pricingMode;
+  final double? maxWeightKg;
+  final int? maxPassengers;
+  final bool enabled;
+  final int sortOrder;
+
+  factory ServiceCatalogItem.fromJson(Map<String, dynamic> json) => ServiceCatalogItem(
+        id: json['id']?.toString() ?? '',
+        code: json['code']?.toString() ?? '',
+        kind: json['kind']?.toString() ?? 'option',
+        service: json['service']?.toString() ?? 'delivery',
+        transport: json['transport']?.toString() ?? 'Moto',
+        title: json['title']?.toString() ?? '',
+        description: json['description']?.toString() ?? '',
+        priceCs: (json['priceCs'] as num?)?.toDouble() ?? 0,
+        currency: json['currency']?.toString() ?? 'NIO',
+        pricingMode: json['pricingMode']?.toString() ?? 'flat',
+        maxWeightKg: (json['maxWeightKg'] as num?)?.toDouble(),
+        maxPassengers: (json['maxPassengers'] as num?)?.toInt(),
+        enabled: json['enabled'] == true || json['enabled']?.toString() == 'true',
+        sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      );
 }
 
 class AppNotification {
@@ -415,6 +532,7 @@ class AppSettings {
     this.fareRoundingCs = 5,
     this.prioritySurchargePct = 25,
     this.scheduledSurchargePct = 0,
+    this.serviceCatalog = const [],
   });
 
   final double dollarRate;
@@ -422,6 +540,7 @@ class AppSettings {
   final double fareRoundingCs;
   final double prioritySurchargePct;
   final double scheduledSurchargePct;
+  final List<ServiceCatalogItem> serviceCatalog;
 
   VehicleRate rateFor(String vehicle) =>
       vehicleRates[vehicle] ??
@@ -445,6 +564,11 @@ class AppSettings {
           (json['prioritySurchargePct'] as num?)?.toDouble() ?? 25,
       scheduledSurchargePct:
           (json['scheduledSurchargePct'] as num?)?.toDouble() ?? 0,
+      serviceCatalog: (json['serviceCatalog'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => ServiceCatalogItem.fromJson(item.cast<String, dynamic>()))
+          .where((item) => item.enabled)
+          .toList(),
     );
   }
 }

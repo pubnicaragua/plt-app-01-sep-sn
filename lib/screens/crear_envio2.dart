@@ -23,6 +23,7 @@ class CrearEnvio2 extends StatefulWidget {
     this.originPlace,
     this.destinationPlace,
     this.transport = 'Moto',
+    this.serviceMode = 'Envíos',
     this.estimatedShipping,
     this.originRefs = '',
     this.destinationRefs = '',
@@ -41,6 +42,7 @@ class CrearEnvio2 extends StatefulWidget {
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
   final String transport;
+  final String serviceMode;
   final double? estimatedShipping;
   final String originRefs;
   final String destinationRefs;
@@ -58,6 +60,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   late int weight;
   late String weightUnit;
   late int bundles;
+  int passengerCount = 1;
   late String truckType;
   late final TextEditingController description;
   late final TextEditingController invoicePrice;
@@ -70,6 +73,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   bool fragile = false;
   bool needsAdditional = false;
   String additionalOption = '';
+  final additionalStops = <TripStop>[];
   String paymentStatus = 'Pendiente';
   String paymentMethod = 'Efectivo';
   final productPhotos = <Uint8List>[];
@@ -94,7 +98,15 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     references = TextEditingController(text: widget.destinationRefs);
     additionalNotes = TextEditingController();
     apiClient.getSettings().then((value) {
-      if (mounted) setState(() => settings = value);
+      if (mounted) {
+        setState(() {
+          settings = value;
+          final truckOptions = _truckCatalog;
+          if (truckOptions.isNotEmpty && !truckOptions.any((item) => item.title == truckType)) {
+            truckType = truckOptions.first.title;
+          }
+        });
+      }
     }).catchError((_) {});
     _settingsPoll = Timer.periodic(
       const Duration(seconds: 15),
@@ -105,7 +117,15 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   Future<void> _refreshSettings() async {
     try {
       final value = await apiClient.getSettings();
-      if (mounted) setState(() => settings = value);
+      if (mounted) {
+        setState(() {
+          settings = value;
+          final truckOptions = _truckCatalog;
+          if (truckOptions.isNotEmpty && !truckOptions.any((item) => item.title == truckType)) {
+            truckType = truckOptions.first.title;
+          }
+        });
+      }
     } catch (_) {}
   }
 
@@ -216,7 +236,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     }
     final extraDescription = [
       if (widget.transport == 'Camión') 'Tipo de camión: $truckType',
-      if (needsAdditional) 'Servicio adicional: $additionalOption',
+      if (needsAdditional) 'Servicio adicional: ${_selectedOption?.title ?? additionalOption}',
       if (additionalNotes.text.trim().isNotEmpty)
         'Indicaciones: ${additionalNotes.text.trim()}',
     ].join(' · ');
@@ -241,6 +261,21 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           invoiceAmount: invoiceAmountCs,
           paymentStatus: paymentStatus,
           paymentMethod: paymentMethod,
+          serviceMode: widget.serviceMode,
+          vehicleVariant: widget.transport == 'Camión' ? _selectedTruckCode : null,
+          truckType: widget.transport == 'Camión' ? truckType : null,
+          passengerCount: widget.serviceMode == 'Taxi Privado' ? passengerCount : null,
+          returnTrip: _isReturnTrip,
+          stops: List<TripStop>.of(additionalStops),
+          options: _selectedOption == null ? const [] : [
+            TripOptionSelection(
+              code: _selectedOption!.code,
+              title: _selectedOption!.title,
+              description: _selectedOption!.description,
+              priceCs: _selectedOption!.priceCs,
+              currency: _selectedOption!.currency,
+            ),
+          ],
           productPhotos: List<Uint8List>.of(productPhotos),
           invoicePhoto: invoicePhoto,
           invoiceFileName: invoiceFileName,
@@ -255,6 +290,97 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         ),
       ),
     );
+  }
+
+  ServiceCatalogItem? _findOption(String code, {String? fallbackTitle}) {
+    final items = settings?.serviceCatalog ?? const <ServiceCatalogItem>[];
+    for (final item in items) {
+      if (item.code == code && item.enabled) return item;
+    }
+    for (final item in items) {
+      if (fallbackTitle != null && item.title == fallbackTitle && item.enabled) return item;
+    }
+    return null;
+  }
+
+  String _serviceCode(String code) => widget.serviceMode == 'Taxi Privado' && code.startsWith('delivery-')
+      ? code.replaceFirst('delivery-', 'taxi-')
+      : code;
+
+  ServiceCatalogItem? _serviceOption(String code, {String? fallbackTitle}) => _findOption(_serviceCode(code), fallbackTitle: fallbackTitle);
+
+  ServiceCatalogItem? get _selectedOption => additionalOption.isEmpty ? null : _findOption(additionalOption);
+
+  bool get _isReturnTrip => additionalOption.contains('round-trip');
+
+  List<ServiceCatalogItem> get _truckCatalog => (settings?.serviceCatalog ?? const <ServiceCatalogItem>[])
+      .where((item) => item.kind == 'vehicle' && item.service == 'cargo' && item.transport == 'Camión' && item.enabled)
+      .toList()
+    ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+  List<_TruckTypeData> get _truckTypesForUi {
+    if (_truckCatalog.isEmpty) return _truckTypes;
+    return _truckCatalog.map((item) => _TruckTypeData(
+      code: item.code,
+      label: item.title,
+      asset: _truckAsset(item.code),
+      description: item.description,
+      price: _priceLabel(item, 'C\$40 USD'),
+    )).toList();
+  }
+
+  String _truckAsset(String code) {
+    if (code.contains('extra-small')) return 'assets/img/HomeCliente/carga_extra_pequeno.png';
+    if (code.contains('pickup')) return 'assets/img/HomeCliente/carga_minivan.png';
+    if (code.contains('medium')) return 'assets/img/HomeCliente/carga_mediano.png';
+    return 'assets/img/HomeCliente/carga_grande.png';
+  }
+
+  String? get _selectedTruckCode {
+    for (final item in _truckCatalog) {
+      if (item.title == truckType) return item.code;
+    }
+    return null;
+  }
+
+  String _priceLabel(ServiceCatalogItem? item, String fallback) {
+    if (item == null) return fallback;
+    final prefix = item.currency == 'USD' ? 'US$' : 'C$';
+    return '$prefix${item.priceCs.toStringAsFixed(item.priceCs.truncateToDouble() == item.priceCs ? 0 : 2)}';
+  }
+
+  Future<void> _selectAdditional(String code, String fallbackTitle) async {
+    final resolvedCode = _serviceCode(code);
+    final item = _findOption(resolvedCode, fallbackTitle: fallbackTitle);
+    setState(() {
+      needsAdditional = true;
+      additionalOption = item?.code ?? resolvedCode;
+    });
+    if (code.contains('multiple-stops')) {
+      await _addStop();
+    }
+  }
+
+  Future<void> _addStop() async {
+    final controller = TextEditingController();
+    final address = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Agregar destino adicional', style: TextStyle(fontFamily: 'Figtree')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Dirección o referencia'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text.trim()), child: const Text('Agregar')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (address == null || address.isEmpty || !mounted) return;
+    setState(() => additionalStops.add(TripStop(label: 'Parada ${additionalStops.length + 1}', address: address, order: additionalStops.length + 1)));
   }
 
   @override
@@ -287,6 +413,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       const SizedBox(height: 12),
                       _TruckTypeSelector(
                         selected: truckType,
+                        types: _truckTypesForUi,
                         onChanged: (value) => setState(() => truckType = value),
                       ),
                       const SizedBox(height: 14),
@@ -337,6 +464,23 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       maxLines: 1,
                       compact: true,
                     ),
+                    if (widget.serviceMode == 'Taxi Privado') ...[
+                      const SizedBox(height: 12),
+                      const _FormSectionTitle(
+                        icon: Icons.people_alt_outlined,
+                        title: 'Cantidad de pasajeros',
+                      ),
+                      const SizedBox(height: 8),
+                      _CounterField(
+                        value: '$passengerCount pasajero${passengerCount == 1 ? '' : 's'}',
+                        onMinus: passengerCount > 1
+                            ? () => setState(() => passengerCount--)
+                            : null,
+                        onPlus: passengerCount < 6
+                            ? () => setState(() => passengerCount++)
+                            : null,
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     _additionalBlock(),
                     if (widget.transport == 'Vehículo' ||
@@ -376,6 +520,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   Widget _standardAdditionalBlock() {
+    final multiple = _serviceOption('delivery-multiple-stops', fallbackTitle: 'Varios destinos');
+    final roundTrip = _serviceOption('delivery-round-trip', fallbackTitle: 'Ida y vuelta');
+    final insurance = _serviceOption('delivery-insurance', fallbackTitle: 'Seguro');
+    final waiting = _serviceOption('delivery-waiting', fallbackTitle: 'Espera en destino');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -403,31 +551,24 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/adicional_destinos.png',
-                title: 'Varios destinos',
-                price: 'C\$40 USD',
-                subtitle: 'Múltiples destinos',
-                selected:
-                    needsAdditional && additionalOption == 'Varios destinos',
+                title: multiple?.title ?? 'Varios destinos',
+                price: _priceLabel(multiple, 'C\$40 USD'),
+                subtitle: multiple?.description ?? 'Múltiples destinos',
+                selected: needsAdditional && additionalOption == (multiple?.code ?? _serviceCode('delivery-multiple-stops')),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = 'Varios destinos';
-                }),
+                onTap: () => _selectAdditional('delivery-multiple-stops', 'Varios destinos'),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/adicional_regreso.png',
-                title: 'Ida y vuelta',
-                subtitle: 'Regreso al origen',
-                price: 'C\$40 USD',
-                selected: needsAdditional && additionalOption == 'Ida y vuelta',
+                title: roundTrip?.title ?? 'Ida y vuelta',
+                subtitle: roundTrip?.description ?? 'Regreso al origen',
+                price: _priceLabel(roundTrip, 'C\$40 USD'),
+                selected: needsAdditional && additionalOption == (roundTrip?.code ?? _serviceCode('delivery-round-trip')),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = 'Ida y vuelta';
-                }),
+                onTap: () => _selectAdditional('delivery-round-trip', 'Ida y vuelta'),
               ),
             ),
           ],
@@ -438,31 +579,24 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/adicional_seguro.png',
-                title: 'Seguro',
-                subtitle: 'Asegura tu producto',
-                price: 'C\$40 USD',
-                selected: needsAdditional && additionalOption == 'Seguro',
+                title: insurance?.title ?? 'Seguro',
+                subtitle: insurance?.description ?? 'Asegura tu producto',
+                price: _priceLabel(insurance, 'C\$40 USD'),
+                selected: needsAdditional && additionalOption == (insurance?.code ?? _serviceCode('delivery-insurance')),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = 'Seguro';
-                }),
+                onTap: () => _selectAdditional('delivery-insurance', 'Seguro'),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/adicional_espera.png',
-                title: 'Espera en destino',
-                subtitle: '6 horas espera',
-                price: 'C\$40 USD',
-                selected:
-                    needsAdditional && additionalOption == 'Espera en destino',
+                title: waiting?.title ?? 'Espera en destino',
+                subtitle: waiting?.description ?? '6 horas espera',
+                price: _priceLabel(waiting, 'C\$40 USD'),
+                selected: needsAdditional && additionalOption == (waiting?.code ?? _serviceCode('delivery-waiting')),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = 'Espera en destino';
-                }),
+                onTap: () => _selectAdditional('delivery-waiting', 'Espera en destino'),
               ),
             ),
           ],
@@ -472,6 +606,11 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   Widget _cargoAdditionalBlock() {
+    final helper = _findOption('cargo-helper', fallbackTitle: 'Ayudante');
+    final multiple = _findOption('cargo-multiple-stops', fallbackTitle: 'Varios destinos');
+    final roundTrip = _findOption('cargo-round-trip', fallbackTitle: 'Ida y vuelta');
+    final waiting = _findOption('cargo-waiting', fallbackTitle: 'Espera en destino');
+    final insurance = _findOption('cargo-insurance', fallbackTitle: 'Seguro');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -499,31 +638,24 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/carga_ayudante.png',
-                title: 'Ayudante',
-                subtitle: 'Para carga y descarga',
-                price: 'C\$40 USD',
-                selected: needsAdditional && additionalOption == 'Ayudante',
+                title: helper?.title ?? 'Ayudante',
+                subtitle: helper?.description ?? 'Para carga y descarga',
+                price: _priceLabel(helper, 'C\$40 USD'),
+                selected: needsAdditional && additionalOption == (helper?.code ?? 'cargo-helper'),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = 'Ayudante';
-                }),
+                onTap: () => _selectAdditional('cargo-helper', 'Ayudante'),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/adicional_destinos.png',
-                title: 'Varios destinos',
-                subtitle: 'Múltiples destinos',
-                price: 'C\$40 USD',
-                selected:
-                    needsAdditional && additionalOption == 'Varios destinos',
+                title: multiple?.title ?? 'Varios destinos',
+                subtitle: multiple?.description ?? 'Múltiples destinos',
+                price: _priceLabel(multiple, 'C\$40 USD'),
+                selected: needsAdditional && additionalOption == (multiple?.code ?? 'cargo-multiple-stops'),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = 'Varios destinos';
-                }),
+                onTap: () => _selectAdditional('cargo-multiple-stops', 'Varios destinos'),
               ),
             ),
           ],
@@ -534,31 +666,24 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/adicional_regreso.png',
-                title: 'Ida y vuelta',
-                subtitle: 'Regreso al origen',
-                price: 'C\$40 USD',
-                selected: needsAdditional && additionalOption == 'Ida y vuelta',
+                title: roundTrip?.title ?? 'Ida y vuelta',
+                subtitle: roundTrip?.description ?? 'Regreso al origen',
+                price: _priceLabel(roundTrip, 'C\$40 USD'),
+                selected: needsAdditional && additionalOption == (roundTrip?.code ?? 'cargo-round-trip'),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = 'Ida y vuelta';
-                }),
+                onTap: () => _selectAdditional('cargo-round-trip', 'Ida y vuelta'),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/adicional_espera.png',
-                title: 'Espera en destino',
-                subtitle: '6 horas espera',
-                price: 'C\$40 USD',
-                selected:
-                    needsAdditional && additionalOption == 'Espera en destino',
+                title: waiting?.title ?? 'Espera en destino',
+                subtitle: waiting?.description ?? '6 horas espera',
+                price: _priceLabel(waiting, 'C\$40 USD'),
+                selected: needsAdditional && additionalOption == (waiting?.code ?? 'cargo-waiting'),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = 'Espera en destino';
-                }),
+                onTap: () => _selectAdditional('cargo-waiting', 'Espera en destino'),
               ),
             ),
           ],
@@ -569,31 +694,24 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/adicional_seguro.png',
-                title: 'Seguro',
-                subtitle: 'Asegura tu producto',
-                price: 'C\$40 USD',
-                selected: needsAdditional && additionalOption == 'Seguro',
+                title: insurance?.title ?? 'Seguro',
+                subtitle: insurance?.description ?? 'Asegura tu producto',
+                price: _priceLabel(insurance, 'C\$40 USD'),
+                selected: needsAdditional && additionalOption == (insurance?.code ?? 'cargo-insurance'),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = 'Seguro';
-                }),
+                onTap: () => _selectAdditional('cargo-insurance', 'Seguro'),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/carga_mas_camiones.png',
-                title: '¿Más camiones?',
-                subtitle: 'Escoge tu producto',
-                price: 'C\$40 USD',
-                selected:
-                    needsAdditional && additionalOption == '¿Más camiones?',
+                title: _findOption('cargo-more-trucks')?.title ?? '¿Más camiones?',
+                subtitle: _findOption('cargo-more-trucks')?.description ?? 'Escoge tu producto',
+                price: _priceLabel(_findOption('cargo-more-trucks'), 'C\$40 USD'),
+                selected: needsAdditional && additionalOption == (_findOption('cargo-more-trucks')?.code ?? 'cargo-more-trucks'),
                 enabled: true,
-                onTap: () => setState(() {
-                  needsAdditional = true;
-                  additionalOption = '¿Más camiones?';
-                }),
+                onTap: () => _selectAdditional('cargo-more-trucks', '¿Más camiones?'),
               ),
             ),
           ],
@@ -1026,14 +1144,18 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
 
 class _TruckTypeData {
   const _TruckTypeData({
+    this.code = '',
     required this.label,
     required this.asset,
     required this.description,
+    this.price = 'C\$40 USD',
   });
 
+  final String code;
   final String label;
   final String asset;
   final String description;
+  final String price;
 }
 
 const _truckTypes = [
@@ -1060,16 +1182,17 @@ const _truckTypes = [
 ];
 
 class _TruckTypeSelector extends StatelessWidget {
-  const _TruckTypeSelector({required this.selected, required this.onChanged});
+  const _TruckTypeSelector({required this.selected, required this.types, required this.onChanged});
 
   final String selected;
+  final List<_TruckTypeData> types;
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final selectedType = _truckTypes.firstWhere(
+    final selectedType = types.firstWhere(
       (type) => type.label == selected,
-      orElse: () => _truckTypes.first,
+      orElse: () => types.first,
     );
 
     return Column(
@@ -1131,7 +1254,7 @@ class _TruckTypeSelector extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        for (final type in _truckTypes) ...[
+        for (final type in types) ...[
           GestureDetector(
             onTap: () => onChanged(type.label),
             child: CustomPaint(
@@ -1161,8 +1284,8 @@ class _TruckTypeSelector extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const Text(
-                      'C\$40 USD',
+                    Text(
+                      type.price,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 11,
@@ -1182,7 +1305,7 @@ class _TruckTypeSelector extends StatelessWidget {
               ),
             ),
           ),
-          if (type != _truckTypes.last) const SizedBox(height: 7),
+          if (type != types.last) const SizedBox(height: 7),
         ],
       ],
     );
