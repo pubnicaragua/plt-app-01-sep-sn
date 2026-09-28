@@ -81,6 +81,10 @@ class _HomeClienteState extends State<HomeCliente> {
               bottom: safeBottom + 8,
               child: AppNavBar(
                 current: tab,
+                profileImageUrl: _profileImageUrl(apiClient.currentProfile),
+                profileInitials: initials(
+                  apiClient.currentUser?.displayName ?? 'Usuario',
+                ),
                 onChanged: (index) => setState(() {
                   tab = index;
                   if (index == 1 || index == 2) _tripRefreshVersion++;
@@ -188,12 +192,38 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
     );
   }
 
+  void _openPrivateTaxi() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SeleccionarPuntosEnvio(
+          startTransport: 'Vehículo',
+          onOpenMap: (result) async {
+            return Navigator.of(context).push<RouteSelectionResult>(
+              MaterialPageRoute(
+                builder: (_) => CrearEnvio1(
+                  startOrigin: result.origin,
+                  startDestination: result.destination,
+                  startOriginPlace: result.originPlace,
+                  startDestinationPlace: result.destinationPlace,
+                  startTransport: 'Vehículo',
+                  startServiceMode: 'Taxi Privado',
+                  returnToPointSelection: true,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = apiClient.currentUser;
     final name = user?.displayName.trim().isNotEmpty == true
         ? user!.displayName.trim()
         : 'Logística Nica SA';
+    final profileUrl = _profileImageUrl(apiClient.currentProfile);
     final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 20.0;
 
     return ListView(
@@ -219,8 +249,8 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  const Text(
-                    '¿Qué vas a enviar hoy?',
+                  Text(
+                    '${greetingForManagua()}!',
                     style: TextStyle(
                       color: Color(0xFFB9D4FF),
                       fontSize: 12,
@@ -244,15 +274,35 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
                 border: Border.all(color: glassBorder),
               ),
               alignment: Alignment.center,
-              child: Text(
-                initials(name),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-              ),
+              child: profileUrl == null
+                  ? Text(
+                      initials(name),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
+                    )
+                  : ClipOval(
+                      child: Image.network(
+                        profileUrl,
+                        width: 42,
+                        height: 42,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Text(
+                            initials(name),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -363,9 +413,9 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
           },
         ),
         const SizedBox(height: 12),
-        const SizedBox(
+        SizedBox(
           width: double.infinity,
-          child: _NeedLocationButton(),
+          child: _NeedLocationButton(onTap: _openPrivateTaxi),
         ),
         const SizedBox(height: 10),
         const _LogisticsBanner(),
@@ -382,21 +432,26 @@ class _HeaderCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .13),
-            shape: BoxShape.circle,
-            border: Border.all(color: glassBorder),
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0x3D111336),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: .32)),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: Colors.white, size: 21),
+            ),
           ),
-          alignment: Alignment.center,
-          child: Icon(icon, color: Colors.white, size: 21),
         ),
       ),
     );
@@ -423,14 +478,16 @@ class _LogisticsBanner extends StatelessWidget {
 }
 
 class _NeedLocationButton extends StatelessWidget {
-  const _NeedLocationButton();
+  const _NeedLocationButton({required this.onTap});
+
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: onTap,
         borderRadius: BorderRadius.circular(13),
         child: Container(
           height: 47,
@@ -494,6 +551,23 @@ class _NeedLocationButton extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _profileImageUrl(Map<String, dynamic> profile) {
+  for (final key in [
+    'photoUrl',
+    'avatarUrl',
+    'imageUrl',
+    'profilePhoto',
+    'profileImage',
+    'avatar',
+  ]) {
+    final value = profile[key]?.toString().trim();
+    if (value != null && value.isNotEmpty && value.startsWith('http')) {
+      return value;
+    }
+  }
+  return null;
 }
 
 class _VehicleShowcaseCard extends StatelessWidget {

@@ -62,6 +62,11 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
   @override
   Widget build(BuildContext context) {
     final trip = widget.trip;
+    final isTaxi = trip.serviceMode == 'Taxi Privado';
+    final finishedAt = DateTime.now().toLocal();
+    final two = (int value) => value.toString().padLeft(2, '0');
+    final finishedLabel =
+        'Finalizado hoy, ${two(finishedAt.hour)}:${two(finishedAt.minute)} hrs';
     final screenWidth = MediaQuery.sizeOf(context).width;
     const logoScale = 1.04;
     final logoOffsetX = screenWidth > 390
@@ -85,8 +90,8 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                 child: _DeliveryCheck(),
               ),
               const SizedBox(height: 10),
-              const Text(
-                '¡Paquete entregado!',
+              Text(
+                isTaxi ? '¡Viaje terminado!' : '¡Paquete entregado!',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -96,8 +101,10 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                 ),
               ),
               const SizedBox(height: 3),
-              const Text(
-                'Tu paquete ha llegado a su destino de forma segura y puntual.',
+              Text(
+                isTaxi
+                    ? 'Tu viaje terminó correctamente en el destino indicado.'
+                    : 'Tu paquete ha llegado a su destino de forma segura y puntual.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xFFB9D4FF),
@@ -168,7 +175,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                             fit: BoxFit.contain,
                           ),
                           const SizedBox(width: 6),
-                          const Text('Entregado hoy, 14:30 hrs',
+                          Text(finishedLabel,
                               style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,

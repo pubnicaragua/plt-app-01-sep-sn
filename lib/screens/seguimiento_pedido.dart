@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -164,9 +163,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       final waTarget = phone.isEmpty
           ? 'https://wa.me/?text='
           : 'https://wa.me/${phone.startsWith('505') ? phone : '505$phone'}?text=';
-      if (!kIsWeb &&
-          (await launchUrl(
-              Uri.parse('$waTarget${Uri.encodeComponent(message)}')))) {
+      if (await launchUrl(
+        Uri.parse('$waTarget${Uri.encodeComponent(message)}'),
+        mode: LaunchMode.externalApplication,
+      )) {
         return;
       }
       if (!mounted) return;
@@ -760,7 +760,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             ]),
             const SizedBox(height: 8),
             Text(
-              'Llegada en $eta minutos (${distance.toStringAsFixed(1)} km)',
+              currentStatus == 'Completado'
+                  ? 'Entrega completada'
+                  : currentStatus == 'Pendiente'
+                      ? 'Tiempo estimado pendiente'
+                      : 'Llegada en $eta minutos (${distance.toStringAsFixed(1)} km)',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 19,
@@ -931,7 +935,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                       child: Text(
                         currentStatus == 'Pendiente'
                             ? 'La solicitud está pendiente de asignación.'
-                            : 'Viaje en curso. Finalizará cuando el conductor confirme la entrega.',
+                            : currentStatus == 'Asignado'
+                                ? 'Conductor asignado. Esperando el inicio del viaje.'
+                                : currentStatus == 'En camino'
+                                    ? 'El conductor va hacia el punto de recogida.'
+                                    : 'El paquete fue recogido y va hacia el destino.',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11.5,
@@ -941,34 +949,6 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                       ),
                     ),
                   ],
-                ),
-              ),
-
-            // --- CAMBIO PARA PRUEBAS: 'true' hace que el botón siempre sea visible ---
-            if (true) const SizedBox(height: 12),
-            if (true)
-              SizedBox(
-                height: 48,
-                child: Material(
-                  color: accentBlue,
-                  borderRadius: BorderRadius.circular(26),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(26),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => FinalizarViaje(trip: trip)),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Ver detalle de entrega',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Figtree'),
-                      ),
-                    ),
-                  ),
                 ),
               ),
 

@@ -41,6 +41,7 @@ class CrearEnvio1 extends StatefulWidget {
     this.startScheduled = false,
     this.startDate,
     this.startTime,
+    this.startServiceMode = 'Envíos',
     this.returnToPointSelection = false,
   });
 
@@ -56,6 +57,7 @@ class CrearEnvio1 extends StatefulWidget {
   final bool startScheduled;
   final String? startDate;
   final String? startTime;
+  final String startServiceMode;
   final bool returnToPointSelection;
 
   @override
@@ -68,7 +70,11 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   PlaceSuggestion? originPlace;
   PlaceSuggestion? destinationPlace;
   late String transport;
-  String serviceTab = 'Envíos';
+  late String serviceTab;
+  String taxiVariant = 'taxi-sedan';
+  late bool scheduled;
+  String? scheduledDate;
+  String? scheduledTime;
   AppSettings? settings;
   Timer? _settingsPoll;
   GoogleMapController? _mapController;
@@ -85,6 +91,13 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     originPlace = widget.startOriginPlace;
     destinationPlace = widget.startDestinationPlace;
     transport = _normalizeTransport(widget.startTransport);
+    serviceTab = widget.startServiceMode == 'Taxi Privado'
+        ? 'Taxi Privado'
+        : 'Envíos';
+    if (serviceTab == 'Taxi Privado') transport = 'Vehículo';
+    scheduled = widget.startScheduled;
+    scheduledDate = widget.startDate;
+    scheduledTime = widget.startTime;
 
     apiClient.getSettings().then((data) {
       if (mounted) setState(() => settings = data);
@@ -474,17 +487,70 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
           originPlace: originPlace,
           destinationPlace: destinationPlace,
           transport: transport,
+          serviceMode: serviceTab,
+          vehicleVariant: serviceTab == 'Taxi Privado' ? taxiVariant : null,
           estimatedShipping: _priceFor(transport),
           originRefs: widget.startOriginRefs,
           destinationRefs: widget.startDestinationRefs,
           recipientName: widget.startRecipientName,
           recipientPhone: widget.startRecipientPhone,
-          startScheduled: widget.startScheduled,
-          startDate: widget.startDate,
-          startTime: widget.startTime,
+          startScheduled: scheduled,
+          startDate: scheduledDate,
+          startTime: scheduledTime,
         ),
       ),
     );
+  }
+
+  Future<void> _openSchedule() async {
+    final now = DateTime.now();
+    final initialDate = scheduledDate == null
+        ? now.add(const Duration(minutes: 30))
+        : DateTime.tryParse(scheduledDate!) ?? now;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initialDate.isBefore(now) ? now : initialDate,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 1)),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(primary: accentBlue),
+        ),
+        child: child!,
+      ),
+    );
+    if (date == null || !mounted) return;
+    final parsedTime = scheduledTime?.split(':');
+    final initialTime = parsedTime != null && parsedTime.length == 2
+        ? TimeOfDay(
+            hour: int.tryParse(parsedTime[0]) ?? now.hour,
+            minute: int.tryParse(parsedTime[1]) ?? now.minute,
+          )
+        : TimeOfDay.fromDateTime(now.add(const Duration(minutes: 30)));
+    final time = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(primary: accentBlue),
+        ),
+        child: child!,
+      ),
+    );
+    if (time == null || !mounted) return;
+    final selected = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    if (selected.isBefore(now) || selected.isAfter(now.add(const Duration(hours: 24)))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Programa el viaje dentro de las próximas 24 horas.')),
+      );
+      return;
+    }
+    String two(int value) => value.toString().padLeft(2, '0');
+    setState(() {
+      scheduled = true;
+      scheduledDate = '${date.year}-${two(date.month)}-${two(date.day)}';
+      scheduledTime = '${two(time.hour)}:${two(time.minute)}';
+    });
   }
 
   @override
@@ -572,7 +638,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: _openSchedule,
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.white,
                         backgroundColor: accentBlue,
@@ -581,8 +647,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                             horizontal: 18, vertical: 8),
                         shape: const StadiumBorder(),
                       ),
-                      child: const Text(
-                        'Programar',
+                      child: Text(
+                        scheduled ? 'Programado' : 'Programar',
                         style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
@@ -623,33 +689,70 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _ImageVehicleCard(
-                      label: 'Moto',
-                      subtitle: 'Envíos en moto',
-                      asset: 'assets/img/HomeCliente/crear_moto.png',
-                      selected: transport == 'Moto',
-                      onTap: () => setState(() => transport = 'Moto'),
+                  if (serviceTab == 'Taxi Privado')
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ImageVehicleCard(
+                            label: 'Sedán',
+                            subtitle: 'Máximo 4 pasajeros',
+                            asset: 'assets/img/HomeCliente/crear_auto.png',
+                            selected: taxiVariant == 'taxi-sedan',
+                            onTap: () => setState(() {
+                              transport = 'Vehículo';
+                              taxiVariant = 'taxi-sedan';
+                            }),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: _ImageVehicleCard(
+                            label: 'SUV',
+                            subtitle: 'Máximo 6 pasajeros',
+                            asset: 'assets/img/HomeCliente/crear_auto.png',
+                            selected: taxiVariant == 'taxi-suv',
+                            onTap: () => setState(() {
+                              transport = 'Vehículo';
+                              taxiVariant = 'taxi-suv';
+                            }),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ImageVehicleCard(
+                            label: 'Moto',
+                            subtitle: 'Envíos en moto',
+                            asset: 'assets/img/HomeCliente/crear_moto.png',
+                            selected: transport == 'Moto',
+                            onTap: () => setState(() => transport = 'Moto'),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: _ImageVehicleCard(
+                            label: 'Auto',
+                            subtitle: 'Envíos en auto',
+                            asset: 'assets/img/HomeCliente/crear_auto.png',
+                            selected: transport == 'Vehículo',
+                            onTap: () => setState(() => transport = 'Vehículo'),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: _ImageVehicleCard(
+                            label: 'Carga',
+                            subtitle: 'Carga',
+                            asset: 'assets/img/HomeCliente/crear_carga.png',
+                            selected: transport == 'Camión',
+                            onTap: () => setState(() => transport = 'Camión'),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 7),
-                    _ImageVehicleCard(
-                      label: 'Auto',
-                      subtitle: 'Envíos en auto',
-                      asset: 'assets/img/HomeCliente/crear_auto.png',
-                      selected: transport == 'Vehículo',
-                      onTap: () => setState(() => transport = 'Vehículo'),
-                    ),
-                    const SizedBox(width: 7),
-                    _ImageVehicleCard(
-                      label: 'Carga',
-                      subtitle: 'Carga',
-                      asset: 'assets/img/HomeCliente/crear_carga.png',
-                      selected: transport == 'Camión',
-                      onTap: () => setState(() => transport = 'Camión'),
-                    ),
-                  ],
-                ),
                 if (_distanceKm != null) ...[
                   const SizedBox(height: 8),
                   _SelectedRateSummary(
@@ -2092,7 +2195,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                   originPlace: originPlace,
                   destinationPlace: destinationPlace,
                   transport: transport,
-          serviceMode: serviceTab,
+                  serviceMode: 'Envíos',
                   estimatedShipping: price,
                   description: description.text.trim(),
                   fragile: fragile,

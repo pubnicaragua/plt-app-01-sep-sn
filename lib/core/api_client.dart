@@ -16,6 +16,7 @@ class ApiClient {
   final http.Client _client;
   String? accessToken;
   SessionUser? currentUser;
+  Map<String, dynamic> currentProfile = const {};
 
   static String get _defaultBaseUrl {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -40,6 +41,7 @@ class ApiClient {
     final response = LoginResponse.fromJson(json);
     accessToken = response.accessToken;
     currentUser = response.user;
+    currentProfile = response.profile;
     return response;
   }
 
@@ -60,6 +62,7 @@ class ApiClient {
   Future<void> clearSession() async {
     accessToken = null;
     currentUser = null;
+    currentProfile = const {};
   }
 
   Future<LoginResponse> register({
@@ -93,6 +96,7 @@ class ApiClient {
     final response = LoginResponse.fromJson(json);
     accessToken = response.accessToken;
     currentUser = response.user;
+    currentProfile = response.profile;
     return response;
   }
 

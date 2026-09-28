@@ -25,11 +25,15 @@ class AppNavBar extends StatelessWidget {
           assetPath: 'assets/img/HomeCliente/HistorialNavbar.png'),
       AppNavBarItem(Icons.person_outline_rounded, 'Tú'),
     ],
+    this.profileImageUrl,
+    this.profileInitials = '',
   });
 
   final int current;
   final ValueChanged<int> onChanged;
   final List<AppNavBarItem> items;
+  final String? profileImageUrl;
+  final String profileInitials;
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +106,17 @@ class AppNavBar extends StatelessWidget {
                 SizedBox(
                   width: 27,
                   height: 27,
-                  child: item.assetPath == null
+                  child: index == 3 && profileImageUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            profileImageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _profileFallback(item),
+                          ),
+                        )
+                      : index == 3 && profileInitials.isNotEmpty
+                          ? _profileFallback(item)
+                          : item.assetPath == null
                       ? Icon(item.icon, color: Colors.white, size: 22)
                       : Image.asset(
                           item.assetPath!,
@@ -128,6 +142,26 @@ class AppNavBar extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _profileFallback(AppNavBarItem item) {
+    return Container(
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .20),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withValues(alpha: .35)),
+      ),
+      child: Text(
+        profileInitials.isEmpty ? 'Tú' : profileInitials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Figtree',
         ),
       ),
     );

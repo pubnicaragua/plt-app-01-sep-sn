@@ -31,6 +31,17 @@ String formatFareCs(double value, [double multiple = 5]) =>
 
 final ValueNotifier<bool> appDarkMode = ValueNotifier<bool>(false);
 
+/// Saludo comercial usando la hora local de Nicaragua.
+/// Managua opera en UTC-06:00; se calcula explícitamente para que el saludo
+/// no dependa de la zona horaria del dispositivo o del navegador.
+String greetingForManagua() {
+  final managuaNow = DateTime.now().toUtc().subtract(const Duration(hours: 6));
+  final hour = managuaNow.hour;
+  if (hour >= 1 && hour < 12) return 'Buenos días';
+  if (hour >= 12 && hour < 19) return 'Buenas tardes';
+  return 'Buenas noches';
+}
+
 const LinearGradient fondoGradient = LinearGradient(
   begin: Alignment.topCenter,
   end: Alignment.bottomCenter,
