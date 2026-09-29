@@ -42,6 +42,24 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   int? _routeDurationSeconds;
   BitmapDescriptor? _driverMarkerIcon;
   String? _markerTransport;
+  Map<String, BitmapDescriptor> _routeMarkerIcons = const {};
+  bool _completionOpened = false;
+  Timer? _demoTaxiCompletion;
+
+  // PRUEBA TEMPORAL: quitar este temporizador cuando el conductor tenga
+  // movimiento real y el backend cambie el viaje a "Completado".
+  void _scheduleDemoTaxiCompletion() {
+    _demoTaxiCompletion = Timer(const Duration(seconds: 10), () {
+      if (!mounted || _completionOpened) return;
+      _completionOpened = true;
+      poll?.cancel();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => FinalizarViaje(trip: _latestTrip ?? widget.trip),
+        ),
+      );
+    });
+  }
 
   @override
   void initState() {
@@ -49,13 +67,18 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     _prevStatus = widget.trip.status;
     tracking = apiClient.getTracking(widget.trip.id);
     unawaited(_loadDriverMarkerIcon(widget.trip.transport));
+    unawaited(_loadRouteMarkerIcons());
     _loadRoadRoute();
     poll = Timer.periodic(const Duration(seconds: 5), (_) => _refresh());
+    if (widget.trip.serviceMode == 'Taxi Privado') {
+      _scheduleDemoTaxiCompletion();
+    }
   }
 
   @override
   void dispose() {
     poll?.cancel();
+    _demoTaxiCompletion?.cancel();
     super.dispose();
   }
 
@@ -77,6 +100,17 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       }
       final data = await apiClient.getTrip(widget.trip.id);
       if (!mounted) return;
+      if (data.status == 'Completado' &&
+          widget.trip.serviceMode == 'Taxi Privado' &&
+          !_completionOpened) {
+        _completionOpened = true;
+        poll?.cancel();
+        _demoTaxiCompletion?.cancel();
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => FinalizarViaje(trip: data)),
+        );
+        return;
+      }
       final refreshedTracking = apiClient.getTracking(widget.trip.id);
       if (data.status != _prevStatus) {
         setState(() {
@@ -235,6 +269,13 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     if (widget.trip.originLat != null && widget.trip.originLng != null) {
       points.add(LatLng(widget.trip.originLat!, widget.trip.originLng!));
     }
+    final stops = List<TripStop>.of(widget.trip.stops)
+      ..sort((a, b) => a.order.compareTo(b.order));
+    for (final stop in stops) {
+      if (stop.latitude != null && stop.longitude != null) {
+        points.add(LatLng(stop.latitude!, stop.longitude!));
+      }
+    }
     if (widget.trip.destinationLat != null &&
         widget.trip.destinationLng != null) {
       points.add(
@@ -243,6 +284,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     }
     return points;
   }
+
+  List<LatLng> _orderedTripPoints() => _tripBoundsPoints();
 
   List<LatLng> _routeCoordinates(TrackingData? data) {
     if (_roadRoute.length >= 2) return _roadRoute;
@@ -260,6 +303,60 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     } catch (_) {
       // El marcador estándar queda como respaldo si el bitmap no está disponible.
     }
+  }
+
+  Future<void> _loadRouteMarkerIcons() async {
+    final icons = <String, BitmapDescriptor>{};
+    icons['A'] = await _buildRouteLabelMarker('A', cyan);
+    final stops = List<TripStop>.of(widget.trip.stops)
+      ..sort((a, b) => a.order.compareTo(b.order));
+    for (var index = 0; index < stops.length; index++) {
+      final label = String.fromCharCode(66 + index);
+      icons[label] = await _buildRouteLabelMarker(label, accentBlue);
+    }
+    if (!mounted) return;
+    setState(() => _routeMarkerIcons = icons);
+  }
+
+  Future<BitmapDescriptor> _buildRouteLabelMarker(
+    String label,
+    Color color,
+  ) async {
+    const size = 80.0;
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
+    const center = Offset(size / 2, size / 2);
+    canvas.drawCircle(center, 28, Paint()..color = color);
+    canvas.drawCircle(
+      center,
+      28,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4,
+    );
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 21,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Figtree',
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(
+      canvas,
+      Offset(
+        center.dx - painter.width / 2,
+        center.dy - painter.height / 2,
+      ),
+    );
+    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
   Future<BitmapDescriptor> _buildDriverMarkerIcon(String? value) async {
@@ -306,25 +403,26 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
 
   Future<void> _loadRoadRoute() async {
     final trip = widget.trip;
-    if (trip.originLat == null ||
-        trip.originLng == null ||
-        trip.destinationLat == null ||
-        trip.destinationLng == null) {
+    final tripPoints = _orderedTripPoints();
+    if (tripPoints.length < 2) {
       return;
     }
 
     // El API entrega la geometría vial calculada en servidor cuando la clave
     // de Google está configurada en Render. Así app y web comparten la misma
     // ruta y el ETA se actualiza desde la posición viva del conductor.
-    var routingOriginLat = trip.originLat!;
-    var routingOriginLng = trip.originLng!;
+    var routingOriginLat = tripPoints.first.latitude;
+    var routingOriginLng = tripPoints.first.longitude;
     try {
       final serverTracking = await tracking;
-      routingOriginLat =
-          serverTracking.driverLocation?.latitude ?? routingOriginLat;
-      routingOriginLng =
-          serverTracking.driverLocation?.longitude ?? routingOriginLng;
-      if (serverTracking.routeProvider == 'google' &&
+      if (trip.serviceMode != 'Taxi Privado') {
+        routingOriginLat =
+            serverTracking.driverLocation?.latitude ?? routingOriginLat;
+        routingOriginLng =
+            serverTracking.driverLocation?.longitude ?? routingOriginLng;
+      }
+      if (trip.serviceMode != 'Taxi Privado' &&
+          serverTracking.routeProvider == 'google' &&
           serverTracking.route.length >= 2) {
         final points = serverTracking.route
             .map((point) => LatLng(point.latitude, point.longitude))
@@ -353,20 +451,30 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       defaultValue: 'AIzaSyCMwxArmM-BEJuxgbjOiON8KdH_IsNH1F4',
     );
     final requests = <Uri>[];
+    final origin = tripPoints.first;
+    final destination = tripPoints.last;
+    final intermediate = tripPoints
+        .sublist(1, tripPoints.length - 1)
+        .map((point) => '${point.latitude},${point.longitude}')
+        .join('|');
     if (mapsKey.isNotEmpty) {
       requests
           .add(Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
         'origin': '$routingOriginLat,$routingOriginLng',
-        'destination': '${trip.destinationLat},${trip.destinationLng}',
+        'destination': '${destination.latitude},${destination.longitude}',
         'mode': 'driving',
         'alternatives': 'false',
         'departure_time': 'now',
         'key': mapsKey,
+        if (intermediate.isNotEmpty) 'waypoints': intermediate,
       }));
     }
+    final osrmCoordinates = tripPoints
+        .map((point) => '${point.longitude},${point.latitude}')
+        .join(';');
     requests.add(Uri.https(
       'router.project-osrm.org',
-      '/route/v1/driving/$routingOriginLng,$routingOriginLat;${trip.destinationLng},${trip.destinationLat}',
+      '/route/v1/driving/$osrmCoordinates',
       {'overview': 'full', 'geometries': 'geojson'},
     ));
 
@@ -532,8 +640,25 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       markers.add(Marker(
         markerId: const MarkerId('pickup'),
         position: LatLng(trip.originLat!, trip.originLng!),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+        icon: _routeMarkerIcons['A'] ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
         infoWindow: InfoWindow(title: trip.origin),
+      ));
+    }
+    final stops = List<TripStop>.of(trip.stops)
+      ..sort((a, b) => a.order.compareTo(b.order));
+    for (var index = 0; index < stops.length; index++) {
+      final stop = stops[index];
+      if (stop.latitude == null || stop.longitude == null) continue;
+      markers.add(Marker(
+        markerId: MarkerId('stop-${stop.order}'),
+        position: LatLng(stop.latitude!, stop.longitude!),
+        icon: _routeMarkerIcons[String.fromCharCode(66 + index)] ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        infoWindow: InfoWindow(
+          title: 'Ruta ${String.fromCharCode(66 + index)}',
+          snippet: stop.address,
+        ),
       ));
     }
     if (trip.destinationLat != null && trip.destinationLng != null) {
@@ -589,6 +714,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   @override
   Widget build(BuildContext context) {
     final trip = widget.trip;
+    final isTaxi = trip.serviceMode == 'Taxi Privado';
     final distance = _routeDistanceKm ?? trip.distanceKm ?? 4.2;
     final eta = _routeDurationSeconds != null && _routeDurationSeconds! > 0
         ? math.max(1, (_routeDurationSeconds! / 60).round())
@@ -617,10 +743,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                               ? () => Navigator.of(context).pop()
                               : null,
                         ),
-                        const Expanded(
+                        Expanded(
                           child: Center(
                             child: Text(
-                              'Seguimiento en vivo',
+                              isTaxi ? 'Taxi en camino' : 'Seguimiento en vivo',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
@@ -638,11 +764,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
               ),
             ),
             DraggableScrollableSheet(
-              initialChildSize: .59,
-              minChildSize: .56,
+              initialChildSize: isTaxi ? .48 : .59,
+              minChildSize: isTaxi ? .45 : .56,
               maxChildSize: .90,
               snap: true,
-              snapSizes: const [.59, .90],
+              snapSizes: isTaxi ? const [.48, .90] : const [.59, .90],
               builder: (context, scrollController) {
                 return ClipRRect(
                   borderRadius: const BorderRadius.vertical(
@@ -685,12 +811,13 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
 
   Widget _buildGoogleMap() {
     final height = MediaQuery.sizeOf(context).height;
+    final sheetFraction = widget.trip.serviceMode == 'Taxi Privado' ? .48 : .59;
     return GoogleMap(
       initialCameraPosition:
           CameraPosition(target: _initialMapCenter, zoom: 12.8),
       // La hoja inferior ocupa la parte baja del mapa. Este padding hace que
       // la ruta quede centrada en el área visible y no detrás del glass.
-      padding: EdgeInsets.only(top: 116, bottom: height * .59),
+      padding: EdgeInsets.only(top: 116, bottom: height * sheetFraction),
       markers: _mapMarkers(_mapData),
       polylines: _mapPolylines(_mapData),
       mapType: MapType.normal,
@@ -724,6 +851,21 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         final currentLocation =
             liveData?.currentLocationLabel ?? trip.destination;
         if (liveData != null) _syncMapData(liveData);
+        if (widget.trip.serviceMode == 'Taxi Privado') {
+          return _buildTaxiBody(
+            trip: trip,
+            liveData: liveData,
+            distance: distance,
+            eta: eta,
+            scrollController: scrollController,
+            driverName: driverName,
+            driverVehicle: driverVehicle,
+            driverPlate: driverPlate,
+            driverPhoto: driverPhoto,
+            currentLocation: currentLocation,
+            currentStatus: currentStatus,
+          );
+        }
         return ListView(
           controller: scrollController,
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
@@ -1001,6 +1143,168 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildTaxiBody({
+    required Trip trip,
+    required TrackingData? liveData,
+    required double distance,
+    required int eta,
+    required ScrollController scrollController,
+    required String driverName,
+    required String driverVehicle,
+    required String driverPlate,
+    required String? driverPhoto,
+    required String currentLocation,
+    required String currentStatus,
+  }) {
+    final status = currentStatus == 'Pendiente' ? 'Buscando conductor' : 'En camino';
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      children: [
+        Center(
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5),
+            ),
+          ),
+        ),
+        const SizedBox(height: 15),
+        Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              status,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Llegada en $eta minutos (${distance.toStringAsFixed(1)} km)',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Figtree',
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            _AssetIcon('location.png', size: 18),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                'Aproximándose a $currentLocation',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _DriverAvatar(name: driverName, photoUrl: driverPhoto),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    driverName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                  Text(
+                    driverVehicle,
+                    style: const TextStyle(
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 12,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .10),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: glassBorder),
+                    ),
+                    child: Text(
+                      driverPlate,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            RoundBtn(
+              asset: 'llamada.png',
+              onTap: () => _callDriver(liveData?.driverPhone ?? trip.contactPhone),
+            ),
+            const SizedBox(width: 7),
+            RoundBtn(
+              asset: 'mensaje.png',
+              filled: true,
+              onTap: () => _shareWhatsApp(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 17),
+        Row(
+          children: [
+            Expanded(
+              child: _MiniBtn(
+                asset: 'copiar.png',
+                label: 'Copiar',
+                onTap: () => _copyText(trip.id, 'Código de seguimiento copiado'),
+              ),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: _MiniBtn(
+                asset: 'compartir.png',
+                label: 'Compartir',
+                filled: true,
+                onTap: () => _shareTracking(),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

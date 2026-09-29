@@ -34,6 +34,7 @@ class CrearEnvio1 extends StatefulWidget {
     this.startOriginPlace,
     this.startDestinationPlace,
     this.startTransport = 'Moto',
+    this.startServiceMode = 'Envíos',
     this.startOriginRefs = '',
     this.startDestinationRefs = '',
     this.startRecipientName = '',
@@ -49,6 +50,7 @@ class CrearEnvio1 extends StatefulWidget {
   final PlaceSuggestion? startOriginPlace;
   final PlaceSuggestion? startDestinationPlace;
   final String startTransport;
+  final String startServiceMode;
   final String startOriginRefs;
   final String startDestinationRefs;
   final String startRecipientName;
@@ -69,6 +71,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   PlaceSuggestion? destinationPlace;
   late String transport;
   String serviceTab = 'Envíos';
+  String taxiVariant = 'Sedán';
   AppSettings? settings;
   Timer? _settingsPoll;
   GoogleMapController? _mapController;
@@ -85,6 +88,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     originPlace = widget.startOriginPlace;
     destinationPlace = widget.startDestinationPlace;
     transport = _normalizeTransport(widget.startTransport);
+    serviceTab = widget.startServiceMode;
 
     apiClient.getSettings().then((data) {
       if (mounted) setState(() => settings = data);
@@ -474,6 +478,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
           originPlace: originPlace,
           destinationPlace: destinationPlace,
           transport: transport,
+          serviceMode: serviceTab,
           estimatedShipping: _priceFor(transport),
           originRefs: widget.startOriginRefs,
           destinationRefs: widget.startDestinationRefs,
@@ -615,7 +620,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                             enabled: true,
                             onTap: () => setState(() {
                               serviceTab = label;
-                              if (label == 'Taxi Privado') transport = 'Vehículo';
+                              if (label == 'Taxi Privado') {
+                                transport = 'Vehículo';
+                                taxiVariant = 'Sedán';
+                              }
                             }),
                           ),
                         ),
@@ -623,33 +631,71 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _ImageVehicleCard(
-                      label: 'Moto',
-                      subtitle: 'Envíos en moto',
-                      asset: 'assets/img/HomeCliente/crear_moto.png',
-                      selected: transport == 'Moto',
-                      onTap: () => setState(() => transport = 'Moto'),
-                    ),
-                    const SizedBox(width: 7),
-                    _ImageVehicleCard(
-                      label: 'Auto',
-                      subtitle: 'Envíos en auto',
-                      asset: 'assets/img/HomeCliente/crear_auto.png',
-                      selected: transport == 'Vehículo',
-                      onTap: () => setState(() => transport = 'Vehículo'),
-                    ),
-                    const SizedBox(width: 7),
-                    _ImageVehicleCard(
-                      label: 'Carga',
-                      subtitle: 'Carga',
-                      asset: 'assets/img/HomeCliente/crear_carga.png',
-                      selected: transport == 'Camión',
-                      onTap: () => setState(() => transport = 'Camión'),
-                    ),
-                  ],
-                ),
+                if (serviceTab == 'Taxi Privado')
+                  Row(
+                    children: [
+                      _ImageVehicleCard(
+                        label: 'Sedán',
+                        subtitle: '4 pasajeros',
+                        asset: 'assets/img/HomeCliente/taxi_sedan.png',
+                        selected: taxiVariant == 'Sedán',
+                        onTap: () => setState(() {
+                          taxiVariant = 'Sedán';
+                          transport = 'Vehículo';
+                        }),
+                      ),
+                      const SizedBox(width: 7),
+                      _ImageVehicleCard(
+                        label: 'SUV',
+                        subtitle: '6 pasajeros',
+                        asset: 'assets/img/HomeCliente/taxi_suv.png',
+                        selected: taxiVariant == 'SUV',
+                        onTap: () => setState(() {
+                          taxiVariant = 'SUV';
+                          transport = 'Vehículo';
+                        }),
+                      ),
+                      const SizedBox(width: 7),
+                      _ImageVehicleCard(
+                        label: 'Microbus',
+                        subtitle: '12 pasajeros',
+                        asset: 'assets/img/HomeCliente/taxi_microbus.png',
+                        selected: taxiVariant == 'Microbus',
+                        onTap: () => setState(() {
+                          taxiVariant = 'Microbus';
+                          transport = 'Vehículo';
+                        }),
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      _ImageVehicleCard(
+                        label: 'Moto',
+                        subtitle: 'Envíos en moto',
+                        asset: 'assets/img/HomeCliente/crear_moto.png',
+                        selected: transport == 'Moto',
+                        onTap: () => setState(() => transport = 'Moto'),
+                      ),
+                      const SizedBox(width: 7),
+                      _ImageVehicleCard(
+                        label: 'Auto',
+                        subtitle: 'Envíos en auto',
+                        asset: 'assets/img/HomeCliente/crear_auto.png',
+                        selected: transport == 'Vehículo',
+                        onTap: () => setState(() => transport = 'Vehículo'),
+                      ),
+                      const SizedBox(width: 7),
+                      _ImageVehicleCard(
+                        label: 'Carga',
+                        subtitle: 'Carga',
+                        asset: 'assets/img/HomeCliente/crear_carga.png',
+                        selected: transport == 'Camión',
+                        onTap: () => setState(() => transport = 'Camión'),
+                      ),
+                    ],
+                  ),
                 if (_distanceKm != null) ...[
                   const SizedBox(height: 8),
                   _SelectedRateSummary(
@@ -2092,7 +2138,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                   originPlace: originPlace,
                   destinationPlace: destinationPlace,
                   transport: transport,
-          serviceMode: serviceTab,
+                  serviceMode: 'Envíos', //Cambiar a serviceTab
                   estimatedShipping: price,
                   description: description.text.trim(),
                   fragile: fragile,

@@ -62,6 +62,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
   @override
   Widget build(BuildContext context) {
     final trip = widget.trip;
+    final isTaxi = trip.serviceMode == 'Taxi Privado';
     final screenWidth = MediaQuery.sizeOf(context).width;
     const logoScale = 1.04;
     final logoOffsetX = screenWidth > 390
@@ -85,8 +86,8 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                 child: _DeliveryCheck(),
               ),
               const SizedBox(height: 10),
-              const Text(
-                '¡Paquete entregado!',
+              Text(
+                isTaxi ? '¡Viaje terminado!' : '¡Paquete entregado!',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -96,8 +97,10 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                 ),
               ),
               const SizedBox(height: 3),
-              const Text(
-                'Tu paquete ha llegado a su destino de forma segura y puntual.',
+              Text(
+                isTaxi
+                    ? 'Tu pasajero ha llegado a su destino de forma segura y puntual.'
+                    : 'Tu paquete ha llegado a su destino de forma segura y puntual.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xFFB9D4FF),
@@ -182,12 +185,12 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                     const SizedBox(height: 10),
                     InkWell(
                       onTap: _pickEvidencePhoto,
-                      child: const Padding(
+                      child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 1),
                         child: Center(
                           child: Text(
-                            'Evidencia de entrega',
-                            style: TextStyle(
+                            isTaxi ? 'Evidencia de viaje' : 'Evidencia de entrega',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -298,6 +301,18 @@ class _DeliveryCheck extends StatelessWidget {
       decoration: const BoxDecoration(
         color: Color(0x7A00FF37),
         shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x9900FF37),
+            blurRadius: 22,
+            spreadRadius: 6,
+          ),
+          BoxShadow(
+            color: Color(0x5500FF37),
+            blurRadius: 42,
+            spreadRadius: 10,
+          ),
+        ],
       ),
       child: const Icon(Icons.check_rounded, color: Colors.white, size: 34),
     );

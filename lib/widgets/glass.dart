@@ -234,6 +234,7 @@ class GlassButton extends StatelessWidget {
     this.width = double.infinity,
     this.fontSize = 17,
     this.textColor,
+    this.backgroundColor,
   });
 
   final String label;
@@ -244,6 +245,7 @@ class GlassButton extends StatelessWidget {
   final double width;
   final double fontSize;
   final Color? textColor;
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -261,11 +263,13 @@ class GlassButton extends StatelessWidget {
               filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
               child: Container(
                 decoration: BoxDecoration(
-                  color:
-                      filled ? accentBlue : Colors.white.withValues(alpha: .16),
+                  color: backgroundColor ??
+                      (filled ? accentBlue : Colors.white.withValues(alpha: .16)),
                   borderRadius: BorderRadius.circular(45),
                   border: Border.all(
-                    color: filled ? const Color(0x40FFFFFF) : glassBorder,
+                    color: filled || backgroundColor != null
+                        ? const Color(0x40FFFFFF)
+                        : glassBorder,
                   ),
                 ),
                 child: Row(

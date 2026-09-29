@@ -11,6 +11,8 @@ import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'confirmar_pedido.dart';
+import 'crear_envio3.dart';
+import 'establecer_destinos.dart';
 
 class CrearEnvio2 extends StatefulWidget {
   const CrearEnvio2({
@@ -102,7 +104,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         setState(() {
           settings = value;
           final truckOptions = _truckCatalog;
-          if (truckOptions.isNotEmpty && !truckOptions.any((item) => item.title == truckType)) {
+          if (truckOptions.isNotEmpty &&
+              !truckOptions.any((item) => item.title == truckType)) {
             truckType = truckOptions.first.title;
           }
         });
@@ -121,7 +124,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         setState(() {
           settings = value;
           final truckOptions = _truckCatalog;
-          if (truckOptions.isNotEmpty && !truckOptions.any((item) => item.title == truckType)) {
+          if (truckOptions.isNotEmpty &&
+              !truckOptions.any((item) => item.title == truckType)) {
             truckType = truckOptions.first.title;
           }
         });
@@ -236,10 +240,58 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     }
     final extraDescription = [
       if (widget.transport == 'Camión') 'Tipo de camión: $truckType',
-      if (needsAdditional) 'Servicio adicional: ${_selectedOption?.title ?? additionalOption}',
+      if (needsAdditional)
+        'Servicio adicional: ${_selectedOption?.title ?? additionalOption}',
       if (additionalNotes.text.trim().isNotEmpty)
         'Indicaciones: ${additionalNotes.text.trim()}',
     ].join(' · ');
+    if (widget.serviceMode == 'Taxi Privado') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CrearEnvio3(
+            origin: widget.origin,
+            destination: widget.destination,
+            weight: weight,
+            weightUnit: weightUnit,
+            bundles: bundles,
+            originPlace: widget.originPlace,
+            destinationPlace: widget.destinationPlace,
+            transport: widget.transport,
+            description: [
+              if (description.text.trim().isNotEmpty) description.text.trim(),
+              if (extraDescription.isNotEmpty) extraDescription,
+            ].join(' · '),
+            fragile: false,
+            paymentStatus: paymentStatus,
+            paymentMethod: paymentMethod,
+            serviceMode: widget.serviceMode,
+            passengerCount: passengerCount,
+            returnTrip: _isReturnTrip,
+            stops: List<TripStop>.of(additionalStops),
+            options: _selectedOption == null
+                ? const []
+                : [
+                    TripOptionSelection(
+                      code: _selectedOption!.code,
+                      title: _selectedOption!.title,
+                      description: _selectedOption!.description,
+                      priceCs: _selectedOption!.priceCs,
+                      currency: _selectedOption!.currency,
+                    ),
+                  ],
+            originRefs: widget.originRefs,
+            destinationRefs: references.text.trim(),
+            recipientName: recipient.text.trim(),
+            recipientPhone: phone.text.trim(),
+            serviceType: widget.startScheduled ? 'Programado' : 'Express',
+            scheduledDate: widget.startDate,
+            scheduledTime: widget.startTime,
+            isScheduled: widget.startScheduled,
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Confirmarpedido(
@@ -262,20 +314,24 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           paymentStatus: paymentStatus,
           paymentMethod: paymentMethod,
           serviceMode: widget.serviceMode,
-          vehicleVariant: widget.transport == 'Camión' ? _selectedTruckCode : null,
+          vehicleVariant:
+              widget.transport == 'Camión' ? _selectedTruckCode : null,
           truckType: widget.transport == 'Camión' ? truckType : null,
-          passengerCount: widget.serviceMode == 'Taxi Privado' ? passengerCount : null,
+          passengerCount:
+              widget.serviceMode == 'Taxi Privado' ? passengerCount : null,
           returnTrip: _isReturnTrip,
           stops: List<TripStop>.of(additionalStops),
-          options: _selectedOption == null ? const [] : [
-            TripOptionSelection(
-              code: _selectedOption!.code,
-              title: _selectedOption!.title,
-              description: _selectedOption!.description,
-              priceCs: _selectedOption!.priceCs,
-              currency: _selectedOption!.currency,
-            ),
-          ],
+          options: _selectedOption == null
+              ? const []
+              : [
+                  TripOptionSelection(
+                    code: _selectedOption!.code,
+                    title: _selectedOption!.title,
+                    description: _selectedOption!.description,
+                    priceCs: _selectedOption!.priceCs,
+                    currency: _selectedOption!.currency,
+                  ),
+                ],
           productPhotos: List<Uint8List>.of(productPhotos),
           invoicePhoto: invoicePhoto,
           invoiceFileName: invoiceFileName,
@@ -298,41 +354,55 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       if (item.code == code && item.enabled) return item;
     }
     for (final item in items) {
-      if (fallbackTitle != null && item.title == fallbackTitle && item.enabled) return item;
+      if (fallbackTitle != null && item.title == fallbackTitle && item.enabled)
+        return item;
     }
     return null;
   }
 
-  String _serviceCode(String code) => widget.serviceMode == 'Taxi Privado' && code.startsWith('delivery-')
-      ? code.replaceFirst('delivery-', 'taxi-')
-      : code;
+  String _serviceCode(String code) =>
+      widget.serviceMode == 'Taxi Privado' && code.startsWith('delivery-')
+          ? code.replaceFirst('delivery-', 'taxi-')
+          : code;
 
-  ServiceCatalogItem? _serviceOption(String code, {String? fallbackTitle}) => _findOption(_serviceCode(code), fallbackTitle: fallbackTitle);
+  ServiceCatalogItem? _serviceOption(String code, {String? fallbackTitle}) =>
+      _findOption(_serviceCode(code), fallbackTitle: fallbackTitle);
 
-  ServiceCatalogItem? get _selectedOption => additionalOption.isEmpty ? null : _findOption(additionalOption);
+  ServiceCatalogItem? get _selectedOption =>
+      additionalOption.isEmpty ? null : _findOption(additionalOption);
 
   bool get _isReturnTrip => additionalOption.contains('round-trip');
 
-  List<ServiceCatalogItem> get _truckCatalog => (settings?.serviceCatalog ?? const <ServiceCatalogItem>[])
-      .where((item) => item.kind == 'vehicle' && item.service == 'cargo' && item.transport == 'Camión' && item.enabled)
-      .toList()
-    ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+  List<ServiceCatalogItem> get _truckCatalog =>
+      (settings?.serviceCatalog ?? const <ServiceCatalogItem>[])
+          .where((item) =>
+              item.kind == 'vehicle' &&
+              item.service == 'cargo' &&
+              item.transport == 'Camión' &&
+              item.enabled)
+          .toList()
+        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
   List<_TruckTypeData> get _truckTypesForUi {
     if (_truckCatalog.isEmpty) return _truckTypes;
-    return _truckCatalog.map((item) => _TruckTypeData(
-      code: item.code,
-      label: item.title,
-      asset: _truckAsset(item.code),
-      description: item.description,
-      price: _priceLabel(item, 'C\$40 USD'),
-    )).toList();
+    return _truckCatalog
+        .map((item) => _TruckTypeData(
+              code: item.code,
+              label: item.title,
+              asset: _truckAsset(item.code),
+              description: item.description,
+              price: _priceLabel(item, 'C\$40 USD'),
+            ))
+        .toList();
   }
 
   String _truckAsset(String code) {
-    if (code.contains('extra-small')) return 'assets/img/HomeCliente/carga_extra_pequeno.png';
-    if (code.contains('pickup')) return 'assets/img/HomeCliente/carga_minivan.png';
-    if (code.contains('medium')) return 'assets/img/HomeCliente/carga_mediano.png';
+    if (code.contains('extra-small'))
+      return 'assets/img/HomeCliente/carga_extra_pequeno.png';
+    if (code.contains('pickup'))
+      return 'assets/img/HomeCliente/carga_minivan.png';
+    if (code.contains('medium'))
+      return 'assets/img/HomeCliente/carga_mediano.png';
     return 'assets/img/HomeCliente/carga_grande.png';
   }
 
@@ -345,7 +415,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
 
   String _priceLabel(ServiceCatalogItem? item, String fallback) {
     if (item == null) return fallback;
-    final prefix = item.currency == 'USD' ? 'US$' : 'C$';
+    final prefix = item.currency == 'USD' ? 'US\$' : 'C\$';
     return '$prefix${item.priceCs.toStringAsFixed(item.priceCs.truncateToDouble() == item.priceCs ? 0 : 2)}';
   }
 
@@ -357,7 +427,24 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       additionalOption = item?.code ?? resolvedCode;
     });
     if (code.contains('multiple-stops')) {
-      await _addStop();
+      final selectedStops = await Navigator.of(context)
+          .push<List<TripStop>>(
+        MaterialPageRoute(
+          builder: (_) => EstablecerDestinos(
+            origin: widget.origin,
+            destination: widget.destination,
+            originPlace: widget.originPlace,
+            destinationPlace: widget.destinationPlace,
+            initialStops: additionalStops,
+          ),
+        ),
+      );
+      if (!mounted || selectedStops == null) return;
+      setState(() {
+        additionalStops
+          ..clear()
+          ..addAll(selectedStops);
+      });
     }
   }
 
@@ -366,21 +453,30 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     final address = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Agregar destino adicional', style: TextStyle(fontFamily: 'Figtree')),
+        title: const Text('Agregar destino adicional',
+            style: TextStyle(fontFamily: 'Figtree')),
         content: TextField(
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(hintText: 'Dirección o referencia'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text.trim()), child: const Text('Agregar')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
+              child: const Text('Agregar')),
         ],
       ),
     );
     controller.dispose();
     if (address == null || address.isEmpty || !mounted) return;
-    setState(() => additionalStops.add(TripStop(label: 'Parada ${additionalStops.length + 1}', address: address, order: additionalStops.length + 1)));
+    setState(() => additionalStops.add(TripStop(
+        label: 'Parada ${additionalStops.length + 1}',
+        address: address,
+        order: additionalStops.length + 1)));
   }
 
   @override
@@ -402,7 +498,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                   padding: const EdgeInsets.fromLTRB(12, 9, 12, 18),
                   children: [
                     _PageHeader(
-                      title: widget.transport == 'Moto'
+                      title: widget.serviceMode == 'Taxi Privado'
+                          ? 'Taxi Privado'
+                          : widget.transport == 'Moto'
                           ? 'Motos'
                           : widget.transport == 'Vehículo'
                               ? 'Autos'
@@ -419,9 +517,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       const SizedBox(height: 14),
                     ],
                     const SizedBox(height: 14),
-                    const _FormSectionTitle(
-                      icon: Icons.inventory_2_outlined,
-                      title: 'Detalles de envío',
+                    _FormSectionTitle(
+                      icon: widget.serviceMode == 'Taxi Privado'
+                          ? Icons.local_taxi_outlined
+                          : Icons.inventory_2_outlined,
+                      title: widget.serviceMode == 'Taxi Privado'
+                          ? 'Detalles del viaje'
+                          : 'Detalles de envío',
                     ),
                     const SizedBox(height: 10),
                     Row(
@@ -429,9 +531,12 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                         Expanded(
                           child: _InputPill(
                             controller: recipient,
-                            label: 'Destinatario(s)',
-                            iconAsset:
-                                'assets/img/HomeCliente/detalle_destinatario.png',
+                            label: widget.serviceMode == 'Taxi Privado'
+                                ? 'Pasajero principal'
+                                : 'Destinatario(s)',
+                            iconAsset: widget.serviceMode == 'Taxi Privado'
+                                ? 'assets/img/HomeCliente/carga_ayudante.png'
+                                : 'assets/img/HomeCliente/detalle_destinatario.png',
                             textInputAction: TextInputAction.next,
                           ),
                         ),
@@ -439,7 +544,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                         Expanded(
                           child: _InputPill(
                             controller: phone,
-                            label: 'Teléfono(s)',
+                            label: widget.serviceMode == 'Taxi Privado'
+                                ? 'Teléfono'
+                                : 'Teléfono(s)',
                             iconAsset:
                                 'assets/img/HomeCliente/detalle_telefono.png',
                             keyboardType: TextInputType.phone,
@@ -448,13 +555,15 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    _InputPill(
-                      controller: references,
-                      label: 'Referencias',
-                      iconAsset: 'assets/img/HomeCliente/detalle_lista.png',
-                      textInputAction: TextInputAction.done,
-                    ),
+                    if (widget.serviceMode != 'Taxi Privado') ...[
+                      const SizedBox(height: 8),
+                      _InputPill(
+                        controller: references,
+                        label: 'Referencias',
+                        iconAsset: 'assets/img/HomeCliente/detalle_lista.png',
+                        textInputAction: TextInputAction.done,
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     _InputPill(
                       controller: additionalNotes,
@@ -472,7 +581,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       ),
                       const SizedBox(height: 8),
                       _CounterField(
-                        value: '$passengerCount pasajero${passengerCount == 1 ? '' : 's'}',
+                        value:
+                            '$passengerCount pasajero${passengerCount == 1 ? '' : 's'}',
                         onMinus: passengerCount > 1
                             ? () => setState(() => passengerCount--)
                             : null,
@@ -483,13 +593,19 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                     ],
                     const SizedBox(height: 14),
                     _additionalBlock(),
-                    if (widget.transport == 'Vehículo' ||
-                        widget.transport == 'Camión') ...[
+                    if (widget.serviceMode != 'Taxi Privado' &&
+                        (widget.transport == 'Vehículo' ||
+                            widget.transport == 'Camión')) ...[
                       const SizedBox(height: 14),
                       _fragileBlock(),
                     ],
-                    const SizedBox(height: 12),
-                    _productPhotosBlock(),
+                    if (widget.serviceMode == 'Taxi Privado') ...[
+                      const SizedBox(height: 14),
+                      _paymentBlock(includeInvoice: false),
+                    ] else ...[
+                      const SizedBox(height: 12),
+                      _productPhotosBlock(),
+                    ],
                   ],
                 ),
               ),
@@ -520,10 +636,14 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   Widget _standardAdditionalBlock() {
-    final multiple = _serviceOption('delivery-multiple-stops', fallbackTitle: 'Varios destinos');
-    final roundTrip = _serviceOption('delivery-round-trip', fallbackTitle: 'Ida y vuelta');
-    final insurance = _serviceOption('delivery-insurance', fallbackTitle: 'Seguro');
-    final waiting = _serviceOption('delivery-waiting', fallbackTitle: 'Espera en destino');
+    final multiple = _serviceOption('delivery-multiple-stops',
+        fallbackTitle: 'Varios destinos');
+    final roundTrip =
+        _serviceOption('delivery-round-trip', fallbackTitle: 'Ida y vuelta');
+    final insurance =
+        _serviceOption('delivery-insurance', fallbackTitle: 'Seguro');
+    final waiting =
+        _serviceOption('delivery-waiting', fallbackTitle: 'Espera en destino');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -554,9 +674,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: multiple?.title ?? 'Varios destinos',
                 price: _priceLabel(multiple, 'C\$40 USD'),
                 subtitle: multiple?.description ?? 'Múltiples destinos',
-                selected: needsAdditional && additionalOption == (multiple?.code ?? _serviceCode('delivery-multiple-stops')),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (multiple?.code ??
+                            _serviceCode('delivery-multiple-stops')),
                 enabled: true,
-                onTap: () => _selectAdditional('delivery-multiple-stops', 'Varios destinos'),
+                onTap: () => _selectAdditional(
+                    'delivery-multiple-stops', 'Varios destinos'),
               ),
             ),
             const SizedBox(width: 8),
@@ -566,9 +690,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: roundTrip?.title ?? 'Ida y vuelta',
                 subtitle: roundTrip?.description ?? 'Regreso al origen',
                 price: _priceLabel(roundTrip, 'C\$40 USD'),
-                selected: needsAdditional && additionalOption == (roundTrip?.code ?? _serviceCode('delivery-round-trip')),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (roundTrip?.code ??
+                            _serviceCode('delivery-round-trip')),
                 enabled: true,
-                onTap: () => _selectAdditional('delivery-round-trip', 'Ida y vuelta'),
+                onTap: () =>
+                    _selectAdditional('delivery-round-trip', 'Ida y vuelta'),
               ),
             ),
           ],
@@ -582,7 +710,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: insurance?.title ?? 'Seguro',
                 subtitle: insurance?.description ?? 'Asegura tu producto',
                 price: _priceLabel(insurance, 'C\$40 USD'),
-                selected: needsAdditional && additionalOption == (insurance?.code ?? _serviceCode('delivery-insurance')),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (insurance?.code ?? _serviceCode('delivery-insurance')),
                 enabled: true,
                 onTap: () => _selectAdditional('delivery-insurance', 'Seguro'),
               ),
@@ -594,9 +724,12 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: waiting?.title ?? 'Espera en destino',
                 subtitle: waiting?.description ?? '6 horas espera',
                 price: _priceLabel(waiting, 'C\$40 USD'),
-                selected: needsAdditional && additionalOption == (waiting?.code ?? _serviceCode('delivery-waiting')),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (waiting?.code ?? _serviceCode('delivery-waiting')),
                 enabled: true,
-                onTap: () => _selectAdditional('delivery-waiting', 'Espera en destino'),
+                onTap: () =>
+                    _selectAdditional('delivery-waiting', 'Espera en destino'),
               ),
             ),
           ],
@@ -607,9 +740,12 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
 
   Widget _cargoAdditionalBlock() {
     final helper = _findOption('cargo-helper', fallbackTitle: 'Ayudante');
-    final multiple = _findOption('cargo-multiple-stops', fallbackTitle: 'Varios destinos');
-    final roundTrip = _findOption('cargo-round-trip', fallbackTitle: 'Ida y vuelta');
-    final waiting = _findOption('cargo-waiting', fallbackTitle: 'Espera en destino');
+    final multiple =
+        _findOption('cargo-multiple-stops', fallbackTitle: 'Varios destinos');
+    final roundTrip =
+        _findOption('cargo-round-trip', fallbackTitle: 'Ida y vuelta');
+    final waiting =
+        _findOption('cargo-waiting', fallbackTitle: 'Espera en destino');
     final insurance = _findOption('cargo-insurance', fallbackTitle: 'Seguro');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -641,7 +777,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: helper?.title ?? 'Ayudante',
                 subtitle: helper?.description ?? 'Para carga y descarga',
                 price: _priceLabel(helper, 'C\$40 USD'),
-                selected: needsAdditional && additionalOption == (helper?.code ?? 'cargo-helper'),
+                selected: needsAdditional &&
+                    additionalOption == (helper?.code ?? 'cargo-helper'),
                 enabled: true,
                 onTap: () => _selectAdditional('cargo-helper', 'Ayudante'),
               ),
@@ -653,9 +790,12 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: multiple?.title ?? 'Varios destinos',
                 subtitle: multiple?.description ?? 'Múltiples destinos',
                 price: _priceLabel(multiple, 'C\$40 USD'),
-                selected: needsAdditional && additionalOption == (multiple?.code ?? 'cargo-multiple-stops'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (multiple?.code ?? 'cargo-multiple-stops'),
                 enabled: true,
-                onTap: () => _selectAdditional('cargo-multiple-stops', 'Varios destinos'),
+                onTap: () => _selectAdditional(
+                    'cargo-multiple-stops', 'Varios destinos'),
               ),
             ),
           ],
@@ -669,9 +809,11 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: roundTrip?.title ?? 'Ida y vuelta',
                 subtitle: roundTrip?.description ?? 'Regreso al origen',
                 price: _priceLabel(roundTrip, 'C\$40 USD'),
-                selected: needsAdditional && additionalOption == (roundTrip?.code ?? 'cargo-round-trip'),
+                selected: needsAdditional &&
+                    additionalOption == (roundTrip?.code ?? 'cargo-round-trip'),
                 enabled: true,
-                onTap: () => _selectAdditional('cargo-round-trip', 'Ida y vuelta'),
+                onTap: () =>
+                    _selectAdditional('cargo-round-trip', 'Ida y vuelta'),
               ),
             ),
             const SizedBox(width: 8),
@@ -681,9 +823,11 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: waiting?.title ?? 'Espera en destino',
                 subtitle: waiting?.description ?? '6 horas espera',
                 price: _priceLabel(waiting, 'C\$40 USD'),
-                selected: needsAdditional && additionalOption == (waiting?.code ?? 'cargo-waiting'),
+                selected: needsAdditional &&
+                    additionalOption == (waiting?.code ?? 'cargo-waiting'),
                 enabled: true,
-                onTap: () => _selectAdditional('cargo-waiting', 'Espera en destino'),
+                onTap: () =>
+                    _selectAdditional('cargo-waiting', 'Espera en destino'),
               ),
             ),
           ],
@@ -697,7 +841,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: insurance?.title ?? 'Seguro',
                 subtitle: insurance?.description ?? 'Asegura tu producto',
                 price: _priceLabel(insurance, 'C\$40 USD'),
-                selected: needsAdditional && additionalOption == (insurance?.code ?? 'cargo-insurance'),
+                selected: needsAdditional &&
+                    additionalOption == (insurance?.code ?? 'cargo-insurance'),
                 enabled: true,
                 onTap: () => _selectAdditional('cargo-insurance', 'Seguro'),
               ),
@@ -706,12 +851,19 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             Expanded(
               child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/carga_mas_camiones.png',
-                title: _findOption('cargo-more-trucks')?.title ?? '¿Más camiones?',
-                subtitle: _findOption('cargo-more-trucks')?.description ?? 'Escoge tu producto',
-                price: _priceLabel(_findOption('cargo-more-trucks'), 'C\$40 USD'),
-                selected: needsAdditional && additionalOption == (_findOption('cargo-more-trucks')?.code ?? 'cargo-more-trucks'),
+                title:
+                    _findOption('cargo-more-trucks')?.title ?? '¿Más camiones?',
+                subtitle: _findOption('cargo-more-trucks')?.description ??
+                    'Escoge tu producto',
+                price:
+                    _priceLabel(_findOption('cargo-more-trucks'), 'C\$40 USD'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (_findOption('cargo-more-trucks')?.code ??
+                            'cargo-more-trucks'),
                 enabled: true,
-                onTap: () => _selectAdditional('cargo-more-trucks', '¿Más camiones?'),
+                onTap: () =>
+                    _selectAdditional('cargo-more-trucks', '¿Más camiones?'),
               ),
             ),
           ],
@@ -956,32 +1108,56 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     );
   }
 
-  Widget _paymentBlock() {
+  Widget _paymentBlock({bool includeInvoice = true}) {
+    if (!includeInvoice) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Método de pago',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Figtree',
+            ),
+          ),
+          _StatusToggle(
+            value: paymentMethod,
+            options: const ['Efectivo', 'Transferencia'],
+            onChanged: (value) => setState(() => paymentMethod = value),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Estado del pago',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                fontFamily: 'Figtree',
+        if (includeInvoice) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Estado del pago',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
               ),
-            ),
-            _StatusToggle(
-              value: paymentStatus,
-              options: const ['Pagado', 'Pendiente'],
-              onChanged: (value) => setState(() => paymentStatus = value),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        _invoiceUploadCard(),
-        const SizedBox(height: 19),
+              _StatusToggle(
+                value: paymentStatus,
+                options: const ['Pagado', 'Pendiente'],
+                onChanged: (value) => setState(() => paymentStatus = value),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _invoiceUploadCard(),
+          const SizedBox(height: 19),
+        ],
         const Text(
           'Método de pago',
           style: TextStyle(
@@ -1182,7 +1358,8 @@ const _truckTypes = [
 ];
 
 class _TruckTypeSelector extends StatelessWidget {
-  const _TruckTypeSelector({required this.selected, required this.types, required this.onChanged});
+  const _TruckTypeSelector(
+      {required this.selected, required this.types, required this.onChanged});
 
   final String selected;
   final List<_TruckTypeData> types;

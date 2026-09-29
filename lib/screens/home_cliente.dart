@@ -188,6 +188,31 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
     );
   }
 
+  void _openTaxiFlow() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SeleccionarPuntosEnvio(
+          startTransport: 'Vehículo',
+          onOpenMap: (result) async {
+            return Navigator.of(context).push<RouteSelectionResult>(
+              MaterialPageRoute(
+                builder: (_) => CrearEnvio1(
+                  startOrigin: result.origin,
+                  startDestination: result.destination,
+                  startOriginPlace: result.originPlace,
+                  startDestinationPlace: result.destinationPlace,
+                  startTransport: 'Vehículo',
+                  startServiceMode: 'Taxi Privado',
+                  returnToPointSelection: true,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = apiClient.currentUser;
@@ -363,9 +388,9 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
           },
         ),
         const SizedBox(height: 12),
-        const SizedBox(
+        SizedBox(
           width: double.infinity,
-          child: _NeedLocationButton(),
+          child: _NeedLocationButton(onTap: _openTaxiFlow),
         ),
         const SizedBox(height: 10),
         const _LogisticsBanner(),
@@ -423,14 +448,16 @@ class _LogisticsBanner extends StatelessWidget {
 }
 
 class _NeedLocationButton extends StatelessWidget {
-  const _NeedLocationButton();
+  const _NeedLocationButton({required this.onTap});
+
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: onTap,
         borderRadius: BorderRadius.circular(13),
         child: Container(
           height: 47,
