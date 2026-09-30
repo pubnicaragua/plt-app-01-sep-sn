@@ -143,16 +143,10 @@ class _InicioState extends State<Inicio> {
                   ),
                   Opacity(
                     opacity: .36,
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.mode(
-                        Color(0xFF83A9F5),
-                        BlendMode.srcIn,
-                      ),
-                      child: Image.asset(
-                        'assets/img/fondoapps.png',
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                      ),
+                    child: Image.asset(
+                      'assets/img/fondoapps.png',
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
                     ),
                   ),
                 ],

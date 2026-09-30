@@ -254,7 +254,7 @@ class Trip {
 }
 
 class TripStop {
-  const TripStop({required this.label, required this.address, required this.order, this.id, this.latitude, this.longitude, this.refs});
+  const TripStop({required this.label, required this.address, required this.order, this.id, this.latitude, this.longitude, this.refs, this.recipientName, this.recipientPhone});
 
   final String? id;
   final String label;
@@ -263,6 +263,8 @@ class TripStop {
   final double? latitude;
   final double? longitude;
   final String? refs;
+  final String? recipientName;
+  final String? recipientPhone;
 
   factory TripStop.fromJson(Map<String, dynamic> json) => TripStop(
         id: json['id']?.toString(),
@@ -272,6 +274,8 @@ class TripStop {
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
         refs: json['refs']?.toString(),
+        recipientName: json['recipientName']?.toString(),
+        recipientPhone: json['recipientPhone']?.toString(),
       );
 }
 

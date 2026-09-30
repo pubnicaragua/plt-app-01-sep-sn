@@ -342,9 +342,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       showProgress: false,
       showDescription: false,
       showStepBadge: true,
-      backgroundLogoOpacity: .86,
-      backgroundLogoOffsetY: -58,
-      backgroundLogoScale: 1.08,
+      backgroundLogoOpacity: 1,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -395,20 +393,17 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(15, 14, 15, 13),
-                  decoration: BoxDecoration(
-                    color: const Color(0xD90A1B52),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: .10)),
-                  ),
+                AppGlassSurface(
+                  borderRadius: 14,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(15, 14, 15, 13),
                   child: _billingTotalCard(
                     shipping: shipping,
                     base: base,
                     additional: additional,
                     service: service,
                     total: total,
+                  ),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -524,34 +519,32 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     required ValueChanged<String> onChanged,
     TextInputType? keyboardType,
   }) {
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: .10)),
-      ),
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        keyboardType: keyboardType,
-        textAlignVertical: TextAlignVertical.center,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'Figtree',
-        ),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(
-            color: Color(0xFFB9D4FF),
-            fontSize: 10.5,
+    return AppGlassSurface(
+      borderRadius: 22,
+      child: SizedBox(
+        height: 44,
+        child: TextField(
+          controller: controller,
+          onChanged: onChanged,
+          keyboardType: keyboardType,
+          textAlignVertical: TextAlignVertical.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
             fontFamily: 'Figtree',
           ),
-          prefixIcon: Icon(icon, color: Colors.white, size: 18),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.only(right: 12),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              color: Color(0xFFB9D4FF),
+              fontSize: 10.5,
+              fontFamily: 'Figtree',
+            ),
+            prefixIcon: Icon(icon, color: Colors.white, size: 18),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.only(right: 12),
+          ),
         ),
       ),
     );

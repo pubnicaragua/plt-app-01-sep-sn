@@ -785,92 +785,90 @@ class _RouteEditor extends StatelessWidget {
     final minutes = durationSeconds == null
         ? null
         : (durationSeconds! / 60).ceil().clamp(1, 999);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(11, 7, 11, 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .11),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: Colors.white.withValues(alpha: .24)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Image.asset(
-                  'assets/img/HomeCliente/punto_desde.png',
-                  width: 24,
-                  height: 24,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: PlaceAutocompleteField(
-                  controller: origin,
-                  label: 'Desde',
-                  hint: 'Selecciona el punto de recogida',
-                  bare: true,
-                  onSelected: onOriginSelected,
-                ),
-              ),
-            ],
-          ),
-          Container(
-            height: 1,
-            margin:
-                const EdgeInsets.only(left: 31, right: 1, top: 2, bottom: 2),
-            color: Colors.white.withValues(alpha: .26),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Image.asset(
-                  'assets/img/HomeCliente/punto_hasta.png',
-                  width: 24,
-                  height: 24,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: PlaceAutocompleteField(
-                  controller: destination,
-                  label: 'Hacia',
-                  hint: 'Selecciona el punto de entrega',
-                  bare: true,
-                  onSelected: onDestinationSelected,
-                ),
-              ),
-              if (minutes != null)
+    return AppGlassSurface(
+      borderRadius: 13,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(11, 7, 11, 8),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    '$minutes min',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'Figtree',
-                    ),
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Image.asset(
+                    'assets/img/HomeCliente/punto_desde.png',
+                    width: 24,
+                    height: 24,
+                    fit: BoxFit.contain,
                   ),
                 ),
-            ],
-          ),
-          if (loading)
-            const Padding(
-              padding: EdgeInsets.only(left: 26, right: 1, top: 2),
-              child: LinearProgressIndicator(
-                minHeight: 2,
-                backgroundColor: Colors.transparent,
-                color: cyan,
-              ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: PlaceAutocompleteField(
+                    controller: origin,
+                    label: 'Desde',
+                    hint: 'Selecciona el punto de recogida',
+                    bare: true,
+                    onSelected: onOriginSelected,
+                  ),
+                ),
+              ],
             ),
-        ],
+            Container(
+              height: 1,
+              margin:
+                  const EdgeInsets.only(left: 31, right: 1, top: 2, bottom: 2),
+              color: Colors.white.withValues(alpha: .26),
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Image.asset(
+                    'assets/img/HomeCliente/punto_hasta.png',
+                    width: 24,
+                    height: 24,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: PlaceAutocompleteField(
+                    controller: destination,
+                    label: 'Hacia',
+                    hint: 'Selecciona el punto de entrega',
+                    bare: true,
+                    onSelected: onDestinationSelected,
+                  ),
+                ),
+                if (minutes != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      '$minutes min',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.only(left: 26, right: 1, top: 2),
+                child: LinearProgressIndicator(
+                  minHeight: 2,
+                  backgroundColor: Colors.transparent,
+                  color: cyan,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -956,67 +954,53 @@ class _ImageVehicleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(13),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              height: 104,
-              padding: const EdgeInsets.fromLTRB(7, 4, 7, 6),
-              decoration: BoxDecoration(
-                color: selected
-                    ? accentBlue.withValues(alpha: .40)
-                    : Colors.white.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(
-                  color: selected ? cyan : Colors.white.withValues(alpha: .22),
-                  width: selected ? 1.2 : 1,
+        child: GestureDetector(
+      onTap: onTap,
+      child: AppGlassSurface(
+        borderRadius: 13,
+        selected: selected,
+        child: Container(
+          height: 104,
+          padding: const EdgeInsets.fromLTRB(7, 4, 7, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Image.asset(
+                  asset,
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.local_shipping_outlined,
+                    color: Colors.white70,
+                    size: 30,
+                  ),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Image.asset(
-                      asset,
-                      width: double.infinity,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.local_shipping_outlined,
-                        color: Colors.white70,
-                        size: 30,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Figtree',
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xBFFFFFFF),
-                      fontSize: 8,
-                      fontFamily: 'Figtree',
-                    ),
-                  ),
-                ],
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
               ),
-            ),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xBFFFFFFF),
+                  fontSize: 8,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ],
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -1039,62 +1023,54 @@ class _SelectedRateSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final routeKm = routeDistanceKm ?? distanceKm;
     final extraKm = (routeKm - rate.includedKm).clamp(0, double.infinity);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(13),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .13),
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: Colors.white.withValues(alpha: .28)),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.payments_outlined, color: cyan, size: 16),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Tarifa estimada · $vehicle',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Figtree',
-                      ),
-                    ),
-                  ),
-                  Text(
-                    'C\$ ${price.toStringAsFixed(0)}',
+    return AppGlassSurface(
+      borderRadius: 13,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.payments_outlined, color: cyan, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Tarifa estimada · $vehicle',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 17,
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w800,
                       fontFamily: 'Figtree',
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '${routeKm.toStringAsFixed(1)} km · base C\$ ${rate.baseFeeCs.toStringAsFixed(0)} + ${extraKm.toStringAsFixed(1)} km adicionales × C\$ ${rate.farePerKmCs.toStringAsFixed(1)} + C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} servicio',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  'C\$ ${price.toStringAsFixed(0)}',
                   style: const TextStyle(
-                    color: Color(0xD9FFFFFF),
-                    fontSize: 8.8,
-                    height: 1.2,
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
                     fontFamily: 'Figtree',
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${routeKm.toStringAsFixed(1)} km · base C\$ ${rate.baseFeeCs.toStringAsFixed(0)} + ${extraKm.toStringAsFixed(1)} km adicionales × C\$ ${rate.farePerKmCs.toStringAsFixed(1)} + C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} servicio',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xD9FFFFFF),
+                  fontSize: 8.8,
+                  height: 1.2,
+                  fontFamily: 'Figtree',
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

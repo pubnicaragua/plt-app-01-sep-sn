@@ -20,6 +20,7 @@ class EstablecerDestinos extends StatefulWidget {
     required this.originPlace,
     required this.destinationPlace,
     this.initialStops = const [],
+    this.collectRecipientDetails = false,
   });
 
   final String origin;
@@ -27,6 +28,7 @@ class EstablecerDestinos extends StatefulWidget {
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
   final List<TripStop> initialStops;
+  final bool collectRecipientDetails;
 
   @override
   State<EstablecerDestinos> createState() => _EstablecerDestinosState();
@@ -60,24 +62,47 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
       ];
 
   Future<void> _addDestination() async {
-    final place = await Navigator.of(context).push<PlaceSuggestion>(
+    final destination = await Navigator.of(context).push<_AddedDestination>(
       MaterialPageRoute(
-        builder: (_) => const _AddDestinationPage(),
+        builder: (_) => _AddDestinationPage(
+          collectRecipientDetails: widget.collectRecipientDetails,
+        ),
       ),
     );
-    if (!mounted || place == null) return;
+    if (!mounted || destination == null) return;
     setState(() {
       stops.add(
         TripStop(
+          id: 'stop-${DateTime.now().microsecondsSinceEpoch}',
           label: 'Destino adicional',
-          address: place.description,
-          latitude: place.latitude,
-          longitude: place.longitude,
+          address: destination.place.description,
+          latitude: destination.place.latitude,
+          longitude: destination.place.longitude,
           order: stops.length + 1,
+          recipientName: destination.recipientName,
+          recipientPhone: destination.recipientPhone,
         ),
       );
     });
     _fitMap();
+  }
+
+  void _confirmDestinations() {
+    if (widget.collectRecipientDetails &&
+        stops.any((stop) =>
+            (stop.recipientName ?? '').trim().isEmpty ||
+            (stop.recipientPhone ?? '').trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Completa el destinatario y teléfono de cada destino adicional.',
+            style: TextStyle(fontFamily: 'Figtree'),
+          ),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pop(stops);
   }
 
   void _fitMap() {
@@ -165,7 +190,7 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
     return Scaffold(
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
-        backgroundLogoOpacity: .18,
+        backgroundLogoOpacity: 1,
         child: SafeArea(
           child: Column(
             children: [
@@ -203,29 +228,43 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
                       child: Column(
                         children: [
                           for (var index = 0; index < points.length; index++)
-                            _RouteRow(
-                              point: points[index],
-                              removable: index > 0 && index < points.length - 1,
-                              showMap: index == points.length - 1,
-                              onMap: _openMap,
-                              onRemove: index > 0 && index < points.length - 1
-                                  ? () => setState(() {
-                                        // points empieza con A, por eso la
-                                        // primera parada corresponde a stops[0].
-                                        stops.removeAt(index - 1);
-                                        for (var i = 0; i < stops.length; i++) {
-                                          stops[i] = TripStop(
-                                            id: stops[i].id,
-                                            label: stops[i].label,
-                                            address: stops[i].address,
-                                            order: i + 1,
-                                            latitude: stops[i].latitude,
-                                            longitude: stops[i].longitude,
-                                            refs: stops[i].refs,
-                                          );
-                                        }
-                                      })
-                                  : null,
+                            Column(
+                              key: ValueKey(
+                                  'route-point-${points[index].place?.placeId ?? points[index].label}'),
+                              children: [
+                                _RouteRow(
+                                  point: points[index],
+                                  removable:
+                                      index > 0 && index < points.length - 1,
+                                  showMap: index == points.length - 1,
+                                  onMap: _openMap,
+                                  onRemove:
+                                      index > 0 && index < points.length - 1
+                                          ? () => setState(() {
+                                                stops.removeAt(index - 1);
+                                                for (var i = 0;
+                                                    i < stops.length;
+                                                    i++) {
+                                                  stops[i] = TripStop(
+                                                    id: stops[i].id,
+                                                    label: stops[i].label,
+                                                    address: stops[i].address,
+                                                    order: i + 1,
+                                                    latitude:
+                                                        stops[i].latitude,
+                                                    longitude:
+                                                        stops[i].longitude,
+                                                    refs: stops[i].refs,
+                                                    recipientName:
+                                                        stops[i].recipientName,
+                                                    recipientPhone:
+                                                        stops[i].recipientPhone,
+                                                  );
+                                                }
+                                              })
+                                          : null,
+                                ),
+                              ],
                             ),
                           const SizedBox(height: 9),
                           GlassButton(
@@ -246,7 +285,7 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
                 padding: const EdgeInsets.fromLTRB(12, 6, 12, 14),
                 child: GlassButton(
                   label: 'Confirmar destinos',
-                  onPressed: () => Navigator.of(context).pop(stops),
+                  onPressed: _confirmDestinations,
                   filled: true,
                   height: 50,
                   fontSize: 13,
@@ -266,6 +305,63 @@ class _RoutePoint {
   final String label;
   final String name;
   final PlaceSuggestion? place;
+}
+
+class _AddedDestination {
+  const _AddedDestination({
+    required this.place,
+    this.recipientName,
+    this.recipientPhone,
+  });
+
+  final PlaceSuggestion place;
+  final String? recipientName;
+  final String? recipientPhone;
+}
+
+class _DestinationContactInput extends StatelessWidget {
+  const _DestinationContactInput({
+    required this.label,
+    required this.onChanged,
+    this.keyboardType,
+  });
+
+  final String label;
+  final ValueChanged<String> onChanged;
+  final TextInputType? keyboardType;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      onChanged: onChanged,
+      keyboardType: keyboardType,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontFamily: 'Figtree',
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(
+          color: Color(0xBFFFFFFF),
+          fontSize: 12,
+          fontFamily: 'Figtree',
+        ),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: .08),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: .22)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: const BorderSide(color: cyan),
+        ),
+      ),
+    );
+  }
 }
 
 class _RouteRow extends StatelessWidget {
@@ -629,7 +725,9 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
 }
 
 class _AddDestinationPage extends StatefulWidget {
-  const _AddDestinationPage();
+  const _AddDestinationPage({required this.collectRecipientDetails});
+
+  final bool collectRecipientDetails;
 
   @override
   State<_AddDestinationPage> createState() => _AddDestinationPageState();
@@ -638,6 +736,8 @@ class _AddDestinationPage extends StatefulWidget {
 class _AddDestinationPageState extends State<_AddDestinationPage> {
   final controller = TextEditingController();
   PlaceSuggestion? selected;
+  String recipientName = '';
+  String recipientPhone = '';
 
   @override
   void dispose() {
@@ -650,7 +750,7 @@ class _AddDestinationPageState extends State<_AddDestinationPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
-        backgroundLogoOpacity: .18,
+        backgroundLogoOpacity: 1,
         child: SafeArea(
           child: Column(
             children: [
@@ -720,6 +820,31 @@ class _AddDestinationPageState extends State<_AddDestinationPage> {
                           ],
                         ),
                       ),
+                      if (widget.collectRecipientDetails) ...[
+                        const SizedBox(height: 18),
+                        const Text(
+                          'Destinatario de este punto',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree',
+                          ),
+                        ),
+                        const SizedBox(height: 9),
+                        _DestinationContactInput(
+                          label: 'Nombre del destinatario *',
+                          onChanged: (value) =>
+                              setState(() => recipientName = value),
+                        ),
+                        const SizedBox(height: 9),
+                        _DestinationContactInput(
+                          label: 'Teléfono del destinatario *',
+                          keyboardType: TextInputType.phone,
+                          onChanged: (value) =>
+                              setState(() => recipientPhone = value),
+                        ),
+                      ],
                     ],
                   ],
                 ),
@@ -730,9 +855,22 @@ class _AddDestinationPageState extends State<_AddDestinationPage> {
                   width: double.infinity,
                   height: 44,
                   child: ElevatedButton(
-                    onPressed: selected == null
+                    onPressed: selected == null ||
+                            (widget.collectRecipientDetails &&
+                                (recipientName.trim().isEmpty ||
+                                    recipientPhone.trim().isEmpty))
                         ? null
-                        : () => Navigator.of(context).pop(selected),
+                        : () => Navigator.of(context).pop(
+                              _AddedDestination(
+                                place: selected!,
+                                recipientName: widget.collectRecipientDetails
+                                    ? recipientName.trim()
+                                    : null,
+                                recipientPhone: widget.collectRecipientDetails
+                                    ? recipientPhone.trim()
+                                    : null,
+                              ),
+                            ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accentBlue,
                       disabledBackgroundColor: Colors.white.withValues(alpha: .12),

@@ -18,7 +18,7 @@ class WizardScaffold extends StatelessWidget {
     this.showProgress = true,
     this.showDescription = true,
     this.showStepBadge = false,
-    this.backgroundLogoOpacity = .53,
+    this.backgroundLogoOpacity = 1,
     this.backgroundLogoOffsetY = 0,
     this.backgroundLogoScale = 1,
   });

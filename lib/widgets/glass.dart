@@ -21,7 +21,7 @@ class AppBackground extends StatelessWidget {
     super.key,
     required this.child,
     this.darken = 0.18,
-    this.backgroundLogoOpacity = .53,
+    this.backgroundLogoOpacity = 1,
     this.backgroundLogoOffsetX = 0,
     this.backgroundLogoOffsetY = 0,
     this.backgroundLogoScale = 1,
@@ -144,28 +144,20 @@ class _BackgroundLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth.clamp(0.0, 390.0).toDouble();
-        final height = width * 793 / 390 * scale;
-        return Transform.translate(
-          offset: Offset(offsetX, offsetY),
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: SizedBox(
-              width: width * scale,
-              height: height,
+        return ClipRect(
+          child: Transform.translate(
+            offset: Offset(offsetX, offsetY),
+            child: Transform.scale(
+              scale: scale,
               child: Opacity(
                 opacity: opacity,
-                child: ColorFiltered(
-                  colorFilter: const ColorFilter.mode(
-                    Color(0xFF9BA8C5),
-                    BlendMode.srcIn,
-                  ),
-                  child: Image.asset(
-                    'assets/img/fondoapps.png',
-                    fit: BoxFit.contain,
-                    alignment: Alignment.bottomCenter,
-                    filterQuality: FilterQuality.high,
-                  ),
+                child: Image.asset(
+                  'assets/img/fondoapps.png',
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.center,
+                  filterQuality: FilterQuality.high,
                 ),
               ),
             ),
@@ -223,6 +215,88 @@ class GlassCard extends StatelessWidget {
   }
 }
 
+class AppGlassSurface extends StatelessWidget {
+  const AppGlassSurface({
+    super.key,
+    required this.child,
+    this.borderRadius = 16,
+    this.selected = false,
+    this.fillColor,
+  });
+
+  final Widget child;
+  final double borderRadius;
+  final bool selected;
+  final Color? fillColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: CustomPaint(
+        foregroundPainter: _AppGlassEdgePainter(
+          radius: borderRadius,
+          selected: selected,
+        ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          decoration: BoxDecoration(
+            color: fillColor ??
+                (selected ? const Color(0x4D1E5FD4) : Colors.transparent),
+            borderRadius: BorderRadius.circular(borderRadius),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x40000000),
+                offset: Offset(1, 5),
+                blurRadius: 4.7,
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _AppGlassEdgePainter extends CustomPainter {
+  const _AppGlassEdgePainter({required this.radius, required this.selected});
+
+  final double radius;
+  final bool selected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.15
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: selected
+            ? [
+                cyan.withValues(alpha: .95),
+                Colors.white.withValues(alpha: .42),
+                cyan.withValues(alpha: .75),
+              ]
+            : [
+                Colors.white.withValues(alpha: .48),
+                Colors.white.withValues(alpha: .10),
+                const Color(0x667EA5D8),
+              ],
+      ).createShader(rect);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect.deflate(.6), Radius.circular(radius)),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _AppGlassEdgePainter oldDelegate) =>
+      oldDelegate.radius != radius || oldDelegate.selected != selected;
+}
+
 class GlassButton extends StatelessWidget {
   const GlassButton({
     super.key,
@@ -264,7 +338,9 @@ class GlassButton extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: backgroundColor ??
-                      (filled ? accentBlue : Colors.white.withValues(alpha: .16)),
+                      (filled
+                          ? accentBlue
+                          : Colors.white.withValues(alpha: .16)),
                   borderRadius: BorderRadius.circular(45),
                   border: Border.all(
                     color: filled || backgroundColor != null
@@ -286,7 +362,7 @@ class GlassButton extends StatelessWidget {
                     Text(
                       label,
                       textAlign: TextAlign.center,
-                       style: TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: fontSize,
                         fontWeight: FontWeight.w700,

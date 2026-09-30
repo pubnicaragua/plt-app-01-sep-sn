@@ -63,18 +63,10 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
   Widget build(BuildContext context) {
     final trip = widget.trip;
     final isTaxi = trip.serviceMode == 'Taxi Privado';
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    const logoScale = 1.04;
-    final logoOffsetX = screenWidth > 390
-        ? -((screenWidth - 390 * logoScale) / 2)
-        : 0.0;
     return Scaffold(
       body: AppBackground(
         darken: 0,
         backgroundLogoOpacity: 1,
-        backgroundLogoOffsetX: logoOffsetX,
-        backgroundLogoOffsetY: 30,
-        backgroundLogoScale: logoScale,
         child: Stack(
           children: [
             Positioned.fill(

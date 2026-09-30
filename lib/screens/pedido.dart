@@ -225,17 +225,20 @@ class _TripCard extends StatelessWidget {
         : (trip.scheduledTime?.trim().isNotEmpty == true
             ? trip.scheduledTime!.trim()
             : 'Pendiente');
-    return GlassCard(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => SeguimientoPedido(trip: trip),
-        ),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
-      color: Colors.white.withValues(alpha: .08),
-      blur: 18,
+    return AppGlassSurface(
       borderRadius: 14,
-      child: Row(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => SeguimientoPedido(trip: trip),
+            ),
+          ),
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
+            child: Row(
         children: [
           SizedBox(
             width: 48,
@@ -291,6 +294,9 @@ class _TripCard extends StatelessWidget {
           const SizedBox(width: 8),
           const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 27),
         ],
+            ),
+          ),
+        ),
       ),
     );
   }

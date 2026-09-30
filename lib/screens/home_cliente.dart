@@ -256,26 +256,24 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
               ),
             ),
             _HeaderCircle(
-              icon: Icons.notifications_none_rounded,
               onTap: () => showAppNotifications(context),
             ),
             const SizedBox(width: 9),
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .16),
-                shape: BoxShape.circle,
-                border: Border.all(color: glassBorder),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                initials(name),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
+            AppGlassSurface(
+              borderRadius: 21,
+              child: SizedBox(
+                width: 42,
+                height: 42,
+                child: Center(
+                  child: Text(
+                    initials(name),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -400,9 +398,8 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
 }
 
 class _HeaderCircle extends StatelessWidget {
-  const _HeaderCircle({required this.icon, required this.onTap});
+  const _HeaderCircle({required this.onTap});
 
-  final IconData icon;
   final VoidCallback onTap;
 
   @override
@@ -412,16 +409,25 @@ class _HeaderCircle extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .13),
-            shape: BoxShape.circle,
-            border: Border.all(color: glassBorder),
+        child: AppGlassSurface(
+          borderRadius: 21,
+          child: SizedBox(
+            width: 42,
+            height: 42,
+            child: Center(
+              child: Image.asset(
+                'assets/img/HomeCliente/notificaciones_bell.png',
+                width: 20,
+                height: 20,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.notifications_none_rounded,
+                  color: Colors.white,
+                  size: 21,
+                ),
+              ),
+            ),
           ),
-          alignment: Alignment.center,
-          child: Icon(icon, color: Colors.white, size: 21),
         ),
       ),
     );
@@ -1058,20 +1064,16 @@ class _HomeTabState extends State<_HomeTab> {
                   showAppNotifications(context);
                 },
                 customBorder: const CircleBorder(),
-                child: Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .10),
-                    shape: BoxShape.circle,
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: .25)),
-                  ),
+                child: AppGlassSurface(
+                  borderRadius: 23,
+                  child: SizedBox(
+                    width: 46,
+                    height: 46,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       Image.asset(
-                        'assets/img/HomeCliente/notificaciones.png',
+                        'assets/img/HomeCliente/notificaciones_bell.png',
                         width: 24,
                         height: 24,
                         fit: BoxFit.contain,
@@ -1117,26 +1119,25 @@ class _HomeTabState extends State<_HomeTab> {
                         ),
                     ],
                   ),
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 10),
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: .16),
-                border: Border.all(color: glassBorder),
-              ),
-              child: Center(
-                child: Text(
-                  initials(displayName),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
+            AppGlassSurface(
+              borderRadius: 23,
+              child: SizedBox(
+                width: 46,
+                height: 46,
+                child: Center(
+                  child: Text(
+                    initials(displayName),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
                   ),
                 ),
               ),

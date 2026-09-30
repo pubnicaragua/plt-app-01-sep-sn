@@ -165,9 +165,7 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
     return Scaffold(
       backgroundColor: const Color(0xFF082B66),
       body: AppBackground(
-        backgroundLogoOpacity: .16,
-        backgroundLogoOffsetY: 100,
-        backgroundLogoScale: 1.08,
+        backgroundLogoOpacity: 1,
         child: SafeArea(
           child: ListView(
             padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 28),
@@ -266,10 +264,11 @@ class _RouteSelectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(10, 8, 9, 8),
-      color: Colors.white.withValues(alpha: .08),
-      child: Column(
+    return AppGlassSurface(
+      borderRadius: 22,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 9, 8),
+        child: Column(
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -332,6 +331,7 @@ class _RouteSelectionCard extends StatelessWidget {
             ],
           ),
         ],
+        ),
       ),
     );
   }

@@ -253,6 +253,8 @@ class ApiClient {
               'longitude': stop.longitude,
               'refs': stop.refs,
               'order': stop.order,
+              'recipientName': stop.recipientName,
+              'recipientPhone': stop.recipientPhone,
             }).toList(),
         'options': options.map((option) => option.toJson()).toList(),
       },

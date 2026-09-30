@@ -368,8 +368,28 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   ServiceCatalogItem? _serviceOption(String code, {String? fallbackTitle}) =>
       _findOption(_serviceCode(code), fallbackTitle: fallbackTitle);
 
-  ServiceCatalogItem? get _selectedOption =>
-      additionalOption.isEmpty ? null : _findOption(additionalOption);
+  ServiceCatalogItem? get _selectedOption {
+    if (additionalOption.isEmpty) return null;
+    final item = _findOption(additionalOption);
+    if (item != null) return item;
+    if (additionalOption == 'cargo-refrigerated') {
+      return const ServiceCatalogItem(
+        id: 'local-cargo-refrigerated',
+        code: 'cargo-refrigerated',
+        kind: 'option',
+        service: 'cargo',
+        transport: 'Camión',
+        title: 'Refrigerado',
+        description: 'Para productos fríos',
+        priceCs: 40,
+        currency: 'USD',
+        pricingMode: 'flat',
+        enabled: true,
+        sortOrder: 70,
+      );
+    }
+    return null;
+  }
 
   bool get _isReturnTrip => additionalOption.contains('round-trip');
 
@@ -427,8 +447,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       additionalOption = item?.code ?? resolvedCode;
     });
     if (code.contains('multiple-stops')) {
-      final selectedStops = await Navigator.of(context)
-          .push<List<TripStop>>(
+      final selectedStops = await Navigator.of(context).push<List<TripStop>>(
         MaterialPageRoute(
           builder: (_) => EstablecerDestinos(
             origin: widget.origin,
@@ -436,6 +455,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             originPlace: widget.originPlace,
             destinationPlace: widget.destinationPlace,
             initialStops: additionalStops,
+            collectRecipientDetails: widget.serviceMode != 'Taxi Privado',
           ),
         ),
       );
@@ -485,9 +505,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
         darken: .04,
-        backgroundLogoOpacity: .62,
-        backgroundLogoOffsetY: -30,
-        backgroundLogoScale: 1.02,
+        backgroundLogoOpacity: 1,
         child: SafeArea(
           child: Column(
             children: [
@@ -501,10 +519,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       title: widget.serviceMode == 'Taxi Privado'
                           ? 'Taxi Privado'
                           : widget.transport == 'Moto'
-                          ? 'Motos'
-                          : widget.transport == 'Vehículo'
-                              ? 'Autos'
-                              : 'Carga',
+                              ? 'Motos'
+                              : widget.transport == 'Vehículo'
+                                  ? 'Autos'
+                                  : 'Carga',
                       onBack: () => Navigator.of(context).pop(),
                     ),
                     if (widget.transport == 'Camión') ...[
@@ -538,6 +556,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                                 ? 'assets/img/HomeCliente/carga_ayudante.png'
                                 : 'assets/img/HomeCliente/detalle_destinatario.png',
                             textInputAction: TextInputAction.next,
+                            large: widget.transport != 'Camión',
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -551,6 +570,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                                 'assets/img/HomeCliente/detalle_telefono.png',
                             keyboardType: TextInputType.phone,
                             textInputAction: TextInputAction.next,
+                            large: widget.transport != 'Camión',
                           ),
                         ),
                       ],
@@ -562,6 +582,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                         label: 'Referencias',
                         iconAsset: 'assets/img/HomeCliente/detalle_lista.png',
                         textInputAction: TextInputAction.done,
+                        large: widget.transport != 'Camión',
                       ),
                     ],
                     const SizedBox(height: 8),
@@ -572,6 +593,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       enabled: true,
                       maxLines: 1,
                       compact: true,
+                      large: widget.transport != 'Camión',
                     ),
                     if (widget.serviceMode == 'Taxi Privado') ...[
                       const SizedBox(height: 12),
@@ -679,6 +701,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                         (multiple?.code ??
                             _serviceCode('delivery-multiple-stops')),
                 enabled: true,
+                large: true,
                 onTap: () => _selectAdditional(
                     'delivery-multiple-stops', 'Varios destinos'),
               ),
@@ -695,6 +718,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                         (roundTrip?.code ??
                             _serviceCode('delivery-round-trip')),
                 enabled: true,
+                large: true,
                 onTap: () =>
                     _selectAdditional('delivery-round-trip', 'Ida y vuelta'),
               ),
@@ -714,6 +738,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                     additionalOption ==
                         (insurance?.code ?? _serviceCode('delivery-insurance')),
                 enabled: true,
+                large: true,
                 onTap: () => _selectAdditional('delivery-insurance', 'Seguro'),
               ),
             ),
@@ -728,6 +753,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                     additionalOption ==
                         (waiting?.code ?? _serviceCode('delivery-waiting')),
                 enabled: true,
+                large: true,
                 onTap: () =>
                     _selectAdditional('delivery-waiting', 'Espera en destino'),
               ),
@@ -747,6 +773,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     final waiting =
         _findOption('cargo-waiting', fallbackTitle: 'Espera en destino');
     final insurance = _findOption('cargo-insurance', fallbackTitle: 'Seguro');
+    final refrigerated =
+        _findOption('cargo-refrigerated', fallbackTitle: 'Refrigerado');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -864,6 +892,47 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 enabled: true,
                 onTap: () =>
                     _selectAdditional('cargo-more-trucks', '¿Más camiones?'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/refrigerado.png',
+                title: refrigerated?.title ?? 'Refrigerado',
+                subtitle: refrigerated?.description ?? 'Para productos fríos',
+                price: _priceLabel(refrigerated, 'US\$40'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (refrigerated?.code ?? 'cargo-refrigerated'),
+                enabled: true,
+                onTap: () =>
+                    _selectAdditional('cargo-refrigerated', 'Refrigerado'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                title: 'Próximamente...',
+                subtitle: '',
+                price: '',
+                selected: false,
+                enabled: false,
+                showLeadingIcon: false,
+                showSelectionControl: false,
+                hideMeta: true,
+                centerTitle: true,
+                disabledOpacity: .72,
+                titleStyle: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+                onTap: () {},
               ),
             ),
           ],
@@ -1396,15 +1465,11 @@ class _TruckTypeSelector extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        CustomPaint(
-          foregroundPainter: const _FormGlassEdgePainter(radius: 14),
+        AppGlassSurface(
+          borderRadius: 14,
           child: Container(
             height: 286,
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-            ),
             child: Column(
               children: [
                 Expanded(
@@ -1434,20 +1499,12 @@ class _TruckTypeSelector extends StatelessWidget {
         for (final type in types) ...[
           GestureDetector(
             onTap: () => onChanged(type.label),
-            child: CustomPaint(
-              foregroundPainter: _FormGlassEdgePainter(
-                radius: 12,
-                selected: type.label == selected,
-              ),
+            child: AppGlassSurface(
+              borderRadius: 12,
+              selected: type.label == selected,
               child: Container(
                 height: 48,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: type.label == selected
-                      ? accentBlue.withValues(alpha: .78)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
                 child: Row(
                   children: [
                     Expanded(
@@ -1517,44 +1574,6 @@ class _FormSectionTitle extends StatelessWidget {
   }
 }
 
-class _FormGlassEdgePainter extends CustomPainter {
-  const _FormGlassEdgePainter({required this.radius, this.selected = false});
-
-  final double radius;
-  final bool selected;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.15
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: selected
-            ? [
-                cyan.withValues(alpha: .95),
-                Colors.white.withValues(alpha: .42),
-                cyan.withValues(alpha: .75)
-              ]
-            : [
-                Colors.white.withValues(alpha: .48),
-                Colors.white.withValues(alpha: .10),
-                const Color(0x667EA5D8)
-              ],
-      ).createShader(rect);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect.deflate(.6), Radius.circular(radius)),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _FormGlassEdgePainter oldDelegate) =>
-      oldDelegate.radius != radius || oldDelegate.selected != selected;
-}
-
 class _InputPill extends StatelessWidget {
   const _InputPill({
     required this.controller,
@@ -1566,6 +1585,7 @@ class _InputPill extends StatelessWidget {
     this.textInputAction,
     this.maxLines = 1,
     this.compact = false,
+    this.large = false,
   });
 
   final TextEditingController controller;
@@ -1577,31 +1597,31 @@ class _InputPill extends StatelessWidget {
   final TextInputAction? textInputAction;
   final int maxLines;
   final bool compact;
+  final bool large;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 180),
       opacity: enabled ? 1 : .48,
-      child: CustomPaint(
-        foregroundPainter: const _FormGlassEdgePainter(radius: 22),
+      child: AppGlassSurface(
+        borderRadius: 22,
         child: Container(
           constraints: BoxConstraints(
-              minHeight: compact ? 38 : (maxLines > 1 ? 52 : 45)),
+            minHeight: large
+                ? (compact ? 46 : (maxLines > 1 ? 58 : 52))
+                : (compact ? 38 : (maxLines > 1 ? 52 : 45)),
+          ),
           padding:
               EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 2 : 4),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(22),
-          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (iconAsset != null)
                 Image.asset(
                   iconAsset!,
-                  width: 21,
-                  height: 21,
+                  width: large ? 23 : 21,
+                  height: large ? 23 : 21,
                   fit: BoxFit.contain,
                 )
               else
@@ -1621,15 +1641,17 @@ class _InputPill extends StatelessWidget {
                   ),
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: compact ? 10.5 : 11.5,
+                    fontSize: large
+                        ? (compact ? 11.5 : 12.5)
+                        : (compact ? 10.5 : 11.5),
                     fontWeight: FontWeight.w700,
                     fontFamily: 'Figtree',
                   ),
                   decoration: InputDecoration(
                     hintText: label,
-                    hintStyle: const TextStyle(
+                    hintStyle: TextStyle(
                       color: Color(0xD9FFFFFF),
-                      fontSize: 10,
+                      fontSize: large ? 11 : 10,
                       fontFamily: 'Figtree',
                     ),
                     border: InputBorder.none,
@@ -1707,6 +1729,15 @@ class _AdditionalOptionCard extends StatelessWidget {
     required this.selected,
     required this.enabled,
     required this.onTap,
+    this.showLeadingIcon = true,
+    this.showSelectionControl = true,
+    this.hideMeta = false,
+    this.disabledOpacity = .42,
+    this.cardRadius = 11,
+    this.backgroundColor,
+    this.titleStyle,
+    this.centerTitle = false,
+    this.large = false,
   });
 
   final IconData? icon;
@@ -1717,6 +1748,15 @@ class _AdditionalOptionCard extends StatelessWidget {
   final bool selected;
   final bool enabled;
   final VoidCallback onTap;
+  final bool showLeadingIcon;
+  final bool showSelectionControl;
+  final bool hideMeta;
+  final double disabledOpacity;
+  final double cardRadius;
+  final Color? backgroundColor;
+  final TextStyle? titleStyle;
+  final bool centerTitle;
+  final bool large;
 
   @override
   Widget build(BuildContext context) {
@@ -1724,79 +1764,79 @@ class _AdditionalOptionCard extends StatelessWidget {
       onTap: enabled ? onTap : null,
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 180),
-        opacity: enabled ? 1 : .42,
-        child: CustomPaint(
-          foregroundPainter: _FormGlassEdgePainter(
-            radius: 11,
-            selected: selected,
-          ),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 58,
-            padding: const EdgeInsets.fromLTRB(9, 7, 7, 7),
-            decoration: BoxDecoration(
-              color: selected
-                  ? accentBlue.withValues(alpha: .78)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(11),
-            ),
+        opacity: enabled ? 1 : disabledOpacity,
+        child: AppGlassSurface(
+          borderRadius: cardRadius,
+          selected: selected,
+          fillColor: backgroundColor,
+          child: Container(
+            height: large ? 70 : 58,
+            padding: EdgeInsets.fromLTRB(large ? 11 : 9, 7, 7, 7),
             child: Row(
               children: [
-                if (iconAsset != null)
+                if (showLeadingIcon && iconAsset != null)
                   Image.asset(
                     iconAsset!,
-                    width: 23,
-                    height: 23,
+                    width: large ? 25 : 23,
+                    height: large ? 25 : 23,
                     fit: BoxFit.contain,
                   )
-                else
-                  Icon(icon, color: Colors.white, size: 20),
-                const SizedBox(width: 7),
+                else if (showLeadingIcon)
+                  Icon(icon, color: Colors.white, size: large ? 22 : 20),
+                if (showLeadingIcon) SizedBox(width: large ? 9 : 7),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: centerTitle
+                        ? CrossAxisAlignment.center
+                        : CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: 'Figtree',
-                        ),
+                        textAlign:
+                            centerTitle ? TextAlign.center : TextAlign.start,
+                        style: titleStyle ??
+                            TextStyle(
+                              color: Colors.white,
+                              fontSize: large ? 10.5 : 9.5,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree',
+                            ),
                       ),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xD9FFFFFF),
-                          fontSize: 7.2,
-                          fontFamily: 'Figtree',
+                      if (!hideMeta)
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xD9FFFFFF),
+                            fontSize: large ? 8.1 : 7.2,
+                            fontFamily: 'Figtree',
+                          ),
                         ),
-                      ),
-                      Text(
-                        price,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 7.5,
-                          fontWeight: FontWeight.w700,
-                          fontFamily: 'Figtree',
+                      if (!hideMeta)
+                        Text(
+                          price,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: large ? 8.2 : 7.5,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Figtree',
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
-                Icon(
-                  selected
-                      ? Icons.check_circle_rounded
-                      : Icons.radio_button_unchecked_rounded,
-                  color: Colors.white.withValues(alpha: enabled ? .95 : .25),
-                  size: 15,
-                ),
+                if (showSelectionControl)
+                  Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    color: Colors.white.withValues(alpha: enabled ? .95 : .25),
+                    size: large ? 17 : 15,
+                  ),
               ],
             ),
           ),
