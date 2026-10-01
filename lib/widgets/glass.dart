@@ -21,7 +21,7 @@ class AppBackground extends StatelessWidget {
     super.key,
     required this.child,
     this.darken = 0.18,
-    this.backgroundLogoOpacity = 1,
+    this.backgroundLogoOpacity = .53,
     this.backgroundLogoOffsetX = 0,
     this.backgroundLogoOffsetY = 0,
     this.backgroundLogoScale = 1,
@@ -144,20 +144,27 @@ class _BackgroundLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return ClipRect(
-          child: Transform.translate(
-            offset: Offset(offsetX, offsetY),
-            child: Transform.scale(
-              scale: scale,
+        return Transform.translate(
+          offset: Offset(offsetX, offsetY),
+          child: Transform.scale(
+            scale: scale,
+            child: SizedBox(
+              width: constraints.maxWidth,
+              height: constraints.maxHeight,
               child: Opacity(
                 opacity: opacity,
-                child: Image.asset(
-                  'assets/img/fondoapps.png',
-                  width: constraints.maxWidth,
-                  height: constraints.maxHeight,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.center,
-                  filterQuality: FilterQuality.high,
+                child: ColorFiltered(
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xFF9BA8C5),
+                    BlendMode.srcIn,
+                  ),
+                  child: Image.asset(
+                    'assets/img/fondoapps.png',
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    fit: BoxFit.fill,
+                    filterQuality: FilterQuality.high,
+                  ),
                 ),
               ),
             ),

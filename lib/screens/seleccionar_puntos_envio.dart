@@ -46,6 +46,7 @@ class SeleccionarPuntosEnvio extends StatefulWidget {
 }
 
 class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
+  static final List<PlaceSuggestion> _recentPlaces = [];
   late final TextEditingController origin;
   late final TextEditingController destination;
   late PlaceSuggestion? originPlace;
@@ -114,6 +115,7 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
   }
 
   void _setOrigin(PlaceSuggestion place) {
+    _rememberPlace(place);
     setState(() {
       originPlace = place;
       origin.text = place.description;
@@ -121,10 +123,17 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
   }
 
   void _setDestination(PlaceSuggestion place) {
+    _rememberPlace(place);
     setState(() {
       destinationPlace = place;
       destination.text = place.description;
     });
+  }
+
+  void _rememberPlace(PlaceSuggestion place) {
+    _recentPlaces.removeWhere((item) => item.placeId == place.placeId);
+    _recentPlaces.insert(0, place);
+    if (_recentPlaces.length > 8) _recentPlaces.removeLast();
   }
 
   RouteSelectionResult get _result => RouteSelectionResult(
@@ -165,7 +174,7 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
     return Scaffold(
       backgroundColor: const Color(0xFF082B66),
       body: AppBackground(
-        backgroundLogoOpacity: 1,
+        backgroundLogoOpacity: .16,
         child: SafeArea(
           child: ListView(
             padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 28),
@@ -183,8 +192,8 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
                         color: Colors.white, size: 19),
                   ),
                   const SizedBox(width: 7),
-                  const Text(
-                    'Regresar al inicio',
+                  Text(
+                    widget.selectionOnly ? 'Regresar al mapa' : 'Regresar',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 15,
@@ -204,14 +213,27 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
                 selectionOnly: widget.selectionOnly,
               ),
               const SizedBox(height: 9),
-              for (var index = 0; index < _recommended.length; index++) ...[
-                _RecommendedPlaceCard(
-                  item: _recommended[index],
-                  selected: destinationPlace?.placeId ==
-                      _recommended[index].place.placeId,
-                  onTap: () => _setDestination(_recommended[index].place),
+              if (_recentPlaces.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(8, 8, 8, 2),
+                  child: Text('LUGARES RECIENTES', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1, fontFamily: 'Figtree')),
                 ),
-                if (index != _recommended.length - 1)
+              for (var index = 0; index < (_recentPlaces.isNotEmpty ? _recentPlaces.length : _recommended.length); index++) ...[
+                _RecommendedPlaceCard(
+                  item: _RecommendedPlace(
+                    place: _recentPlaces.isNotEmpty
+                        ? _recentPlaces[index]
+                        : _recommended[index].place,
+                  ),
+                  selected: destinationPlace?.placeId ==
+                      (_recentPlaces.isNotEmpty
+                          ? _recentPlaces[index].placeId
+                          : _recommended[index].place.placeId),
+                  onTap: () => _setDestination(_recentPlaces.isNotEmpty
+                      ? _recentPlaces[index]
+                      : _recommended[index].place),
+                ),
+                if (index != (_recentPlaces.isNotEmpty ? _recentPlaces.length : _recommended.length) - 1)
                   const SizedBox(height: 2),
               ],
               if (widget.selectionOnly) ...[

@@ -19,7 +19,6 @@ import '../widgets/place_field.dart';
 import '../widgets/wizard.dart';
 import 'confirmar_pedido.dart';
 import 'crear_envio2.dart';
-import 'seleccionar_puntos_envio.dart';
 
 /// Primera vista del flujo de creación de envío.
 ///
@@ -42,7 +41,6 @@ class CrearEnvio1 extends StatefulWidget {
     this.startScheduled = false,
     this.startDate,
     this.startTime,
-    this.returnToPointSelection = false,
   });
 
   final String startOrigin;
@@ -58,7 +56,6 @@ class CrearEnvio1 extends StatefulWidget {
   final bool startScheduled;
   final String? startDate;
   final String? startTime;
-  final bool returnToPointSelection;
 
   @override
   State<CrearEnvio1> createState() => _CrearEnvio1State();
@@ -67,6 +64,8 @@ class CrearEnvio1 extends StatefulWidget {
 class _CrearEnvio1State extends State<CrearEnvio1> {
   late final TextEditingController origin;
   late final TextEditingController destination;
+  late final FocusNode _destinationFocusNode;
+  late final bool _autoFocusDestinationOnEntry;
   PlaceSuggestion? originPlace;
   PlaceSuggestion? destinationPlace;
   late String transport;
@@ -79,16 +78,29 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   double? _routeDistanceKm;
   int? _routeDurationSeconds;
   bool _routeLoading = false;
+  bool _scheduleMode = false;
+  DateTime? _scheduledDate;
+  TimeOfDay? _scheduledTime;
 
   @override
   void initState() {
     super.initState();
     origin = TextEditingController(text: widget.startOrigin);
     destination = TextEditingController(text: widget.startDestination);
+    _destinationFocusNode = FocusNode();
+    _autoFocusDestinationOnEntry = widget.startOrigin.trim().isEmpty &&
+        widget.startDestination.trim().isEmpty &&
+        widget.startOriginPlace == null &&
+        widget.startDestinationPlace == null;
     originPlace = widget.startOriginPlace;
     destinationPlace = widget.startDestinationPlace;
     transport = _normalizeTransport(widget.startTransport);
     serviceTab = widget.startServiceMode;
+    _scheduleMode = widget.startScheduled;
+    _scheduledDate = _parseScheduleDate(widget.startDate) ??
+        DateTime.now().add(const Duration(days: 1));
+    _scheduledTime = _parseScheduleTime(widget.startTime) ??
+        const TimeOfDay(hour: 9, minute: 0);
 
     apiClient.getSettings().then((data) {
       if (mounted) setState(() => settings = data);
@@ -118,7 +130,81 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
         _loadRoadRoute();
       });
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadRoadRoute());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRoadRoute();
+      if (_autoFocusDestinationOnEntry && mounted) {
+        _destinationFocusNode.requestFocus();
+      }
+    });
+  }
+
+  DateTime? _parseScheduleDate(String? value) {
+    if (value == null || value.isEmpty) return null;
+    return DateTime.tryParse(value);
+  }
+
+  TimeOfDay? _parseScheduleTime(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final parts = value.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null ||
+        minute == null ||
+        hour < 0 ||
+        hour > 23 ||
+        minute < 0 ||
+        minute > 59) {
+      return null;
+    }
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _dateForApi(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  String _timeForApi(TimeOfDay time) =>
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _chooseCustomDate() async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _scheduledDate ?? today.add(const Duration(days: 1)),
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: accentBlue,
+            surface: Color(0xFF102850),
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (selected != null && mounted) {
+      setState(() => _scheduledDate = DateUtils.dateOnly(selected));
+    }
+  }
+
+  Future<void> _chooseCustomTime() async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: _scheduledTime ?? const TimeOfDay(hour: 9, minute: 0),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: accentBlue,
+            surface: Color(0xFF102850),
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (selected != null && mounted) {
+      setState(() => _scheduledTime = selected);
+    }
   }
 
   String _normalizeTransport(String value) {
@@ -139,6 +225,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     _settingsPoll?.cancel();
     origin.dispose();
     destination.dispose();
+    _destinationFocusNode.dispose();
     super.dispose();
   }
 
@@ -421,45 +508,22 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
           ),
         };
 
-  Future<void> _editRoutePoints() async {
-    final result = await Navigator.of(context).push<RouteSelectionResult>(
-      MaterialPageRoute(
-        builder: (_) => SeleccionarPuntosEnvio(
-          startOrigin: origin.text.trim(),
-          startDestination: destination.text.trim(),
-          startOriginPlace: originPlace,
-          startDestinationPlace: destinationPlace,
-          startTransport: transport,
-          selectionOnly: true,
-        ),
-      ),
-    );
-    if (!mounted || result == null) return;
-    setState(() {
-      origin.text = result.origin;
-      destination.text = result.destination;
-      originPlace = result.originPlace;
-      destinationPlace = result.destinationPlace;
-      _roadRoute = const [];
-      _routeDistanceKm = null;
-      _routeDurationSeconds = null;
-    });
-    await _loadRoadRoute();
+  void _focusRouteOnMap() {
+    if (_roadRoute.length >= 2) {
+      _fitRoute(_roadRoute);
+      return;
+    }
+    final place = destinationPlace ?? originPlace;
+    if (place?.latitude != null && place?.longitude != null) {
+      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(
+        LatLng(place!.latitude!, place.longitude!),
+        14,
+      ));
+    }
   }
 
   void _handleMapBack() {
-    if (!widget.returnToPointSelection) {
-      Navigator.of(context).pop();
-      return;
-    }
-    Navigator.of(context).pop(
-      RouteSelectionResult(
-        origin: origin.text.trim(),
-        destination: destination.text.trim(),
-        originPlace: originPlace,
-        destinationPlace: destinationPlace,
-      ),
-    );
+    Navigator.of(context).pop();
   }
 
   Future<void> _continueToDetails() async {
@@ -478,15 +542,24 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
           originPlace: originPlace,
           destinationPlace: destinationPlace,
           transport: transport,
+          maxPassengers: taxiVariant == 'Microbus'
+              ? 12
+              : taxiVariant == 'SUV'
+                  ? 6
+                  : 4,
           serviceMode: serviceTab,
           estimatedShipping: _priceFor(transport),
           originRefs: widget.startOriginRefs,
           destinationRefs: widget.startDestinationRefs,
           recipientName: widget.startRecipientName,
           recipientPhone: widget.startRecipientPhone,
-          startScheduled: widget.startScheduled,
-          startDate: widget.startDate,
-          startTime: widget.startTime,
+          startScheduled: _scheduleMode,
+          startDate: _scheduleMode && _scheduledDate != null
+              ? _dateForApi(_scheduledDate!)
+              : null,
+          startTime: _scheduleMode && _scheduledTime != null
+              ? _timeForApi(_scheduledTime!)
+              : null,
         ),
       ),
     );
@@ -495,15 +568,22 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final sheetHeight = (size.height * .54).clamp(390.0, 540.0).toDouble();
+    final hasFare = _distanceKm != null;
+    final sheetHeight = _scheduleMode
+        // Keep this sheet sized to its content instead of the viewport.
+        ? 320.0
+        : (size.height * (hasFare ? .40 : .34))
+            .clamp(hasFare ? 320.0 : 270.0, hasFare ? 370.0 : 315.0)
+            .toDouble();
     return Scaffold(
       backgroundColor: const Color(0xFF082B66),
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           GoogleMap(
             initialCameraPosition:
                 CameraPosition(target: _mapCenter, zoom: 12.5),
-            padding: EdgeInsets.only(bottom: sheetHeight * .80),
+            padding: EdgeInsets.only(bottom: sheetHeight * .72),
             markers: _markers,
             polylines: _polylines,
             mapType: MapType.normal,
@@ -522,6 +602,22 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             top: MediaQuery.paddingOf(context).top + 12,
             left: 12,
             child: _MapBackButton(onTap: _handleMapBack),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 62,
+            left: 14,
+            right: 14,
+            child: _RouteEditor(
+              origin: origin,
+              destination: destination,
+              onOriginSelected: (place) =>
+                  _selectPlace(isOrigin: true, place: place),
+              onDestinationSelected: (place) =>
+                  _selectPlace(isOrigin: false, place: place),
+              onMap: _focusRouteOnMap,
+              loading: _routeLoading,
+              durationSeconds: _routeDurationSeconds,
+            ),
           ),
           Positioned(
             left: 0,
@@ -558,185 +654,465 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
               top: BorderSide(color: Colors.white.withValues(alpha: .28)),
             ),
           ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(15, 12, 15, 15),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Enviar paquete',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: 'Figtree',
-                        ),
+          child: _scheduleMode
+              ? _buildScheduleContent()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(15, 12, 15, 15),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              serviceTab == 'Taxi Privado'
+                                  ? 'Viajes'
+                                  : 'Envíos',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Figtree',
+                              ),
+                            ),
+                          ),
+                          if (serviceTab == 'Taxi Privado')
+                            TextButton(
+                              onPressed: () => setState(() {
+                                _scheduleMode = true;
+                                _scheduledDate ??=
+                                    DateUtils.dateOnly(DateTime.now())
+                                        .add(const Duration(days: 1));
+                                _scheduledTime ??=
+                                    const TimeOfDay(hour: 9, minute: 0);
+                              }),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                backgroundColor: accentBlue,
+                                minimumSize: const Size(84, 32),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 18, vertical: 8),
+                                shape: const StadiumBorder(),
+                              ),
+                              child: const Text(
+                                'Programar',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    fontFamily: 'Figtree'),
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
-                    TextButton(
-                      onPressed: () {},
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        backgroundColor: accentBlue,
-                        minimumSize: const Size(84, 32),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 8),
-                        shape: const StadiumBorder(),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          for (final label in ['Envíos', 'Viajes'])
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 5),
+                                child: _ServiceTab(
+                                  label: label,
+                                  selected: serviceTab ==
+                                      (label == 'Viajes'
+                                          ? 'Taxi Privado'
+                                          : 'Envíos'),
+                                  enabled: true,
+                                  onTap: () => setState(() {
+                                    serviceTab = label == 'Viajes'
+                                        ? 'Taxi Privado'
+                                        : 'Envíos';
+                                    if (label == 'Viajes') {
+                                      transport = 'Vehículo';
+                                      taxiVariant = 'Sedán';
+                                    }
+                                  }),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                      child: const Text(
-                        'Programar',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Figtree'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                _RouteEditor(
-                  origin: origin,
-                  destination: destination,
-                  onOriginSelected: (place) =>
-                      _selectPlace(isOrigin: true, place: place),
-                  onDestinationSelected: (place) =>
-                      _selectPlace(isOrigin: false, place: place),
-                  loading: _routeLoading,
-                  durationSeconds: _routeDurationSeconds,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    for (final label in ['Envíos', 'Taxi Privado'])
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 5),
-                          child: _ServiceTab(
-                            label: label,
-                            selected: serviceTab == label,
-                            enabled: true,
-                            onTap: () => setState(() {
-                              serviceTab = label;
-                              if (label == 'Taxi Privado') {
-                                transport = 'Vehículo';
+                      const SizedBox(height: 8),
+                      if (serviceTab == 'Taxi Privado')
+                        Row(
+                          children: [
+                            _ImageVehicleCard(
+                              label: 'Sedán',
+                              subtitle: '4 pasajeros',
+                              asset: 'assets/img/HomeCliente/taxi_sedan.png',
+                              selected: taxiVariant == 'Sedán',
+                              onTap: () => setState(() {
                                 taxiVariant = 'Sedán';
-                              }
-                            }),
+                                transport = 'Vehículo';
+                              }),
+                            ),
+                            const SizedBox(width: 7),
+                            _ImageVehicleCard(
+                              label: 'SUV',
+                              subtitle: '6 pasajeros',
+                              asset: 'assets/img/HomeCliente/taxi_suv.png',
+                              selected: taxiVariant == 'SUV',
+                              onTap: () => setState(() {
+                                taxiVariant = 'SUV';
+                                transport = 'Vehículo';
+                              }),
+                            ),
+                            const SizedBox(width: 7),
+                            _ImageVehicleCard(
+                              label: 'Microbus',
+                              subtitle: '12 pasajeros',
+                              asset: 'assets/img/HomeCliente/taxi_microbus.png',
+                              selected: taxiVariant == 'Microbus',
+                              onTap: () => setState(() {
+                                taxiVariant = 'Microbus';
+                                transport = 'Vehículo';
+                              }),
+                            ),
+                          ],
+                        )
+                      else
+                        Row(
+                          children: [
+                            _ImageVehicleCard(
+                              label: 'Moto',
+                              subtitle: 'Envíos en moto',
+                              asset: 'assets/img/HomeCliente/crear_moto.png',
+                              selected: transport == 'Moto',
+                              onTap: () => setState(() => transport = 'Moto'),
+                            ),
+                            const SizedBox(width: 7),
+                            _ImageVehicleCard(
+                              label: 'Auto',
+                              subtitle: 'Envíos en auto',
+                              asset: 'assets/img/HomeCliente/crear_auto.png',
+                              selected: transport == 'Vehículo',
+                              onTap: () =>
+                                  setState(() => transport = 'Vehículo'),
+                            ),
+                            const SizedBox(width: 7),
+                            _ImageVehicleCard(
+                              label: 'Carga',
+                              subtitle: 'Carga',
+                              asset: 'assets/img/HomeCliente/crear_carga.png',
+                              selected: transport == 'Camión',
+                              onTap: () => setState(() => transport = 'Camión'),
+                            ),
+                          ],
+                        ),
+                      if (_distanceKm != null) ...[
+                        const SizedBox(height: 8),
+                        _SelectedRateSummary(
+                          vehicle: transport == 'Moto'
+                              ? 'Moto'
+                              : transport == 'Vehículo'
+                                  ? 'Auto'
+                                  : 'Carga',
+                          distanceKm: _distanceKm!,
+                          routeDistanceKm: _routeDistanceKm,
+                          price: _priceFor(transport)!,
+                          rate: _rateFor(transport),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 43,
+                        child: ElevatedButton(
+                          onPressed: _continueToDetails,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentBlue,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: const StadiumBorder(),
+                          ),
+                          child: const Text(
+                            'Completar formulario de envío',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Figtree'),
                           ),
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (serviceTab == 'Taxi Privado')
-                  Row(
-                    children: [
-                      _ImageVehicleCard(
-                        label: 'Sedán',
-                        subtitle: '4 pasajeros',
-                        asset: 'assets/img/HomeCliente/taxi_sedan.png',
-                        selected: taxiVariant == 'Sedán',
-                        onTap: () => setState(() {
-                          taxiVariant = 'Sedán';
-                          transport = 'Vehículo';
-                        }),
-                      ),
-                      const SizedBox(width: 7),
-                      _ImageVehicleCard(
-                        label: 'SUV',
-                        subtitle: '6 pasajeros',
-                        asset: 'assets/img/HomeCliente/taxi_suv.png',
-                        selected: taxiVariant == 'SUV',
-                        onTap: () => setState(() {
-                          taxiVariant = 'SUV';
-                          transport = 'Vehículo';
-                        }),
-                      ),
-                      const SizedBox(width: 7),
-                      _ImageVehicleCard(
-                        label: 'Microbus',
-                        subtitle: '12 pasajeros',
-                        asset: 'assets/img/HomeCliente/taxi_microbus.png',
-                        selected: taxiVariant == 'Microbus',
-                        onTap: () => setState(() {
-                          taxiVariant = 'Microbus';
-                          transport = 'Vehículo';
-                        }),
-                      ),
-                    ],
-                  )
-                else
-                  Row(
-                    children: [
-                      _ImageVehicleCard(
-                        label: 'Moto',
-                        subtitle: 'Envíos en moto',
-                        asset: 'assets/img/HomeCliente/crear_moto.png',
-                        selected: transport == 'Moto',
-                        onTap: () => setState(() => transport = 'Moto'),
-                      ),
-                      const SizedBox(width: 7),
-                      _ImageVehicleCard(
-                        label: 'Auto',
-                        subtitle: 'Envíos en auto',
-                        asset: 'assets/img/HomeCliente/crear_auto.png',
-                        selected: transport == 'Vehículo',
-                        onTap: () => setState(() => transport = 'Vehículo'),
-                      ),
-                      const SizedBox(width: 7),
-                      _ImageVehicleCard(
-                        label: 'Carga',
-                        subtitle: 'Carga',
-                        asset: 'assets/img/HomeCliente/crear_carga.png',
-                        selected: transport == 'Camión',
-                        onTap: () => setState(() => transport = 'Camión'),
-                      ),
                     ],
                   ),
-                if (_distanceKm != null) ...[
-                  const SizedBox(height: 8),
-                  _SelectedRateSummary(
-                    vehicle: transport == 'Moto'
-                        ? 'Moto'
-                        : transport == 'Vehículo'
-                            ? 'Auto'
-                            : 'Carga',
-                    distanceKm: _distanceKm!,
-                    routeDistanceKm: _routeDistanceKm,
-                    price: _priceFor(transport)!,
-                    rate: _rateFor(transport),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 43,
-                  child: ElevatedButton(
-                    onPressed: _continueToDetails,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentBlue,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: const StadiumBorder(),
-                    ),
-                    child: const Text(
-                      'Completar formulario de envío',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: 'Figtree'),
-                    ),
-                  ),
                 ),
-              ],
-            ),
-          ),
         ),
       ),
     );
   }
+
+  Widget _buildScheduleContent() {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final selectedDate = _scheduledDate ?? today.add(const Duration(days: 1));
+    final dates = List.generate(
+      4,
+      (index) => today.add(Duration(days: index + 1)),
+    );
+    final times = List.generate(
+      4,
+      (index) => TimeOfDay(hour: 9 + index, minute: 0),
+    );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(15, 8, 15, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(() => _scheduleMode = false),
+                constraints:
+                    const BoxConstraints.tightFor(width: 34, height: 34),
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white, size: 17),
+              ),
+              const SizedBox(width: 5),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Programa tu viaje',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree')),
+                    Text(
+                        'Selecciona el momento que mejor se adapte a tu necesidad',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 10,
+                            fontFamily: 'Figtree')),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Image.asset('assets/img/HomeCliente/schedule_date_title.png',
+                  width: 17, height: 17),
+              const SizedBox(width: 7),
+              const Text('Fecha de viaje',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 54,
+            child: Row(
+              children: [
+                for (var index = 0; index < dates.length; index++) ...[
+                  Expanded(
+                    child: _ScheduleOption(
+                      title:
+                          index == 0 ? 'Mañana' : _weekdayShort(dates[index]),
+                      subtitle: _dateShort(dates[index]),
+                      selected: DateUtils.isSameDay(selectedDate, dates[index]),
+                      onTap: () =>
+                          setState(() => _scheduledDate = dates[index]),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                ],
+                _ScheduleIconButton(
+                  asset: 'assets/img/HomeCliente/schedule_custom_date.png',
+                  height: 54,
+                  selected: !dates
+                      .any((date) => DateUtils.isSameDay(date, selectedDate)),
+                  onTap: _chooseCustomDate,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              Icon(Icons.access_time_rounded, color: Colors.white, size: 17),
+              SizedBox(width: 7),
+              Text('Horario de recogida',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 52,
+            child: Row(
+              children: [
+                for (final time in times) ...[
+                  Expanded(
+                    child: _ScheduleOption(
+                      title: time.format(context),
+                      selected: _sameTime(_scheduledTime, time),
+                      onTap: () => setState(() => _scheduledTime = time),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                ],
+                _ScheduleIconButton(
+                  asset: 'assets/img/HomeCliente/schedule_custom_time.png',
+                  height: 52,
+                  selected:
+                      !times.any((time) => _sameTime(_scheduledTime, time)),
+                  onTap: _chooseCustomTime,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Image.asset('assets/img/HomeCliente/schedule_availability.png',
+                  width: 15, height: 15),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'La disponibilidad y precio serán confirmados junto con tu selección.',
+                  style: TextStyle(
+                      color: Colors.white, fontSize: 10, fontFamily: 'Figtree'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              onPressed: _continueToDetails,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: const StadiumBorder(),
+              ),
+              child: const Text('Confirmar y continuar',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree')),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _sameTime(TimeOfDay? first, TimeOfDay second) =>
+      first?.hour == second.hour && first?.minute == second.minute;
+
+  String _weekdayShort(DateTime date) =>
+      const ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][date.weekday - 1];
+
+  String _dateShort(DateTime date) => '${date.day} ${const [
+        'ene',
+        'feb',
+        'mar',
+        'abr',
+        'may',
+        'jun',
+        'jul',
+        'ago',
+        'sep',
+        'oct',
+        'nov',
+        'dic'
+      ][date.month - 1]}';
+}
+
+class _ScheduleOption extends StatelessWidget {
+  const _ScheduleOption({
+    required this.title,
+    this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: AppGlassSurface(
+          borderRadius: 11,
+          selected: selected,
+          child: Container(
+            height: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 9,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+class _ScheduleIconButton extends StatelessWidget {
+  const _ScheduleIconButton({
+    required this.asset,
+    required this.height,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String asset;
+  final double height;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: AppGlassSurface(
+          borderRadius: 11,
+          selected: selected,
+          child: SizedBox(
+            width: 58,
+            height: height,
+            child: Center(child: Image.asset(asset, width: 25, height: 25)),
+          ),
+        ),
+      );
 }
 
 class _MapBackButton extends StatelessWidget {
@@ -747,16 +1123,28 @@ class _MapBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xCC123E68),
-      shape: const CircleBorder(),
+      color: const Color(0xCC071B46),
+      borderRadius: BorderRadius.circular(24),
       child: InkWell(
-        customBorder: const CircleBorder(),
+        borderRadius: BorderRadius.circular(24),
         onTap: onTap,
-        child: const SizedBox(
-          width: 42,
-          height: 42,
-          child: Icon(Icons.arrow_back_ios_new_rounded,
-              color: Colors.white, size: 18),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white, size: 16),
+              SizedBox(width: 6),
+              Text('Regresar al inicio',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Figtree',
+                  )),
+            ],
+          ),
         ),
       ),
     );
@@ -769,6 +1157,7 @@ class _RouteEditor extends StatelessWidget {
     required this.destination,
     required this.onOriginSelected,
     required this.onDestinationSelected,
+    required this.onMap,
     required this.loading,
     required this.durationSeconds,
   });
@@ -777,6 +1166,7 @@ class _RouteEditor extends StatelessWidget {
   final TextEditingController destination;
   final ValueChanged<PlaceSuggestion> onOriginSelected;
   final ValueChanged<PlaceSuggestion> onDestinationSelected;
+  final VoidCallback onMap;
   final bool loading;
   final int? durationSeconds;
 
@@ -787,28 +1177,21 @@ class _RouteEditor extends StatelessWidget {
         : (durationSeconds! / 60).ceil().clamp(1, 999);
     return AppGlassSurface(
       borderRadius: 13,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(11, 7, 11, 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(11, 7, 9, 7),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Image.asset(
-                    'assets/img/HomeCliente/punto_desde.png',
-                    width: 24,
-                    height: 24,
-                    fit: BoxFit.contain,
-                  ),
-                ),
+                Image.asset('assets/img/HomeCliente/route_origin_home.png',
+                    width: 27, height: 27, fit: BoxFit.contain),
                 const SizedBox(width: 7),
                 Expanded(
                   child: PlaceAutocompleteField(
                     controller: origin,
-                    label: 'Desde',
-                    hint: 'Selecciona el punto de recogida',
+                    label: 'Origen',
+                    hint: '¿Dónde recogemos?',
                     bare: true,
                     onSelected: onOriginSelected,
                   ),
@@ -817,22 +1200,13 @@ class _RouteEditor extends StatelessWidget {
             ),
             Container(
               height: 1,
-              margin:
-                  const EdgeInsets.only(left: 31, right: 1, top: 2, bottom: 2),
-              color: Colors.white.withValues(alpha: .26),
+              margin: const EdgeInsets.only(left: 30, top: 1, bottom: 1),
+              color: Colors.white.withValues(alpha: .22),
             ),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Image.asset(
-                    'assets/img/HomeCliente/punto_hasta.png',
-                    width: 24,
-                    height: 24,
-                    fit: BoxFit.contain,
-                  ),
-                ),
+                Image.asset('assets/img/HomeCliente/route_destination_flag.png',
+                    width: 27, height: 27, fit: BoxFit.contain),
                 const SizedBox(width: 7),
                 Expanded(
                   child: PlaceAutocompleteField(
@@ -843,28 +1217,43 @@ class _RouteEditor extends StatelessWidget {
                     onSelected: onDestinationSelected,
                   ),
                 ),
-                if (minutes != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      '$minutes min',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Figtree',
-                      ),
+                TextButton.icon(
+                  onPressed: destination.text.trim().isEmpty ? null : onMap,
+                  icon: const Icon(Icons.map_outlined, size: 13),
+                  label: const Text('Mapa'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: accentBlue,
+                    disabledBackgroundColor:
+                        Colors.white.withValues(alpha: .08),
+                    padding: const EdgeInsets.symmetric(horizontal: 9),
+                    minimumSize: const Size(58, 29),
+                    shape: const StadiumBorder(),
+                    textStyle: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
                     ),
                   ),
+                ),
               ],
             ),
-            if (loading)
-              const Padding(
-                padding: EdgeInsets.only(left: 26, right: 1, top: 2),
-                child: LinearProgressIndicator(
-                  minHeight: 2,
-                  backgroundColor: Colors.transparent,
-                  color: cyan,
+            if (minutes != null || loading)
+              Padding(
+                padding: const EdgeInsets.only(left: 30, top: 2),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: loading
+                      ? const LinearProgressIndicator(
+                          minHeight: 2,
+                          backgroundColor: Colors.transparent,
+                          color: cyan,
+                        )
+                      : Text('$minutes min',
+                          style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 9,
+                              fontFamily: 'Figtree')),
                 ),
               ),
           ],

@@ -36,16 +36,24 @@ class EstablecerDestinos extends StatefulWidget {
 
 class _EstablecerDestinosState extends State<EstablecerDestinos> {
   late final List<TripStop> stops;
+  late String origin;
+  late String destination;
+  PlaceSuggestion? originPlace;
+  PlaceSuggestion? destinationPlace;
   GoogleMapController? mapController;
 
   @override
   void initState() {
     super.initState();
     stops = List<TripStop>.of(widget.initialStops);
+    origin = widget.origin;
+    destination = widget.destination;
+    originPlace = widget.originPlace;
+    destinationPlace = widget.destinationPlace;
   }
 
   List<_RoutePoint> get points => [
-        _RoutePoint('A', widget.origin, widget.originPlace),
+        _RoutePoint('A', origin, originPlace),
         ...stops.map((stop) => _RoutePoint(
               String.fromCharCode(66 + stop.order - 1),
               stop.address,
@@ -58,8 +66,30 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
                 longitude: stop.longitude,
               ),
             )),
-        _RoutePoint('Destino', widget.destination, widget.destinationPlace),
+        _RoutePoint('Destino', destination, destinationPlace),
       ];
+
+  Future<void> _editEndpoint({required bool isOrigin}) async {
+    final updated = await Navigator.of(context).push<PlaceSuggestion>(
+      MaterialPageRoute(
+        builder: (_) => _EditRoutePointPage(
+          isOrigin: isOrigin,
+          initialAddress: isOrigin ? origin : destination,
+          initialPlace: isOrigin ? originPlace : destinationPlace,
+        ),
+      ),
+    );
+    if (!mounted || updated == null) return;
+    setState(() {
+      if (isOrigin) {
+        origin = updated.description;
+        originPlace = updated;
+      } else {
+        destination = updated.description;
+        destinationPlace = updated;
+      }
+    });
+  }
 
   Future<void> _addDestination() async {
     final destination = await Navigator.of(context).push<_AddedDestination>(
@@ -102,7 +132,13 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
       );
       return;
     }
-    Navigator.of(context).pop(stops);
+    Navigator.of(context).pop(RouteDestinationsResult(
+      origin: origin,
+      destination: destination,
+      originPlace: originPlace,
+      destinationPlace: destinationPlace,
+      stops: stops,
+    ));
   }
 
   void _fitMap() {
@@ -190,7 +226,7 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
     return Scaffold(
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
-        backgroundLogoOpacity: 1,
+        backgroundLogoOpacity: .62,
         child: SafeArea(
           child: Column(
             children: [
@@ -205,7 +241,7 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
                     ),
                     const Expanded(
                       child: Text(
-                        'Establecer varios destinos',
+                        'Servicios adicionales',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -221,61 +257,121 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                   children: [
-                    GlassCard(
-                      padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
-                      borderRadius: 18,
-                      color: Colors.white.withValues(alpha: .08),
-                      child: Column(
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(6, 0, 6, 12),
+                      child: Row(
                         children: [
-                          for (var index = 0; index < points.length; index++)
-                            Column(
-                              key: ValueKey(
-                                  'route-point-${points[index].place?.placeId ?? points[index].label}'),
+                          AppGlassSurface(
+                            borderRadius: 13,
+                            child: SizedBox(
+                              width: 46,
+                              height: 46,
+                              child: Padding(
+                                padding: const EdgeInsets.all(9),
+                                child: Image.asset(
+                                  'assets/img/HomeCliente/route_multiple_stops.png',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _RouteRow(
-                                  point: points[index],
-                                  removable:
-                                      index > 0 && index < points.length - 1,
-                                  showMap: index == points.length - 1,
-                                  onMap: _openMap,
-                                  onRemove:
-                                      index > 0 && index < points.length - 1
-                                          ? () => setState(() {
-                                                stops.removeAt(index - 1);
-                                                for (var i = 0;
-                                                    i < stops.length;
-                                                    i++) {
-                                                  stops[i] = TripStop(
-                                                    id: stops[i].id,
-                                                    label: stops[i].label,
-                                                    address: stops[i].address,
-                                                    order: i + 1,
-                                                    latitude:
-                                                        stops[i].latitude,
-                                                    longitude:
-                                                        stops[i].longitude,
-                                                    refs: stops[i].refs,
-                                                    recipientName:
-                                                        stops[i].recipientName,
-                                                    recipientPhone:
-                                                        stops[i].recipientPhone,
-                                                  );
-                                                }
-                                              })
-                                          : null,
+                                Text('Varios destinos',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      fontFamily: 'Figtree',
+                                    )),
+                                SizedBox(height: 3),
+                                Text(
+                                  'Agrega paradas y ordénalas según el recorrido que necesitas.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontFamily: 'Figtree',
+                                  ),
                                 ),
                               ],
                             ),
-                          const SizedBox(height: 9),
-                          GlassButton(
-                            label: 'Agregar ruta adicional',
-                            onPressed: _addDestination,
-                            icon: Icons.add_rounded,
-                            filled: true,
-                            height: 40,
-                            fontSize: 12,
                           ),
                         ],
+                      ),
+                    ),
+                    AppGlassSurface(
+                      borderRadius: 18,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
+                        child: Column(
+                          children: [
+                            for (var index = 0; index < points.length; index++)
+                              Column(
+                                key: ValueKey(
+                                    'route-point-${points[index].place?.placeId ?? points[index].label}'),
+                                children: [
+                                  _RouteRow(
+                                    point: points[index],
+                                    removable: index > 0 &&
+                                        index < points.length - 1,
+                                    showMap: index == points.length - 1,
+                                    onMap: _openMap,
+                                    showEdit: index == 0 ||
+                                        index == points.length - 1,
+                                    onEdit: () =>
+                                        _editEndpoint(isOrigin: index == 0),
+                                    onRemove:
+                                        index > 0 && index < points.length - 1
+                                            ? () => setState(() {
+                                                  stops.removeAt(index - 1);
+                                                  for (var i = 0;
+                                                      i < stops.length;
+                                                      i++) {
+                                                    stops[i] = TripStop(
+                                                      id: stops[i].id,
+                                                      label: stops[i].label,
+                                                      address: stops[i].address,
+                                                      order: i + 1,
+                                                      latitude:
+                                                          stops[i].latitude,
+                                                      longitude:
+                                                          stops[i].longitude,
+                                                      refs: stops[i].refs,
+                                                      recipientName:
+                                                          stops[i].recipientName,
+                                                      recipientPhone:
+                                                          stops[i].recipientPhone,
+                                                    );
+                                                  }
+                                                })
+                                            : null,
+                                  ),
+                                  if (index < points.length - 1)
+                                    Container(
+                                      height: 1,
+                                      margin: const EdgeInsets.only(
+                                          left: 37, top: 2, bottom: 2),
+                                      color: Colors.white
+                                          .withValues(alpha: .25),
+                                    ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: GlassButton(
+                        label: 'Agregar ruta adicional',
+                        onPressed: _addDestination,
+                        icon: Icons.add_rounded,
+                        filled: true,
+                        height: 40,
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -305,6 +401,22 @@ class _RoutePoint {
   final String label;
   final String name;
   final PlaceSuggestion? place;
+}
+
+class RouteDestinationsResult {
+  const RouteDestinationsResult({
+    required this.origin,
+    required this.destination,
+    required this.originPlace,
+    required this.destinationPlace,
+    required this.stops,
+  });
+
+  final String origin;
+  final String destination;
+  final PlaceSuggestion? originPlace;
+  final PlaceSuggestion? destinationPlace;
+  final List<TripStop> stops;
 }
 
 class _AddedDestination {
@@ -370,6 +482,8 @@ class _RouteRow extends StatelessWidget {
     required this.removable,
     required this.showMap,
     required this.onMap,
+    required this.showEdit,
+    required this.onEdit,
     this.onRemove,
   });
 
@@ -377,6 +491,8 @@ class _RouteRow extends StatelessWidget {
   final bool removable;
   final bool showMap;
   final VoidCallback onMap;
+  final bool showEdit;
+  final VoidCallback onEdit;
   final VoidCallback? onRemove;
 
   @override
@@ -422,28 +538,152 @@ class _RouteRow extends StatelessWidget {
               ),
             ),
           ),
-          if (showMap)
+          if (showEdit)
+            GlassButton(
+              label: 'Editar',
+              icon: Icons.edit_outlined,
+              onPressed: onEdit,
+              width: 70,
+              height: 28,
+              fontSize: 9,
+              filled: false,
+              backgroundColor: Colors.white.withValues(alpha: .08),
+            ),
+          if (showMap) ...[
+            if (showEdit) const SizedBox(width: 7),
             GlassButton(
               label: 'Mapa',
               onPressed: onMap,
               filled: true,
-              width: 64,
-              height: 32,
-              fontSize: 10,
+              width: 58,
+              height: 28,
+              fontSize: 9,
             ),
+          ],
           if (removable) ...[
-            const SizedBox(width: 6),
+            const SizedBox(width: 7),
             GlassButton(
               label: 'Eliminar',
               onPressed: onRemove!,
-              width: 78,
-              height: 32,
-              fontSize: 10,
+              width: 70,
+              height: 28,
+              fontSize: 9,
               filled: true,
-              backgroundColor: const Color(0xFFB83750),
+              backgroundColor: const Color(0xCCB83750),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _EditRoutePointPage extends StatefulWidget {
+  const _EditRoutePointPage({
+    required this.isOrigin,
+    required this.initialAddress,
+    required this.initialPlace,
+  });
+
+  final bool isOrigin;
+  final String initialAddress;
+  final PlaceSuggestion? initialPlace;
+
+  @override
+  State<_EditRoutePointPage> createState() => _EditRoutePointPageState();
+}
+
+class _EditRoutePointPageState extends State<_EditRoutePointPage> {
+  late final TextEditingController controller;
+  PlaceSuggestion? selected;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController(text: widget.initialAddress);
+    controller.addListener(_onAddressChanged);
+    selected = widget.initialPlace ??
+        PlaceSuggestion(
+          placeId: 'existing-route-point',
+          description: widget.initialAddress,
+          main: widget.initialAddress,
+          secondary: '',
+        );
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_onAddressChanged);
+    controller.dispose();
+    super.dispose();
+  }
+
+  void _onAddressChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isOrigin = widget.isOrigin;
+    final title = isOrigin ? 'Editar origen' : 'Editar destino final';
+    final canUseSelection = selected != null &&
+        selected!.description.trim() == controller.text.trim();
+    return Scaffold(
+      backgroundColor: const Color(0xFF0C1C53),
+      body: AppBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 16, 12),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                    Text(title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        )),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: PlaceAutocompleteField(
+                  controller: controller,
+                  label: isOrigin ? 'Origen' : 'Destino final',
+                  hint: 'Busca una dirección o referencia',
+                  icon: isOrigin
+                      ? Icons.home_outlined
+                      : Icons.flag_outlined,
+                  onSelected: (place) => setState(() => selected = place),
+                ),
+              ),
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                child: GlassButton(
+                  label: 'Usar este punto',
+                  filled: true,
+                  height: 48,
+                  fontSize: 13,
+                  backgroundColor: canUseSelection
+                      ? accentBlue
+                      : Colors.white.withValues(alpha: .12),
+                  onPressed: !canUseSelection
+                      ? () {}
+                      : () => Navigator.of(context).pop(selected!),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -750,7 +990,7 @@ class _AddDestinationPageState extends State<_AddDestinationPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
-        backgroundLogoOpacity: 1,
+        backgroundLogoOpacity: .62,
         child: SafeArea(
           child: Column(
             children: [

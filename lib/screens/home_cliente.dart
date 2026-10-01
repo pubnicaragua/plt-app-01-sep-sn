@@ -15,7 +15,6 @@ import '../widgets/notifications_sheet.dart';
 import '../widgets/place_field.dart';
 import 'inicio.dart';
 import 'crear_envio1.dart';
-import 'seleccionar_puntos_envio.dart';
 import 'pedido.dart';
 import 'mi_perfil_cliente.dart';
 import 'resumen_cliente.dart';
@@ -167,23 +166,7 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
             : 'Moto';
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => SeleccionarPuntosEnvio(
-          startTransport: transport,
-          onOpenMap: (result) async {
-            return Navigator.of(context).push<RouteSelectionResult>(
-              MaterialPageRoute(
-                builder: (_) => CrearEnvio1(
-                  startOrigin: result.origin,
-                  startDestination: result.destination,
-                  startOriginPlace: result.originPlace,
-                  startDestinationPlace: result.destinationPlace,
-                  startTransport: transport,
-                  returnToPointSelection: true,
-                ),
-              ),
-            );
-          },
-        ),
+        builder: (_) => CrearEnvio1(startTransport: transport),
       ),
     );
   }
@@ -191,23 +174,9 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
   void _openTaxiFlow() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => SeleccionarPuntosEnvio(
+        builder: (_) => const CrearEnvio1(
           startTransport: 'Vehículo',
-          onOpenMap: (result) async {
-            return Navigator.of(context).push<RouteSelectionResult>(
-              MaterialPageRoute(
-                builder: (_) => CrearEnvio1(
-                  startOrigin: result.origin,
-                  startDestination: result.destination,
-                  startOriginPlace: result.originPlace,
-                  startDestinationPlace: result.destinationPlace,
-                  startTransport: 'Vehículo',
-                  startServiceMode: 'Taxi Privado',
-                  returnToPointSelection: true,
-                ),
-              ),
-            );
-          },
+          startServiceMode: 'Taxi Privado',
         ),
       ),
     );

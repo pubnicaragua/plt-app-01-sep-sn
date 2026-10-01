@@ -342,7 +342,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       showProgress: false,
       showDescription: false,
       showStepBadge: true,
-      backgroundLogoOpacity: 1,
+      backgroundLogoOpacity: .86,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

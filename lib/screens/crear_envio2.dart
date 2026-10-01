@@ -25,6 +25,7 @@ class CrearEnvio2 extends StatefulWidget {
     this.originPlace,
     this.destinationPlace,
     this.transport = 'Moto',
+    this.maxPassengers = 4,
     this.serviceMode = 'Envíos',
     this.estimatedShipping,
     this.originRefs = '',
@@ -44,6 +45,7 @@ class CrearEnvio2 extends StatefulWidget {
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
   final String transport;
+  final int maxPassengers;
   final String serviceMode;
   final double? estimatedShipping;
   final String originRefs;
@@ -59,6 +61,10 @@ class CrearEnvio2 extends StatefulWidget {
 }
 
 class _CrearEnvio2State extends State<CrearEnvio2> {
+  late String _routeOrigin;
+  late String _routeDestination;
+  PlaceSuggestion? _routeOriginPlace;
+  PlaceSuggestion? _routeDestinationPlace;
   late int weight;
   late String weightUnit;
   late int bundles;
@@ -87,6 +93,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   @override
   void initState() {
     super.initState();
+    _routeOrigin = widget.origin;
+    _routeDestination = widget.destination;
+    _routeOriginPlace = widget.originPlace;
+    _routeDestinationPlace = widget.destinationPlace;
     weight = widget.weight.clamp(1, 1500).toInt();
     weightUnit = widget.weightUnit == 'lb' ? 'lb' : 'kg';
     bundles = widget.bundles.clamp(1, 99).toInt();
@@ -249,13 +259,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => CrearEnvio3(
-            origin: widget.origin,
-            destination: widget.destination,
+            origin: _routeOrigin,
+            destination: _routeDestination,
             weight: weight,
             weightUnit: weightUnit,
             bundles: bundles,
-            originPlace: widget.originPlace,
-            destinationPlace: widget.destinationPlace,
+            originPlace: _routeOriginPlace,
+            destinationPlace: _routeDestinationPlace,
             transport: widget.transport,
             description: [
               if (description.text.trim().isNotEmpty) description.text.trim(),
@@ -295,13 +305,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Confirmarpedido(
-          origin: widget.origin,
-          destination: widget.destination,
+          origin: _routeOrigin,
+          destination: _routeDestination,
           weight: weight,
           weightUnit: weightUnit,
           bundles: bundles,
-          originPlace: widget.originPlace,
-          destinationPlace: widget.destinationPlace,
+          originPlace: _routeOriginPlace,
+          destinationPlace: _routeDestinationPlace,
           transport: widget.transport,
           estimatedShipping: widget.estimatedShipping,
           description: [
@@ -388,6 +398,22 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         sortOrder: 70,
       );
     }
+    if (additionalOption == 'taxi-more-vehicles') {
+      return const ServiceCatalogItem(
+        id: 'local-taxi-more-vehicles',
+        code: 'taxi-more-vehicles',
+        kind: 'option',
+        service: 'taxi',
+        transport: 'Vehículo',
+        title: 'Más vehículos',
+        description: 'A una misma ruta',
+        priceCs: 40,
+        currency: 'USD',
+        pricingMode: 'flat',
+        enabled: true,
+        sortOrder: 40,
+      );
+    }
     return null;
   }
 
@@ -447,23 +473,27 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       additionalOption = item?.code ?? resolvedCode;
     });
     if (code.contains('multiple-stops')) {
-      final selectedStops = await Navigator.of(context).push<List<TripStop>>(
+      final result = await Navigator.of(context).push<RouteDestinationsResult>(
         MaterialPageRoute(
           builder: (_) => EstablecerDestinos(
-            origin: widget.origin,
-            destination: widget.destination,
-            originPlace: widget.originPlace,
-            destinationPlace: widget.destinationPlace,
+            origin: _routeOrigin,
+            destination: _routeDestination,
+            originPlace: _routeOriginPlace,
+            destinationPlace: _routeDestinationPlace,
             initialStops: additionalStops,
             collectRecipientDetails: widget.serviceMode != 'Taxi Privado',
           ),
         ),
       );
-      if (!mounted || selectedStops == null) return;
+      if (!mounted || result == null) return;
       setState(() {
+        _routeOrigin = result.origin;
+        _routeDestination = result.destination;
+        _routeOriginPlace = result.originPlace;
+        _routeDestinationPlace = result.destinationPlace;
         additionalStops
           ..clear()
-          ..addAll(selectedStops);
+          ..addAll(result.stops);
       });
     }
   }
@@ -505,7 +535,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
         darken: .04,
-        backgroundLogoOpacity: 1,
+        backgroundLogoOpacity: .62,
         child: SafeArea(
           child: Column(
             children: [
@@ -602,15 +632,54 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                         title: 'Cantidad de pasajeros',
                       ),
                       const SizedBox(height: 8),
-                      _CounterField(
-                        value:
-                            '$passengerCount pasajero${passengerCount == 1 ? '' : 's'}',
+                      _PassengerCounterField(
+                        value: passengerCount,
                         onMinus: passengerCount > 1
                             ? () => setState(() => passengerCount--)
                             : null,
-                        onPlus: passengerCount < 6
+                        onPlus: passengerCount < widget.maxPassengers
                             ? () => setState(() => passengerCount++)
                             : null,
+                      ),
+                      const SizedBox(height: 8),
+                      _TaxiGlassPanel(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 9),
+                        child: Row(
+                          children: [
+                            Image.asset(
+                              'assets/img/HomeCliente/taxi_passenger_info.png',
+                              width: 20,
+                              height: 20,
+                              fit: BoxFit.contain,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text.rich(
+                                TextSpan(
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    height: 1.3,
+                                    fontFamily: 'Figtree',
+                                  ),
+                                  children: [
+                                    const TextSpan(
+                                      text:
+                                          'Recuerda que según el vehículo varía la cantidad máxima de pasajeros:\n',
+                                    ),
+                                    TextSpan(
+                                      text:
+                                          'Máximo ${widget.maxPassengers} pasajeros',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w800),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                     const SizedBox(height: 14),
@@ -658,6 +727,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   Widget _standardAdditionalBlock() {
+    if (widget.serviceMode == 'Taxi Privado') {
+      return _taxiAdditionalBlock();
+    }
+
     final multiple = _serviceOption('delivery-multiple-stops',
         fallbackTitle: 'Varios destinos');
     final roundTrip =
@@ -761,6 +834,298 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _taxiAdditionalBlock() {
+    final multiple = _serviceOption('delivery-multiple-stops',
+        fallbackTitle: 'Varios destinos');
+    final roundTrip =
+        _serviceOption('delivery-round-trip', fallbackTitle: 'Ida y vuelta');
+    final insurance =
+        _serviceOption('delivery-insurance', fallbackTitle: 'Seguro');
+    final moreVehicles =
+        _serviceOption('delivery-more-vehicles', fallbackTitle: 'Más vehículos');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _FormSectionTitle(
+                icon: Icons.settings_outlined,
+                title: 'Servicios adicionales',
+              ),
+            ),
+            TextButton(
+              onPressed: _showTaxiServicesSheet,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: accentBlue,
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                minimumSize: const Size(102, 34),
+                shape: const StadiumBorder(),
+                textStyle: const TextStyle(
+                  fontFamily: 'Figtree',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Ver todos'),
+                  SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, size: 18),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const Padding(
+          padding: EdgeInsets.only(left: 27, top: 2, bottom: 9),
+          child: Text('Añade servicios extra si los necesitas',
+              style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 10,
+                  fontFamily: 'Figtree')),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_destinos.png',
+                title: multiple?.title ?? 'Varios destinos',
+                subtitle: multiple?.description ?? 'Múltiples destinos',
+                price: _priceLabel(multiple, 'C\$40 USD'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (multiple?.code ?? _serviceCode('delivery-multiple-stops')),
+                enabled: true,
+                onTap: () => _selectAdditional(
+                    'delivery-multiple-stops', 'Varios destinos'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_seguro.png',
+                title: insurance?.title ?? 'Seguro',
+                subtitle: insurance?.description ?? 'Asegura a los pasajeros',
+                price: _priceLabel(insurance, 'C\$40 USD'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (insurance?.code ?? _serviceCode('delivery-insurance')),
+                enabled: true,
+                onTap: () => _selectAdditional('delivery-insurance', 'Seguro'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_regreso.png',
+                title: roundTrip?.title ?? 'Ida y vuelta',
+                subtitle: roundTrip?.description ?? 'Regreso al origen',
+                price: _priceLabel(roundTrip, 'C\$40 USD'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (roundTrip?.code ??
+                            _serviceCode('delivery-round-trip')),
+                enabled: true,
+                onTap: () =>
+                    _selectAdditional('delivery-round-trip', 'Ida y vuelta'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/taxi_more_vehicles.png',
+                title: moreVehicles?.title ?? 'Más vehículos',
+                subtitle: moreVehicles?.description ?? 'A una misma ruta',
+                price: _priceLabel(moreVehicles, 'US\$40'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (moreVehicles?.code ??
+                            _serviceCode('delivery-more-vehicles')),
+                enabled: true,
+                onTap: () => _selectAdditional(
+                    'delivery-more-vehicles', 'Más vehículos'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _showTaxiServicesSheet() {
+    var dismissing = false;
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) => Material(
+        color: Colors.transparent,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => Navigator.of(dialogContext).pop(),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 11, sigmaY: 11),
+                  child: Container(color: const Color(0x55030B24)),
+                ),
+              ),
+            ),
+            NotificationListener<DraggableScrollableNotification>(
+              onNotification: (notification) {
+                if (notification.extent <= .045 && !dismissing) {
+                  dismissing = true;
+                  Navigator.of(dialogContext).pop();
+                }
+                return false;
+              },
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: DraggableScrollableSheet(
+                  initialChildSize: .53,
+                  minChildSize: .035,
+                  maxChildSize: .82,
+                  expand: false,
+                  builder: (context, scrollController) {
+          final multiple = _serviceOption('delivery-multiple-stops',
+              fallbackTitle: 'Varios destinos');
+          final roundTrip = _serviceOption('delivery-round-trip',
+              fallbackTitle: 'Ida y vuelta');
+          final insurance =
+              _serviceOption('delivery-insurance', fallbackTitle: 'Seguro');
+          final moreVehicles = _serviceOption('delivery-more-vehicles',
+              fallbackTitle: 'Más vehículos');
+          final options = [
+            (
+              icon: 'assets/img/HomeCliente/adicional_destinos.png',
+              title: multiple?.title ?? 'Varios destinos',
+              subtitle: multiple?.description ?? 'Múltiples destinos',
+              price: _priceLabel(multiple, 'C\$40 USD'),
+              code: multiple?.code ?? _serviceCode('delivery-multiple-stops'),
+              fallback: 'Varios destinos',
+            ),
+            (
+              icon: 'assets/img/HomeCliente/adicional_regreso.png',
+              title: roundTrip?.title ?? 'Ida y vuelta',
+              subtitle: roundTrip?.description ?? 'Regreso al origen',
+              price: _priceLabel(roundTrip, 'C\$40 USD'),
+              code: roundTrip?.code ?? _serviceCode('delivery-round-trip'),
+              fallback: 'Ida y vuelta',
+            ),
+            (
+              icon: 'assets/img/HomeCliente/adicional_seguro.png',
+              title: insurance?.title ?? 'Seguro',
+              subtitle: insurance?.description ?? 'Asegura a los pasajeros',
+              price: _priceLabel(insurance, 'C\$40 USD'),
+              code: insurance?.code ?? _serviceCode('delivery-insurance'),
+              fallback: 'Seguro',
+            ),
+            (
+              icon: 'assets/img/HomeCliente/taxi_more_vehicles.png',
+              title: moreVehicles?.title ?? 'Más vehículos',
+              subtitle: moreVehicles?.description ?? 'A una misma ruta',
+              price: _priceLabel(moreVehicles, 'US\$40'),
+              code: moreVehicles?.code ??
+                  _serviceCode('delivery-more-vehicles'),
+              fallback: 'Más vehículos',
+            ),
+          ];
+
+          return ClipRRect(
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: AppGlassSurface(
+                borderRadius: 24,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 25, 20, 14),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.settings_outlined,
+                              color: Colors.white, size: 21),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Servicios adicionales',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    fontFamily: 'Figtree',
+                                  )),
+                              Text('Añade servicios extra si los necesitas',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 10,
+                                    fontFamily: 'Figtree',
+                                  )),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.separated(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                        itemCount: options.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final option = options[index];
+                          return _AdditionalOptionCard(
+                            iconAsset: option.icon,
+                            title: option.title,
+                            subtitle: option.subtitle,
+                            price: option.price,
+                            selected: needsAdditional &&
+                                additionalOption == option.code,
+                            enabled: true,
+                            large: true,
+                            cardRadius: 13,
+                            onTap: () =>
+                                _selectAdditional(option.code, option.fallback),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1179,22 +1544,56 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
 
   Widget _paymentBlock({bool includeInvoice = true}) {
     if (!includeInvoice) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Método de pago',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              fontFamily: 'Figtree',
-            ),
+          Row(
+            children: [
+              Image.asset('assets/img/HomeCliente/taxi_payment_title.png',
+                  width: 20, height: 20, fit: BoxFit.contain),
+              const SizedBox(width: 9),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Método de pago',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      )),
+                  Text('Selecciona cómo deseas pagar el viaje.',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontFamily: 'Figtree',
+                      )),
+                ],
+              ),
+            ],
           ),
-          _StatusToggle(
-            value: paymentMethod,
-            options: const ['Efectivo', 'Transferencia'],
-            onChanged: (value) => setState(() => paymentMethod = value),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _TaxiPaymentOption(
+                  label: 'Efectivo',
+                  iconAsset: 'assets/img/HomeCliente/taxi_payment_cash.png',
+                  selected: paymentMethod == 'Efectivo',
+                  onTap: () => setState(() => paymentMethod = 'Efectivo'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _TaxiPaymentOption(
+                  label: 'Transferencia',
+                  iconAsset:
+                      'assets/img/HomeCliente/taxi_payment_transfer.png',
+                  selected: paymentMethod == 'Transferencia',
+                  onTap: () => setState(() => paymentMethod = 'Transferencia'),
+                ),
+              ),
+            ],
           ),
         ],
       );
@@ -2046,16 +2445,139 @@ class _CounterField extends StatelessWidget {
   }
 }
 
+class _PassengerCounterField extends StatelessWidget {
+  const _PassengerCounterField({
+    required this.value,
+    required this.onMinus,
+    required this.onPlus,
+  });
+
+  final int value;
+  final VoidCallback? onMinus;
+  final VoidCallback? onPlus;
+
+  @override
+  Widget build(BuildContext context) => _TaxiGlassPanel(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _CounterButton(icon: Icons.remove_rounded, onTap: onMinus, size: 48),
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$value',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      height: 1,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    value == 1 ? 'Pasajero' : 'Pasajeros',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      height: 1,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _CounterButton(
+                icon: Icons.add_rounded, onTap: onPlus, filled: true, size: 48),
+          ],
+        ),
+      );
+}
+
+class _TaxiGlassPanel extends StatelessWidget {
+  const _TaxiGlassPanel({
+    required this.child,
+    required this.padding,
+    this.selected = false,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => AppGlassSurface(
+        // Match the exact edge and fill treatment used by vehicle choices.
+        borderRadius: 13,
+        selected: selected,
+        child: Padding(padding: padding, child: child),
+      );
+}
+
+class _TaxiPaymentOption extends StatelessWidget {
+  const _TaxiPaymentOption({
+    required this.label,
+    required this.iconAsset,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String iconAsset;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: _TaxiGlassPanel(
+          selected: selected,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              Image.asset(iconAsset,
+                  width: 22, height: 22, fit: BoxFit.contain),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
+                    )),
+              ),
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
 class _CounterButton extends StatelessWidget {
   const _CounterButton({
     required this.icon,
     required this.onTap,
     this.filled = false,
+    this.size = 40,
   });
 
   final IconData icon;
   final VoidCallback? onTap;
   final bool filled;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -2066,8 +2588,8 @@ class _CounterButton extends StatelessWidget {
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: SizedBox(
-          width: 40,
-          height: 40,
+          width: size,
+          height: size,
           child: Icon(icon,
               color: onTap == null ? Colors.white38 : Colors.white, size: 22),
         ),

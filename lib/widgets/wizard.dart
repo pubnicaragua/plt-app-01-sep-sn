@@ -18,7 +18,7 @@ class WizardScaffold extends StatelessWidget {
     this.showProgress = true,
     this.showDescription = true,
     this.showStepBadge = false,
-    this.backgroundLogoOpacity = 1,
+    this.backgroundLogoOpacity = .53,
     this.backgroundLogoOffsetY = 0,
     this.backgroundLogoScale = 1,
   });
@@ -45,7 +45,11 @@ class WizardScaffold extends StatelessWidget {
     final safeTotalSteps = totalSteps.clamp(2, 5).toInt();
     final safeStep = step.clamp(0, safeTotalSteps - 1).toInt();
     final sectionLabels = safeTotalSteps == 3
-        ? const ['Información del envío', 'Detalles de la carga', 'Confirmación del envío']
+        ? const [
+            'Información del envío',
+            'Detalles de la carga',
+            'Confirmación del envío'
+          ]
         : const ['Información del envío', 'Confirmación del envío'];
     return Scaffold(
       appBar: AppBar(
@@ -70,11 +74,13 @@ class WizardScaffold extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: Colors.white.withValues(alpha: .30)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: .30)),
                 ),
                 child: Text(
                   'Paso ${safeStep + 1}',
@@ -96,7 +102,8 @@ class WizardScaffold extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withValues(alpha: .18)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: .18)),
                 ),
                 child: Image.asset(
                   'assets/img/HomeCliente/notificaciones.png',
@@ -121,8 +128,7 @@ class WizardScaffold extends StatelessWidget {
         backgroundLogoScale: backgroundLogoScale,
         child: SafeArea(
           child: ListView(
-            padding: EdgeInsets.fromLTRB(
-                22, showProgress ? 76 : 68, 22, 28),
+            padding: EdgeInsets.fromLTRB(22, showProgress ? 76 : 68, 22, 28),
             children: [
               if (showProgress) ...[
                 Row(

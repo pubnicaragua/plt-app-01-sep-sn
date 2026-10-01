@@ -17,6 +17,7 @@ class PlaceAutocompleteField extends StatefulWidget {
     this.icon,
     this.onSelected,
     this.bare = false,
+    this.focusNode,
   });
 
   final TextEditingController controller;
@@ -25,6 +26,7 @@ class PlaceAutocompleteField extends StatefulWidget {
   final IconData? icon;
   final ValueChanged<PlaceSuggestion>? onSelected;
   final bool bare;
+  final FocusNode? focusNode;
 
   @override
   State<PlaceAutocompleteField> createState() => _PlaceAutocompleteFieldState();
@@ -94,6 +96,7 @@ class _PlaceAutocompleteFieldState extends State<PlaceAutocompleteField> {
             label: widget.label,
             hint: widget.hint,
             controller: widget.controller,
+            focusNode: widget.focusNode,
             onChanged: _onChanged,
           )
         else
@@ -252,12 +255,14 @@ class _BareRouteField extends StatelessWidget {
     required this.label,
     required this.hint,
     required this.controller,
+    this.focusNode,
     required this.onChanged,
   });
 
   final String label;
   final String? hint;
   final TextEditingController controller;
+  final FocusNode? focusNode;
   final ValueChanged<String> onChanged;
 
   @override
@@ -278,6 +283,7 @@ class _BareRouteField extends StatelessWidget {
         const SizedBox(height: 3),
         TextField(
           controller: controller,
+          focusNode: focusNode,
           onChanged: onChanged,
           style: const TextStyle(
             color: Colors.white,
