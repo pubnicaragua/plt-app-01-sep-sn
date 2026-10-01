@@ -36,18 +36,19 @@ class _ViajeAsignadoState extends State<ViajeAsignado> {
     _future!.then((_) {
       if (mounted) setState(() => loading = false);
     }).catchError((_) {
-      if (mounted) setState(() {
-        loading = false;
-        error = 'No se pudo cargar el viaje.';
-      });
+      if (mounted)
+        setState(() {
+          loading = false;
+          error = 'No se pudo cargar el viaje.';
+        });
     });
   }
 
   Future<void> _startTrip(Trip trip) async {
     if (trip.status != 'Asignado') {
       if (mounted) {
-        setState(() =>
-            error = 'El viaje está en estado «${trip.status}» y no se puede iniciar. Vuelve a atrás y refresca la lista.');
+        setState(() => error =
+            'El viaje está en estado «${trip.status}» y no se puede iniciar. Vuelve a atrás y refresca la lista.');
       }
       return;
     }
@@ -58,7 +59,9 @@ class _ViajeAsignadoState extends State<ViajeAsignado> {
         MaterialPageRoute(builder: (_) => ViajeEnCurso(trip: updated)),
       );
     } catch (failure) {
-      final message = failure is ApiException ? failure.message : 'No se pudo iniciar el viaje.';
+      final message = failure is ApiException
+          ? failure.message
+          : 'No se pudo iniciar el viaje.';
       if (mounted) setState(() => error = message);
     }
   }
@@ -341,7 +344,8 @@ class _DetailBody extends StatelessWidget {
               const SizedBox(height: 4),
               DetailRow(
                 label: 'Cantidad',
-                value: '${trip.packages} paquete${trip.packages == 1 ? '' : 's'}',
+                value:
+                    '${trip.packages} paquete${trip.packages == 1 ? '' : 's'}',
               ),
               const SizedBox(height: 4),
               const DetailRow(label: 'Tamaño', value: 'Mediano (máx. 20kg)'),
@@ -362,7 +366,13 @@ class _DetailBody extends StatelessWidget {
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
-                      trip.description ?? 'Manejar con cuidado. Contiene material frágil.',
+                      (trip.description ??
+                              'Manejar con cuidado. Contiene material frágil.')
+                          .replaceAll(
+                            RegExp(r'\s*\[INCOEX_RETURN_AT=[^\]]+\]'),
+                            '',
+                          )
+                          .trim(),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12.5,

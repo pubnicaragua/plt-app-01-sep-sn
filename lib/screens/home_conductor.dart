@@ -27,13 +27,13 @@ class _HomeConductorState extends State<HomeConductor> {
   Timer? poll;
   final Set<String> knownIds = {};
   final Set<String> knownIncidentIds = {};
+  final Set<String> notifiedReturnTrips = {};
   final List<String> news = [];
   int unread = 0;
   String? incidentError;
   CurrentLocation? location;
 
-  String get _driverName =>
-      apiClient.currentUser?.displayName ?? 'Carlos Díaz';
+  String get _driverName => apiClient.currentUser?.displayName ?? 'Carlos Díaz';
 
   @override
   void initState() {
@@ -60,16 +60,21 @@ class _HomeConductorState extends State<HomeConductor> {
         backgroundColor: const Color(0xFF0B1D4D),
         title: const Text(
           'Sesión cerrada',
-          style: TextStyle(color: Colors.white, fontFamily: 'Figtree', fontWeight: FontWeight.w800),
+          style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Figtree',
+              fontWeight: FontWeight.w800),
         ),
         content: Text(
           reason,
-          style: const TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Figtree'),
+          style:
+              const TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Figtree'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Entendido', style: TextStyle(color: cyan, fontFamily: 'Figtree')),
+            child: const Text('Entendido',
+                style: TextStyle(color: cyan, fontFamily: 'Figtree')),
           ),
         ],
       ),
@@ -96,10 +101,10 @@ class _HomeConductorState extends State<HomeConductor> {
     } finally {
       if (mounted) setState(() => loading = false);
     }
-    await _refreshIncidentNotifications();
-    final loc = await requestCurrentLocation();
+    final loc = await requestAppPermissions();
     if (mounted && loc != null) setState(() => location = loc);
-    await requestAppPermissions();
+    await _refreshIncidentNotifications();
+    _checkScheduledReturns(trips);
   }
 
   Future<void> _refresh() async {
@@ -109,7 +114,8 @@ class _HomeConductorState extends State<HomeConductor> {
       if (!sessionOk) {
         await apiClient.clearSession();
         if (!mounted) return;
-        await _forceLogout('Tu sesión fue cerrada remotamente desde el panel de administración');
+        await _forceLogout(
+            'Tu sesión fue cerrada remotamente desde el panel de administración');
         return;
       }
       final data = await apiClient.getTrips(driver: _driverName);
@@ -117,7 +123,8 @@ class _HomeConductorState extends State<HomeConductor> {
       final fresh = data.where((t) => !knownIds.contains(t.id)).toList();
       if (fresh.isNotEmpty) {
         for (final trip in fresh) {
-          news.insert(0, 'Nuevo viaje ${trip.id} asignado · ${trip.origin} → ${trip.destination}');
+          news.insert(0,
+              'Nuevo viaje ${trip.id} asignado · ${trip.origin} → ${trip.destination}');
         }
         setState(() => unread += fresh.length);
         if (mounted && fresh.any((t) => t.status == 'Asignado')) {
@@ -138,7 +145,8 @@ class _HomeConductorState extends State<HomeConductor> {
                   Expanded(
                     child: Text(
                       'Nuevo viaje asignado ${fresh.first.id}',
-                      style: const TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w700),
+                      style: const TextStyle(
+                          fontFamily: 'Figtree', fontWeight: FontWeight.w700),
                     ),
                   ),
                 ],
@@ -149,8 +157,56 @@ class _HomeConductorState extends State<HomeConductor> {
         knownIds.addAll(data.map((t) => t.id));
       }
       setState(() => trips = data);
+      _checkScheduledReturns(data);
     } catch (_) {}
     await _refreshIncidentNotifications();
+  }
+
+  void _checkScheduledReturns(List<Trip> assignedTrips) {
+    final now = DateTime.now();
+    final marker = RegExp(
+      r'\[INCOEX_RETURN_AT=([^;\]]+);MODE=scheduled\]',
+    );
+    for (final trip in assignedTrips) {
+      if (!trip.returnTrip ||
+          trip.status == 'Cancelado' ||
+          trip.status == 'Anulado') {
+        continue;
+      }
+      final match = marker.firstMatch(trip.description ?? '');
+      final returnAt =
+          match == null ? null : DateTime.tryParse(match.group(1)!);
+      if (returnAt == null || returnAt.isAfter(now)) continue;
+      if (now.difference(returnAt) > const Duration(hours: 1)) continue;
+      final notificationKey = '${trip.id}:${returnAt.toIso8601String()}';
+      if (!notifiedReturnTrips.add(notificationKey)) continue;
+
+      const title = 'Compromiso de regreso';
+      final body = 'Es hora de recoger a los pasajeros del viaje ${trip.id} '
+          'y llevarlos de regreso a ${trip.origin}.';
+      unawaited(pushNotification(
+        title: title,
+        body: body,
+        id: notificationKey.hashCode,
+      ));
+      news.insert(0, '$title · $body');
+      if (mounted) {
+        setState(() => unread++);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF0B1D4D),
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              '$title · $body',
+              style: const TextStyle(
+                fontFamily: 'Figtree',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _refreshIncidentNotifications() async {
@@ -158,19 +214,24 @@ class _HomeConductorState extends State<HomeConductor> {
       final incidents = await apiClient.getIncidentNotifications();
       if (!mounted) return;
       final fresh = incidents
-          .where((incident) => incident.id.isNotEmpty && !knownIncidentIds.contains(incident.id))
+          .where((incident) =>
+              incident.id.isNotEmpty && !knownIncidentIds.contains(incident.id))
           .toList(growable: false);
       if (fresh.isEmpty) return;
       for (final incident in fresh) {
         knownIncidentIds.add(incident.id);
-        final target = incident.isGeneral ? 'General' : 'Viaje ${incident.trip}';
-        final details = '${incident.type} · prioridad ${incident.priority} · $target'
+        final target =
+            incident.isGeneral ? 'General' : 'Viaje ${incident.trip}';
+        final details =
+            '${incident.type} · prioridad ${incident.priority} · $target'
             '${incident.description.trim().isEmpty ? '' : ' · ${incident.description.trim()}'}';
         news.insert(0, '${incident.id} · $details');
       }
       setState(() => unread += fresh.length);
       final latest = fresh.first;
-      final title = latest.isGeneral ? 'Incidencia general: ${latest.type}' : 'Incidencia en viaje ${latest.trip}';
+      final title = latest.isGeneral
+          ? 'Incidencia general: ${latest.type}'
+          : 'Incidencia en viaje ${latest.trip}';
       final body = latest.description.trim().isEmpty
           ? 'Prioridad ${latest.priority}'
           : latest.description.trim();
@@ -179,8 +240,11 @@ class _HomeConductorState extends State<HomeConductor> {
         SnackBar(
           backgroundColor: const Color(0xFF0B1D4D),
           behavior: SnackBarBehavior.floating,
-          content: Text('$title · $body', maxLines: 2, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w700)),
+          content: Text('$title · $body',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontFamily: 'Figtree', fontWeight: FontWeight.w700)),
         ),
       );
     } catch (error) {
@@ -274,9 +338,8 @@ class _HomeConductorState extends State<HomeConductor> {
   }
 
   List<Trip> get _upcoming {
-    final list = trips
-        .where((t) => t.isActive && t.status != 'Asignado')
-        .toList();
+    final list =
+        trips.where((t) => t.isActive && t.status != 'Asignado').toList();
     list.sort((a, b) => a.id.compareTo(b.id));
     return list;
   }
@@ -383,7 +446,8 @@ class _HomeConductorState extends State<HomeConductor> {
                     );
                     if (saved == true && mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Recarga enviada para validación.')),
+                        const SnackBar(
+                            content: Text('Recarga enviada para validación.')),
                       );
                     }
                   },
@@ -397,15 +461,24 @@ class _HomeConductorState extends State<HomeConductor> {
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.local_gas_station_rounded, color: cyan, size: 24),
+                        Icon(Icons.local_gas_station_rounded,
+                            color: cyan, size: 24),
                         SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Registrar combustible', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+                              Text('Registrar combustible',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontFamily: 'Figtree')),
                               SizedBox(height: 3),
-                              Text('Toma foto del odómetro y de la factura', style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 12, fontFamily: 'Figtree')),
+                              Text('Toma foto del odómetro y de la factura',
+                                  style: TextStyle(
+                                      color: Color(0xFFB9D4FF),
+                                      fontSize: 12,
+                                      fontFamily: 'Figtree')),
                             ],
                           ),
                         ),
@@ -480,7 +553,8 @@ class _HomeConductorState extends State<HomeConductor> {
                       ),
                       const SizedBox(height: 12),
                       for (final trip in assigned.skip(1)) ...[
-                        _UpcomingTile(trip: trip, onView: () => _openTrip(trip)),
+                        _UpcomingTile(
+                            trip: trip, onView: () => _openTrip(trip)),
                         const SizedBox(height: 10),
                       ],
                     ],
@@ -499,7 +573,8 @@ class _HomeConductorState extends State<HomeConductor> {
                       const _NoTripsCard()
                     else
                       for (final trip in upcoming) ...[
-                        _UpcomingTile(trip: trip, onView: () => _openTrip(trip)),
+                        _UpcomingTile(
+                            trip: trip, onView: () => _openTrip(trip)),
                         const SizedBox(height: 10),
                       ],
                   ],
@@ -666,7 +741,8 @@ class _NextTripCard extends StatelessWidget {
               const SizedBox(width: 16),
               _MiniIcon(Icons.schedule_rounded, trip.pickupTime ?? '—'),
               const Spacer(),
-              _MiniIcon(Icons.inventory_2_rounded, '${trip.packages} paquete${trip.packages == 1 ? '' : 's'}'),
+              _MiniIcon(Icons.inventory_2_rounded,
+                  '${trip.packages} paquete${trip.packages == 1 ? '' : 's'}'),
             ],
           ),
           if (trip.estimatedCostCs != null) ...[
@@ -943,8 +1019,7 @@ class _UpcomingTile extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              const Icon(Icons.payments_outlined,
-                  color: cyan, size: 13),
+              const Icon(Icons.payments_outlined, color: cyan, size: 13),
               const SizedBox(width: 4),
               Text(
                 trip.estimatedCostCs == null
@@ -1014,8 +1089,7 @@ class _HistoryCard extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle,
-                      color: mint, size: 16),
+                  const Icon(Icons.check_circle, color: mint, size: 16),
                   const SizedBox(width: 9),
                   Expanded(
                     child: Column(
@@ -1157,7 +1231,8 @@ class _ErrorState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.cloud_off_rounded, color: Color(0xFFFFB4B4), size: 38),
+          const Icon(Icons.cloud_off_rounded,
+              color: Color(0xFFFFB4B4), size: 38),
           const SizedBox(height: 12),
           Text(
             message,

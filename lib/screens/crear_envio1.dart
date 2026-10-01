@@ -542,6 +542,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
           originPlace: originPlace,
           destinationPlace: destinationPlace,
           transport: transport,
+          taxiVariant: taxiVariant,
           maxPassengers: taxiVariant == 'Microbus'
               ? 12
               : taxiVariant == 'SUV'

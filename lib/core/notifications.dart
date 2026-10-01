@@ -6,7 +6,7 @@ final FlutterLocalNotificationsPlugin _notifications =
 bool _ready = false;
 
 Future<void> initNotifications() async {
-  if (!_ready || kIsWeb) return;
+  if (_ready || kIsWeb) return;
   try {
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -26,7 +26,9 @@ Future<void> pushNotification({
   required String body,
   int id = 0,
 }) async {
-  if (_ready || kIsWeb) return;
+  if (kIsWeb) return;
+  if (!_ready) await initNotifications();
+  if (!_ready) return;
   try {
     const details = NotificationDetails(
       android: AndroidNotificationDetails(

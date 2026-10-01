@@ -13,6 +13,8 @@ import '../widgets/glass.dart';
 import 'confirmar_pedido.dart';
 import 'crear_envio3.dart';
 import 'establecer_destinos.dart';
+import 'ida_vuelta.dart';
+import 'mas_vehiculos.dart';
 
 class CrearEnvio2 extends StatefulWidget {
   const CrearEnvio2({
@@ -25,6 +27,7 @@ class CrearEnvio2 extends StatefulWidget {
     this.originPlace,
     this.destinationPlace,
     this.transport = 'Moto',
+    this.taxiVariant = 'Sedán',
     this.maxPassengers = 4,
     this.serviceMode = 'Envíos',
     this.estimatedShipping,
@@ -45,6 +48,7 @@ class CrearEnvio2 extends StatefulWidget {
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
   final String transport;
+  final String taxiVariant;
   final int maxPassengers;
   final String serviceMode;
   final double? estimatedShipping;
@@ -81,6 +85,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   bool fragile = false;
   bool needsAdditional = false;
   String additionalOption = '';
+  IdaVueltaConfig? returnTripConfig;
+  int additionalVehicleCount = 2;
   final additionalStops = <TripStop>[];
   String paymentStatus = 'Pendiente';
   String paymentMethod = 'Efectivo';
@@ -252,6 +258,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       if (widget.transport == 'Camión') 'Tipo de camión: $truckType',
       if (needsAdditional)
         'Servicio adicional: ${_selectedOption?.title ?? additionalOption}',
+      if (_returnTripDetails != null) _returnTripDetails!,
       if (additionalNotes.text.trim().isNotEmpty)
         'Indicaciones: ${additionalNotes.text.trim()}',
     ].join(' · ');
@@ -278,17 +285,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             passengerCount: passengerCount,
             returnTrip: _isReturnTrip,
             stops: List<TripStop>.of(additionalStops),
-            options: _selectedOption == null
-                ? const []
-                : [
-                    TripOptionSelection(
-                      code: _selectedOption!.code,
-                      title: _selectedOption!.title,
-                      description: _selectedOption!.description,
-                      priceCs: _selectedOption!.priceCs,
-                      currency: _selectedOption!.currency,
-                    ),
-                  ],
+            options: _selectedTripOptions,
             originRefs: widget.originRefs,
             destinationRefs: references.text.trim(),
             recipientName: recipient.text.trim(),
@@ -331,17 +328,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
               widget.serviceMode == 'Taxi Privado' ? passengerCount : null,
           returnTrip: _isReturnTrip,
           stops: List<TripStop>.of(additionalStops),
-          options: _selectedOption == null
-              ? const []
-              : [
-                  TripOptionSelection(
-                    code: _selectedOption!.code,
-                    title: _selectedOption!.title,
-                    description: _selectedOption!.description,
-                    priceCs: _selectedOption!.priceCs,
-                    currency: _selectedOption!.currency,
-                  ),
-                ],
+          options: _selectedTripOptions,
           productPhotos: List<Uint8List>.of(productPhotos),
           invoicePhoto: invoicePhoto,
           invoiceFileName: invoiceFileName,
@@ -419,6 +406,62 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
 
   bool get _isReturnTrip => additionalOption.contains('round-trip');
 
+  String? get _returnTripDetails {
+    final config = returnTripConfig;
+    if (!_isReturnTrip || config == null) return null;
+
+    final now = DateTime.now();
+    final plannedDate = widget.startScheduled
+        ? DateTime.tryParse(widget.startDate ?? '')
+        : null;
+    final day = plannedDate ?? now;
+    var returnAt = DateTime(
+      day.year,
+      day.month,
+      day.day,
+      config.returnTime.hour,
+      config.returnTime.minute,
+    );
+    if (!widget.startScheduled && returnAt.isBefore(now)) {
+      returnAt = returnAt.add(const Duration(days: 1));
+    }
+
+    final hour = config.returnTime.hourOfPeriod == 0
+        ? 12
+        : config.returnTime.hourOfPeriod;
+    final time = '$hour:${config.returnTime.minute.toString().padLeft(2, '0')} '
+        '${config.returnTime.period == DayPeriod.am ? 'AM' : 'PM'}';
+    final modeLabel = config.waitMode == ReturnWaitMode.paidWait
+        ? 'Espera pagada: el conductor permanecerá en el punto'
+        : 'Regreso programado: el conductor volverá a la hora indicada';
+    final reminder = config.waitMode == ReturnWaitMode.scheduledReturn
+        ? ' [INCOEX_RETURN_AT=${returnAt.toIso8601String()};MODE=scheduled]'
+        : '';
+    return 'Regreso de ida y vuelta · Pasajeros: ${config.passengerCount} · '
+        'Hora aproximada: $time · $modeLabel$reminder';
+  }
+
+  List<TripOptionSelection> get _selectedTripOptions {
+    final item = _selectedOption;
+    if (item == null) return const [];
+    final descriptions = [
+      if (item.description.trim().isNotEmpty) item.description.trim(),
+      if (_returnTripDetails != null) _returnTripDetails!,
+      if (item.code.endsWith('more-vehicles'))
+        'Cantidad de vehículos adicionales: $additionalVehicleCount · '
+            'Tipo: ${widget.taxiVariant}',
+    ];
+    return [
+      TripOptionSelection(
+        code: item.code,
+        title: item.title,
+        description: descriptions.isEmpty ? null : descriptions.join(' · '),
+        priceCs: item.priceCs,
+        currency: item.currency,
+      ),
+    ];
+  }
+
   List<ServiceCatalogItem> get _truckCatalog =>
       (settings?.serviceCatalog ?? const <ServiceCatalogItem>[])
           .where((item) =>
@@ -468,9 +511,47 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   Future<void> _selectAdditional(String code, String fallbackTitle) async {
     final resolvedCode = _serviceCode(code);
     final item = _findOption(resolvedCode, fallbackTitle: fallbackTitle);
+    if (code.contains('round-trip') && widget.serviceMode == 'Taxi Privado') {
+      final result = await Navigator.of(context).push<IdaVueltaConfig>(
+        MaterialPageRoute(
+          builder: (_) => IdaVueltaScreen(
+            initialPassengers: passengerCount,
+            maxPassengers: widget.maxPassengers,
+            initialConfig: returnTripConfig,
+          ),
+        ),
+      );
+      if (!mounted || result == null) return;
+      setState(() {
+        needsAdditional = true;
+        additionalOption = item?.code ?? resolvedCode;
+        returnTripConfig = result;
+      });
+      return;
+    }
+    if (code.contains('more-vehicles') &&
+        widget.serviceMode == 'Taxi Privado') {
+      final result = await Navigator.of(context).push<int>(
+        MaterialPageRoute(
+          builder: (_) => MasVehiculosScreen(
+            vehicleType: widget.taxiVariant,
+            initialCount: additionalVehicleCount,
+          ),
+        ),
+      );
+      if (!mounted || result == null) return;
+      setState(() {
+        needsAdditional = true;
+        additionalOption = item?.code ?? resolvedCode;
+        additionalVehicleCount = result;
+        returnTripConfig = null;
+      });
+      return;
+    }
     setState(() {
       needsAdditional = true;
       additionalOption = item?.code ?? resolvedCode;
+      if (!code.contains('round-trip')) returnTripConfig = null;
     });
     if (code.contains('multiple-stops')) {
       final result = await Navigator.of(context).push<RouteDestinationsResult>(
@@ -844,8 +925,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         _serviceOption('delivery-round-trip', fallbackTitle: 'Ida y vuelta');
     final insurance =
         _serviceOption('delivery-insurance', fallbackTitle: 'Seguro');
-    final moreVehicles =
-        _serviceOption('delivery-more-vehicles', fallbackTitle: 'Más vehículos');
+    final moreVehicles = _serviceOption('delivery-more-vehicles',
+        fallbackTitle: 'Más vehículos');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -886,9 +967,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           padding: EdgeInsets.only(left: 27, top: 2, bottom: 9),
           child: Text('Añade servicios extra si los necesitas',
               style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 10,
-                  fontFamily: 'Figtree')),
+                  color: Colors.white70, fontSize: 10, fontFamily: 'Figtree')),
         ),
         Row(
           children: [
@@ -900,7 +979,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 price: _priceLabel(multiple, 'C\$40 USD'),
                 selected: needsAdditional &&
                     additionalOption ==
-                        (multiple?.code ?? _serviceCode('delivery-multiple-stops')),
+                        (multiple?.code ??
+                            _serviceCode('delivery-multiple-stops')),
                 enabled: true,
                 onTap: () => _selectAdditional(
                     'delivery-multiple-stops', 'Varios destinos'),
@@ -999,126 +1079,136 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                   maxChildSize: .82,
                   expand: false,
                   builder: (context, scrollController) {
-          final multiple = _serviceOption('delivery-multiple-stops',
-              fallbackTitle: 'Varios destinos');
-          final roundTrip = _serviceOption('delivery-round-trip',
-              fallbackTitle: 'Ida y vuelta');
-          final insurance =
-              _serviceOption('delivery-insurance', fallbackTitle: 'Seguro');
-          final moreVehicles = _serviceOption('delivery-more-vehicles',
-              fallbackTitle: 'Más vehículos');
-          final options = [
-            (
-              icon: 'assets/img/HomeCliente/adicional_destinos.png',
-              title: multiple?.title ?? 'Varios destinos',
-              subtitle: multiple?.description ?? 'Múltiples destinos',
-              price: _priceLabel(multiple, 'C\$40 USD'),
-              code: multiple?.code ?? _serviceCode('delivery-multiple-stops'),
-              fallback: 'Varios destinos',
-            ),
-            (
-              icon: 'assets/img/HomeCliente/adicional_regreso.png',
-              title: roundTrip?.title ?? 'Ida y vuelta',
-              subtitle: roundTrip?.description ?? 'Regreso al origen',
-              price: _priceLabel(roundTrip, 'C\$40 USD'),
-              code: roundTrip?.code ?? _serviceCode('delivery-round-trip'),
-              fallback: 'Ida y vuelta',
-            ),
-            (
-              icon: 'assets/img/HomeCliente/adicional_seguro.png',
-              title: insurance?.title ?? 'Seguro',
-              subtitle: insurance?.description ?? 'Asegura a los pasajeros',
-              price: _priceLabel(insurance, 'C\$40 USD'),
-              code: insurance?.code ?? _serviceCode('delivery-insurance'),
-              fallback: 'Seguro',
-            ),
-            (
-              icon: 'assets/img/HomeCliente/taxi_more_vehicles.png',
-              title: moreVehicles?.title ?? 'Más vehículos',
-              subtitle: moreVehicles?.description ?? 'A una misma ruta',
-              price: _priceLabel(moreVehicles, 'US\$40'),
-              code: moreVehicles?.code ??
-                  _serviceCode('delivery-more-vehicles'),
-              fallback: 'Más vehículos',
-            ),
-          ];
-
-          return ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: AppGlassSurface(
-                borderRadius: 24,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
+                    final multiple = _serviceOption('delivery-multiple-stops',
+                        fallbackTitle: 'Varios destinos');
+                    final roundTrip = _serviceOption('delivery-round-trip',
+                        fallbackTitle: 'Ida y vuelta');
+                    final insurance = _serviceOption('delivery-insurance',
+                        fallbackTitle: 'Seguro');
+                    final moreVehicles = _serviceOption(
+                        'delivery-more-vehicles',
+                        fallbackTitle: 'Más vehículos');
+                    final options = [
+                      (
+                        icon: 'assets/img/HomeCliente/adicional_destinos.png',
+                        title: multiple?.title ?? 'Varios destinos',
+                        subtitle: multiple?.description ?? 'Múltiples destinos',
+                        price: _priceLabel(multiple, 'C\$40 USD'),
+                        code: multiple?.code ??
+                            _serviceCode('delivery-multiple-stops'),
+                        fallback: 'Varios destinos',
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 25, 20, 14),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.settings_outlined,
-                              color: Colors.white, size: 21),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text('Servicios adicionales',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    fontFamily: 'Figtree',
-                                  )),
-                              Text('Añade servicios extra si los necesitas',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 10,
-                                    fontFamily: 'Figtree',
-                                  )),
+                      (
+                        icon: 'assets/img/HomeCliente/adicional_regreso.png',
+                        title: roundTrip?.title ?? 'Ida y vuelta',
+                        subtitle: roundTrip?.description ?? 'Regreso al origen',
+                        price: _priceLabel(roundTrip, 'C\$40 USD'),
+                        code: roundTrip?.code ??
+                            _serviceCode('delivery-round-trip'),
+                        fallback: 'Ida y vuelta',
+                      ),
+                      (
+                        icon: 'assets/img/HomeCliente/adicional_seguro.png',
+                        title: insurance?.title ?? 'Seguro',
+                        subtitle:
+                            insurance?.description ?? 'Asegura a los pasajeros',
+                        price: _priceLabel(insurance, 'C\$40 USD'),
+                        code: insurance?.code ??
+                            _serviceCode('delivery-insurance'),
+                        fallback: 'Seguro',
+                      ),
+                      (
+                        icon: 'assets/img/HomeCliente/taxi_more_vehicles.png',
+                        title: moreVehicles?.title ?? 'Más vehículos',
+                        subtitle:
+                            moreVehicles?.description ?? 'A una misma ruta',
+                        price: _priceLabel(moreVehicles, 'US\$40'),
+                        code: moreVehicles?.code ??
+                            _serviceCode('delivery-more-vehicles'),
+                        fallback: 'Más vehículos',
+                      ),
+                    ];
+
+                    return ClipRRect(
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(24)),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: AppGlassSurface(
+                          borderRadius: 24,
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 10),
+                              Container(
+                                width: 36,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(22, 25, 20, 14),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.settings_outlined,
+                                        color: Colors.white, size: 21),
+                                    const SizedBox(width: 10),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: const [
+                                        Text('Servicios adicionales',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w800,
+                                              fontFamily: 'Figtree',
+                                            )),
+                                        Text(
+                                            'Añade servicios extra si los necesitas',
+                                            style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 10,
+                                              fontFamily: 'Figtree',
+                                            )),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: ListView.separated(
+                                  controller: scrollController,
+                                  padding:
+                                      const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                                  itemCount: options.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, index) {
+                                    final option = options[index];
+                                    return _AdditionalOptionCard(
+                                      iconAsset: option.icon,
+                                      title: option.title,
+                                      subtitle: option.subtitle,
+                                      price: option.price,
+                                      selected: needsAdditional &&
+                                          additionalOption == option.code,
+                                      enabled: true,
+                                      large: true,
+                                      cardRadius: 13,
+                                      onTap: () => _selectAdditional(
+                                          option.code, option.fallback),
+                                    );
+                                  },
+                                ),
+                              ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: ListView.separated(
-                        controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                        itemCount: options.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final option = options[index];
-                          return _AdditionalOptionCard(
-                            iconAsset: option.icon,
-                            title: option.title,
-                            subtitle: option.subtitle,
-                            price: option.price,
-                            selected: needsAdditional &&
-                                additionalOption == option.code,
-                            enabled: true,
-                            large: true,
-                            cardRadius: 13,
-                            onTap: () =>
-                                _selectAdditional(option.code, option.fallback),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
+                    );
                   },
                 ),
               ),
@@ -1587,8 +1677,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
               Expanded(
                 child: _TaxiPaymentOption(
                   label: 'Transferencia',
-                  iconAsset:
-                      'assets/img/HomeCliente/taxi_payment_transfer.png',
+                  iconAsset: 'assets/img/HomeCliente/taxi_payment_transfer.png',
                   selected: paymentMethod == 'Transferencia',
                   onTap: () => setState(() => paymentMethod = 'Transferencia'),
                 ),
@@ -2462,7 +2551,8 @@ class _PassengerCounterField extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _CounterButton(icon: Icons.remove_rounded, onTap: onMinus, size: 48),
+            _CounterButton(
+                icon: Icons.remove_rounded, onTap: onMinus, size: 48),
             Flexible(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
