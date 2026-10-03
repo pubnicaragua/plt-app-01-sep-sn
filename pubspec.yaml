@@ -28,7 +28,9 @@ flutter:
   assets:
     - assets/brand/incoex-logo.png
     - assets/img/
+    - assets/img/fondo-incoex.png
     - assets/img/HomeCliente/
+    - assets/img/HomeCliente/ri_e-bike-fill.png
     - assets/img/HomeCliente/camion.png
     - assets/img/HomeCliente/EnviosNavbar.png
     - assets/img/HomeCliente/Frame_LogoNavbar.png
@@ -40,6 +42,7 @@ flutter:
     - assets/img/HomeCliente/crear_moto.png
     - assets/img/HomeCliente/crear_auto.png
     - assets/img/HomeCliente/crear_carga.png
+    - assets/img/HomeCliente/carga_precio_cotizacion.png
     - assets/img/brand-x.png
     - assets/img/PantallaInicio/
     - assets/img/EstadosCrearEnvio/

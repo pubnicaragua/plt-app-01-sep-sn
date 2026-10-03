@@ -18,7 +18,9 @@ import '../widgets/glass.dart';
 import '../widgets/place_field.dart';
 import '../widgets/wizard.dart';
 import 'confirmar_pedido.dart';
+import 'crear_envio_carga.dart';
 import 'crear_envio2.dart';
+import 'seleccionar_camion.dart';
 
 /// Primera vista del flujo de creación de envío.
 ///
@@ -41,6 +43,7 @@ class CrearEnvio1 extends StatefulWidget {
     this.startScheduled = false,
     this.startDate,
     this.startTime,
+    this.cargoOnly = false,
   });
 
   final String startOrigin;
@@ -56,6 +59,7 @@ class CrearEnvio1 extends StatefulWidget {
   final bool startScheduled;
   final String? startDate;
   final String? startTime;
+  final bool cargoOnly;
 
   @override
   State<CrearEnvio1> createState() => _CrearEnvio1State();
@@ -96,7 +100,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     destinationPlace = widget.startDestinationPlace;
     transport = _normalizeTransport(widget.startTransport);
     serviceTab = widget.startServiceMode;
-    _scheduleMode = widget.startScheduled;
+    _scheduleMode = widget.startScheduled || widget.cargoOnly;
     _scheduledDate = _parseScheduleDate(widget.startDate) ??
         DateTime.now().add(const Duration(days: 1));
     _scheduledTime = _parseScheduleTime(widget.startTime) ??
@@ -534,21 +538,73 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
       );
       return;
     }
+    if (serviceTab != 'Envíos') {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CrearEnvio2(
+            origin: origin.text.trim(),
+            destination: destination.text.trim(),
+            originPlace: originPlace,
+            destinationPlace: destinationPlace,
+            transport: transport,
+            taxiVariant: taxiVariant,
+            maxPassengers: taxiVariant == 'Microbus'
+                ? 12
+                : taxiVariant == 'SUV'
+                    ? 6
+                    : 4,
+            serviceMode: serviceTab,
+            estimatedShipping: _priceFor(transport),
+            originRefs: widget.startOriginRefs,
+            destinationRefs: widget.startDestinationRefs,
+            recipientName: widget.startRecipientName,
+            recipientPhone: widget.startRecipientPhone,
+            startScheduled: _scheduleMode,
+            startDate: _scheduleMode && _scheduledDate != null
+                ? _dateForApi(_scheduledDate!)
+                : null,
+            startTime: _scheduleMode && _scheduledTime != null
+                ? _timeForApi(_scheduledTime!)
+                : null,
+          ),
+        ),
+      );
+      return;
+    }
+    if (widget.cargoOnly) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => SeleccionarCamionScreen(
+            origin: origin.text.trim(),
+            destination: destination.text.trim(),
+            originPlace: originPlace,
+            destinationPlace: destinationPlace,
+            transport: transport,
+            estimatedShipping: _priceFor(transport),
+            originRefs: widget.startOriginRefs,
+            destinationRefs: widget.startDestinationRefs,
+            recipientName: widget.startRecipientName,
+            recipientPhone: widget.startRecipientPhone,
+            startScheduled: _scheduleMode,
+            startDate: _scheduleMode && _scheduledDate != null
+                ? _dateForApi(_scheduledDate!)
+                : null,
+            startTime: _scheduleMode && _scheduledTime != null
+                ? _timeForApi(_scheduledTime!)
+                : null,
+          ),
+        ),
+      );
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CrearEnvio2(
+        builder: (_) => CrearEnvioCarga(
           origin: origin.text.trim(),
           destination: destination.text.trim(),
           originPlace: originPlace,
           destinationPlace: destinationPlace,
           transport: transport,
-          taxiVariant: taxiVariant,
-          maxPassengers: taxiVariant == 'Microbus'
-              ? 12
-              : taxiVariant == 'SUV'
-                  ? 6
-                  : 4,
-          serviceMode: serviceTab,
           estimatedShipping: _priceFor(transport),
           originRefs: widget.startOriginRefs,
           destinationRefs: widget.startDestinationRefs,
@@ -571,7 +627,6 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     final size = MediaQuery.sizeOf(context);
     final hasFare = _distanceKm != null;
     final sheetHeight = _scheduleMode
-        // Keep this sheet sized to its content instead of the viewport.
         ? 320.0
         : (size.height * (hasFare ? .40 : .34))
             .clamp(hasFare ? 320.0 : 270.0, hasFare ? 370.0 : 315.0)
@@ -655,7 +710,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
               top: BorderSide(color: Colors.white.withValues(alpha: .28)),
             ),
           ),
-          child: _scheduleMode
+          child: widget.cargoOnly || _scheduleMode
               ? _buildScheduleContent()
               : SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(15, 12, 15, 15),
@@ -677,32 +732,31 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                               ),
                             ),
                           ),
-                          if (serviceTab == 'Taxi Privado')
-                            TextButton(
-                              onPressed: () => setState(() {
-                                _scheduleMode = true;
-                                _scheduledDate ??=
-                                    DateUtils.dateOnly(DateTime.now())
-                                        .add(const Duration(days: 1));
-                                _scheduledTime ??=
-                                    const TimeOfDay(hour: 9, minute: 0);
-                              }),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                backgroundColor: accentBlue,
-                                minimumSize: const Size(84, 32),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 18, vertical: 8),
-                                shape: const StadiumBorder(),
-                              ),
-                              child: const Text(
-                                'Programar',
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    fontFamily: 'Figtree'),
-                              ),
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _scheduleMode = true;
+                              _scheduledDate ??=
+                                  DateUtils.dateOnly(DateTime.now())
+                                      .add(const Duration(days: 1));
+                              _scheduledTime ??=
+                                  const TimeOfDay(hour: 9, minute: 0);
+                            }),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: accentBlue,
+                              minimumSize: const Size(84, 32),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 18, vertical: 8),
+                              shape: const StadiumBorder(),
                             ),
+                            child: const Text(
+                              'Programar',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Figtree'),
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 2),
@@ -774,29 +828,25 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                       else
                         Row(
                           children: [
-                            _ImageVehicleCard(
-                              label: 'Moto',
-                              subtitle: 'Envíos en moto',
-                              asset: 'assets/img/HomeCliente/crear_moto.png',
-                              selected: transport == 'Moto',
-                              onTap: () => setState(() => transport = 'Moto'),
+                            Expanded(
+                              child: _ImageVehicleCard(
+                                label: 'Moto',
+                                subtitle: 'Envíos en moto',
+                                asset: 'assets/img/HomeCliente/figma_moto.png',
+                                selected: transport == 'Moto',
+                                onTap: () => setState(() => transport = 'Moto'),
+                              ),
                             ),
                             const SizedBox(width: 7),
-                            _ImageVehicleCard(
-                              label: 'Auto',
-                              subtitle: 'Envíos en auto',
-                              asset: 'assets/img/HomeCliente/crear_auto.png',
-                              selected: transport == 'Vehículo',
-                              onTap: () =>
-                                  setState(() => transport = 'Vehículo'),
-                            ),
-                            const SizedBox(width: 7),
-                            _ImageVehicleCard(
-                              label: 'Carga',
-                              subtitle: 'Carga',
-                              asset: 'assets/img/HomeCliente/crear_carga.png',
-                              selected: transport == 'Camión',
-                              onTap: () => setState(() => transport = 'Camión'),
+                            Expanded(
+                              child: _ImageVehicleCard(
+                                label: 'Auto',
+                                subtitle: 'Envíos en auto',
+                                asset: 'assets/img/HomeCliente/figma_auto.png',
+                                selected: transport == 'Vehículo',
+                                onTap: () =>
+                                    setState(() => transport = 'Vehículo'),
+                              ),
                             ),
                           ],
                         ),
@@ -843,6 +893,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   }
 
   Widget _buildScheduleContent() {
+    final isTrip = serviceTab == 'Taxi Privado';
+    final isCargo = widget.cargoOnly;
     final today = DateUtils.dateOnly(DateTime.now());
     final selectedDate = _scheduledDate ?? today.add(const Duration(days: 1));
     final dates = List.generate(
@@ -861,27 +913,39 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
         children: [
           Row(
             children: [
-              IconButton(
-                onPressed: () => setState(() => _scheduleMode = false),
-                constraints:
-                    const BoxConstraints.tightFor(width: 34, height: 34),
-                padding: EdgeInsets.zero,
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white, size: 17),
-              ),
-              const SizedBox(width: 5),
-              const Expanded(
+              if (!isCargo)
+                IconButton(
+                  onPressed: () => setState(() => _scheduleMode = false),
+                  constraints:
+                      const BoxConstraints.tightFor(width: 34, height: 34),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white, size: 17),
+                ),
+              if (!isCargo) const SizedBox(width: 5),
+              if (isCargo)
+                const Icon(Icons.local_shipping_rounded,
+                    color: Colors.white, size: 19),
+              if (isCargo) const SizedBox(width: 7),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Programa tu viaje',
+                    Text(
+                        isCargo
+                            ? '¿Cuándo necesitas el camión?'
+                            : isTrip
+                                ? 'Programa tu viaje'
+                                : 'Programa tu envío',
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
                             fontFamily: 'Figtree')),
                     Text(
-                        'Selecciona el momento que mejor se adapte a tu necesidad',
+                        isCargo
+                            ? 'Selecciona el momento que mejor se adapte a tu envío'
+                            : 'Selecciona el momento que mejor se adapte a tu necesidad',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -899,7 +963,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
               Image.asset('assets/img/HomeCliente/schedule_date_title.png',
                   width: 17, height: 17),
               const SizedBox(width: 7),
-              const Text('Fecha de viaje',
+              Text(isTrip ? 'Fecha de viaje' : 'Fecha de envío',
                   style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -936,11 +1000,13 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             ),
           ),
           const SizedBox(height: 12),
-          const Row(
+          Row(
             children: [
               Icon(Icons.access_time_rounded, color: Colors.white, size: 17),
               SizedBox(width: 7),
-              Text('Horario de recogida',
+              Text(isTrip || isCargo
+                  ? 'Horario de recogida'
+                  : 'Horario de envío',
                   style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -979,9 +1045,11 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
               Image.asset('assets/img/HomeCliente/schedule_availability.png',
                   width: 15, height: 15),
               const SizedBox(width: 6),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'La disponibilidad y precio serán confirmados junto con tu selección.',
+                  isCargo
+                      ? 'La disponibilidad será confirmada junto con tu selección de camión.'
+                      : 'La disponibilidad y precio serán confirmados junto con tu selección.',
                   style: TextStyle(
                       color: Colors.white, fontSize: 10, fontFamily: 'Figtree'),
                 ),
@@ -999,7 +1067,9 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                 elevation: 0,
                 shape: const StadiumBorder(),
               ),
-              child: const Text('Confirmar y continuar',
+              child: Text(isTrip || isCargo
+                  ? 'Confirmar y continuar'
+                  : 'Programar envío',
                   style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,

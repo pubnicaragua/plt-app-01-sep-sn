@@ -166,7 +166,10 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
             : 'Moto';
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CrearEnvio1(startTransport: transport),
+        builder: (_) => CrearEnvio1(
+          startTransport: transport,
+          cargoOnly: vehicle == 'Carga',
+        ),
       ),
     );
   }

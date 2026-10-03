@@ -18,9 +18,6 @@ class WizardScaffold extends StatelessWidget {
     this.showProgress = true,
     this.showDescription = true,
     this.showStepBadge = false,
-    this.backgroundLogoOpacity = .53,
-    this.backgroundLogoOffsetY = 0,
-    this.backgroundLogoScale = 1,
   });
 
   final String title;
@@ -35,9 +32,6 @@ class WizardScaffold extends StatelessWidget {
   final bool showProgress;
   final bool showDescription;
   final bool showStepBadge;
-  final double backgroundLogoOpacity;
-  final double backgroundLogoOffsetY;
-  final double backgroundLogoScale;
 
   @override
   Widget build(BuildContext context) {
@@ -123,9 +117,6 @@ class WizardScaffold extends StatelessWidget {
       ),
       extendBodyBehindAppBar: true,
       body: AppBackground(
-        backgroundLogoOpacity: backgroundLogoOpacity,
-        backgroundLogoOffsetY: backgroundLogoOffsetY,
-        backgroundLogoScale: backgroundLogoScale,
         child: SafeArea(
           child: ListView(
             padding: EdgeInsets.fromLTRB(22, showProgress ? 76 : 68, 22, 28),

@@ -342,7 +342,6 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       showProgress: false,
       showDescription: false,
       showStepBadge: true,
-      backgroundLogoOpacity: .86,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -397,13 +396,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                   borderRadius: 14,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(15, 14, 15, 13),
-                  child: _billingTotalCard(
-                    shipping: shipping,
-                    base: base,
-                    additional: additional,
-                    service: service,
-                    total: total,
-                  ),
+                    child: _billingTotalCard(
+                      shipping: shipping,
+                      base: base,
+                      additional: additional,
+                      service: service,
+                      total: total,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 10),

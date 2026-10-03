@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
@@ -10,11 +12,21 @@ class IdaVueltaConfig {
     required this.passengerCount,
     required this.returnTime,
     required this.waitMode,
+    this.returnTransport,
+    this.returnPackageType,
+    this.returnWeight,
+    this.returnPhotos = const [],
+    this.returnFragile = false,
   });
 
   final int passengerCount;
   final TimeOfDay returnTime;
   final ReturnWaitMode waitMode;
+  final String? returnTransport;
+  final String? returnPackageType;
+  final int? returnWeight;
+  final List<Uint8List> returnPhotos;
+  final bool returnFragile;
 }
 
 class IdaVueltaScreen extends StatefulWidget {
@@ -99,7 +111,6 @@ class _IdaVueltaScreenState extends State<IdaVueltaScreen> {
       backgroundColor: navy,
       body: AppBackground(
         darken: .04,
-        backgroundLogoOpacity: .62,
         child: SafeArea(
           child: Column(
             children: [

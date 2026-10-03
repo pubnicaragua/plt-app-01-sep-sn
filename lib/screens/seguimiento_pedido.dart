@@ -1284,6 +1284,18 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           ],
         ),
         const SizedBox(height: 17),
+        const Text(
+          'Estado del viaje',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'Figtree',
+          ),
+        ),
+        const SizedBox(height: 8),
+        _StepsRow(status: currentStatus),
+        const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
@@ -1607,49 +1619,81 @@ class _StepsRow extends StatelessWidget {
   const _StepsRow({required this.status});
   final String status;
 
-  static const steps = ['Asignado', 'Recogida', 'Entrega'];
+  static const steps = ['En camino', 'Recogió', 'En viaje', 'Finalizado'];
 
   int get _done {
-    if (status == 'Pendiente') return 0;
-    if (status == 'Asignado') return 1;
-    if (status == 'En camino') return 1;
-    if (status == 'En entrega') return 2;
-    if (status == 'Completado') return 3;
-    return 0;
+    switch (status) {
+      case 'En camino':
+        return 1;
+      case 'Recogió':
+      case 'En entrega':
+        return 2;
+      case 'En viaje':
+        return 3;
+      case 'Finalizado':
+      case 'Completado':
+        return 4;
+      default:
+        return 0;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Row(
-          children: [
-            for (var i = 0; i < steps.length; i++) ...[
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: i < _done
-                      ? figmaBlue
-                      : Colors.white.withValues(alpha: .10),
-                  border:
-                      Border.all(color: i < _done ? figmaBlue : Colors.white24),
+        SizedBox(
+          height: 30,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                left: 15,
+                right: 15,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < steps.length - 1; i++)
+                      Expanded(
+                        child: Container(
+                          height: 2,
+                          margin: const EdgeInsets.symmetric(horizontal: 5),
+                          color: i + 1 < _done
+                              ? figmaBlue
+                              : Colors.white.withValues(alpha: .14),
+                        ),
+                      ),
+                  ],
                 ),
-                child: const Icon(Icons.circle, color: Colors.white, size: 7),
               ),
-              if (i != steps.length - 1)
-                Expanded(
-                  child: Container(
-                    height: 2,
-                    margin: const EdgeInsets.symmetric(horizontal: 5),
-                    color: i + 1 < _done
-                        ? figmaBlue
-                        : Colors.white.withValues(alpha: .14),
-                  ),
-                ),
+              Row(
+                children: [
+                  for (var i = 0; i < steps.length; i++)
+                    Expanded(
+                      child: Center(
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: i < _done
+                                ? figmaBlue
+                                : Colors.white.withValues(alpha: .10),
+                            border: Border.all(
+                              color: i < _done ? figmaBlue : Colors.white24,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.circle,
+                            color: Colors.white,
+                            size: 7,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
-          ],
+          ),
         ),
         const SizedBox(height: 6),
         Row(
@@ -1661,7 +1705,7 @@ class _StepsRow extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 13,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                       fontFamily: 'Figtree'),
                 ),

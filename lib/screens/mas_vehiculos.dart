@@ -41,6 +41,17 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
     }
   }
 
+  bool get _isShippingVehicle =>
+      widget.vehicleType.toLowerCase() == 'moto' ||
+      widget.vehicleType.toLowerCase() == 'auto';
+
+  String get _vehicleNamePlural =>
+      widget.vehicleType.toLowerCase() == 'moto' ? 'motos' : 'autos';
+
+  String get _vehicleAsset => widget.vehicleType.toLowerCase() == 'moto'
+      ? 'assets/img/HomeCliente/ri_e-bike-fill.png'
+      : 'assets/img/HomeCliente/vehiculo.png';
+
   void _save() => Navigator.of(context).pop(count);
 
   @override
@@ -49,7 +60,6 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
       backgroundColor: navy,
       body: AppBackground(
         darken: .04,
-        backgroundLogoOpacity: .62,
         child: SafeArea(
           child: Column(
             children: [
@@ -96,7 +106,9 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                             height: 46,
                             child: Center(
                               child: Image.asset(
-                                'assets/img/HomeCliente/taxi_more_vehicles.png',
+                                _isShippingVehicle
+                                    ? _vehicleAsset
+                                    : 'assets/img/HomeCliente/taxi_more_vehicles.png',
                                 width: 22,
                                 height: 22,
                               ),
@@ -108,9 +120,11 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                '¿Deseas añadir más vehículos?',
-                                style: TextStyle(
+                              Text(
+                                _isShippingVehicle
+                                    ? '¿Deseas añadir más $_vehicleNamePlural?'
+                                    : '¿Deseas añadir más vehículos?',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontFamily: 'Figtree',
                                   fontWeight: FontWeight.w800,
@@ -118,7 +132,9 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                                 ),
                               ),
                               Text(
-                                'Agrega vehículos para recoger a tu personal.',
+                                _isShippingVehicle
+                                    ? 'Agrega $_vehicleNamePlural para recoger tu mercancía.'
+                                    : 'Agrega vehículos para recoger a tu personal.',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: .82),
                                   fontFamily: 'Figtree',
@@ -140,10 +156,12 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
+                            children: [
                               Text(
-                                '¿Cuántos vehículos adicionales quieres?',
-                                style: TextStyle(
+                                _isShippingVehicle
+                                    ? '¿Cuántos $_vehicleNamePlural adicionales quieres?'
+                                    : '¿Cuántos vehículos adicionales quieres?',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontFamily: 'Figtree',
                                   fontWeight: FontWeight.w800,
@@ -152,8 +170,10 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                               ),
                               SizedBox(height: 2),
                               Text(
-                                'Selecciona la cantidad de vehículos',
-                                style: TextStyle(
+                                _isShippingVehicle
+                                    ? 'Selecciona la cantidad de $_vehicleNamePlural'
+                                    : 'Selecciona la cantidad de vehículos',
+                                style: const TextStyle(
                                   color: Color(0xFFD4E3FF),
                                   fontFamily: 'Figtree',
                                   fontSize: 10,
@@ -187,8 +207,11 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                                       fontWeight: FontWeight.w800,
                                       fontSize: 20,
                                     )),
-                                const Text('Vehículos',
-                                    style: TextStyle(
+                                Text(
+                                    _isShippingVehicle
+                                        ? _vehicleNamePlural
+                                        : 'Vehículos',
+                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontFamily: 'Figtree',
                                       fontSize: 10,
@@ -230,9 +253,10 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                                   height: 1.2,
                                 ),
                                 children: [
-                                  const TextSpan(
-                                    text:
-                                        'Recuerda, los vehículos que agregues, son del mismo tipo que seleccionaste previamente.\n',
+                                  TextSpan(
+                                    text: _isShippingVehicle
+                                        ? 'Recuerda, los $_vehicleNamePlural que agregues son del mismo tipo que seleccionaste previamente.\n'
+                                        : 'Recuerda, los vehículos que agregues, son del mismo tipo que seleccionaste previamente.\n',
                                   ),
                                   TextSpan(
                                     text:
@@ -266,9 +290,11 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: const Color(0x40FFFFFF)),
                       ),
-                      child: const Text(
-                        'Añadir vehículos',
-                        style: TextStyle(
+                      child: Text(
+                        _isShippingVehicle
+                            ? 'Añadir $_vehicleNamePlural'
+                            : 'Añadir vehículos',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontFamily: 'Figtree',
                           fontWeight: FontWeight.w800,

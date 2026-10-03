@@ -21,18 +21,10 @@ class AppBackground extends StatelessWidget {
     super.key,
     required this.child,
     this.darken = 0.18,
-    this.backgroundLogoOpacity = .53,
-    this.backgroundLogoOffsetX = 0,
-    this.backgroundLogoOffsetY = 0,
-    this.backgroundLogoScale = 1,
   });
 
   final Widget child;
   final double darken;
-  final double backgroundLogoOpacity;
-  final double backgroundLogoOffsetX;
-  final double backgroundLogoOffsetY;
-  final double backgroundLogoScale;
 
   @override
   Widget build(BuildContext context) {
@@ -42,20 +34,7 @@ class AppBackground extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            if (dark)
-              _DarkBase(
-                logoOpacity: backgroundLogoOpacity,
-                logoOffsetX: backgroundLogoOffsetX,
-                logoOffsetY: backgroundLogoOffsetY,
-                logoScale: backgroundLogoScale,
-              )
-            else
-              _LightBase(
-                logoOpacity: backgroundLogoOpacity,
-                logoOffsetX: backgroundLogoOffsetX,
-                logoOffsetY: backgroundLogoOffsetY,
-                logoScale: backgroundLogoScale,
-              ),
+            const _ResponsiveBackgroundArtwork(),
             if (dark) Container(color: Colors.black.withValues(alpha: darken)),
             child,
           ],
@@ -65,112 +44,19 @@ class AppBackground extends StatelessWidget {
   }
 }
 
-class _LightBase extends StatelessWidget {
-  const _LightBase({
-    required this.logoOpacity,
-    required this.logoOffsetX,
-    required this.logoOffsetY,
-    required this.logoScale,
-  });
-
-  final double logoOpacity;
-  final double logoOffsetX;
-  final double logoOffsetY;
-  final double logoScale;
+class _ResponsiveBackgroundArtwork extends StatelessWidget {
+  const _ResponsiveBackgroundArtwork();
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const DecoratedBox(
-          decoration: BoxDecoration(gradient: fondoGradient),
-        ),
-        _BackgroundLogo(
-          opacity: logoOpacity,
-          offsetX: logoOffsetX,
-          offsetY: logoOffsetY,
-          scale: logoScale,
-        ),
-      ],
-    );
-  }
-}
-
-class _DarkBase extends StatelessWidget {
-  const _DarkBase({
-    required this.logoOpacity,
-    required this.logoOffsetX,
-    required this.logoOffsetY,
-    required this.logoScale,
-  });
-
-  final double logoOpacity;
-  final double logoOffsetX;
-  final double logoOffsetY;
-  final double logoScale;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const DecoratedBox(decoration: BoxDecoration(gradient: fondoGradient)),
-        _BackgroundLogo(
-          opacity: logoOpacity,
-          offsetX: logoOffsetX,
-          offsetY: logoOffsetY,
-          scale: logoScale,
-        ),
-      ],
-    );
-  }
-}
-
-class _BackgroundLogo extends StatelessWidget {
-  const _BackgroundLogo({
-    required this.opacity,
-    required this.offsetX,
-    required this.offsetY,
-    required this.scale,
-  });
-
-  final double opacity;
-  final double offsetX;
-  final double offsetY;
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Transform.translate(
-          offset: Offset(offsetX, offsetY),
-          child: Transform.scale(
-            scale: scale,
-            child: SizedBox(
-              width: constraints.maxWidth,
-              height: constraints.maxHeight,
-              child: Opacity(
-                opacity: opacity,
-                child: ColorFiltered(
-                  colorFilter: const ColorFilter.mode(
-                    Color(0xFF9BA8C5),
-                    BlendMode.srcIn,
-                  ),
-                  child: Image.asset(
-                    'assets/img/fondoapps.png',
-                    width: constraints.maxWidth,
-                    height: constraints.maxHeight,
-                    fit: BoxFit.fill,
-                    filterQuality: FilterQuality.high,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+    return Image.asset(
+      'assets/img/fondo-incoex.png',
+      fit: BoxFit.fill,
+      filterQuality: FilterQuality.high,
+      width: double.infinity,
+      height: double.infinity,
+      alignment: Alignment.center,
+      gaplessPlayback: true,
     );
   }
 }

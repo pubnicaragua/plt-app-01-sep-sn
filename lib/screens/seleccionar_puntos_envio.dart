@@ -174,7 +174,6 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
     return Scaffold(
       backgroundColor: const Color(0xFF082B66),
       body: AppBackground(
-        backgroundLogoOpacity: .16,
         child: SafeArea(
           child: ListView(
             padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 28),
@@ -291,68 +290,68 @@ class _RouteSelectionCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 8, 9, 8),
         child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _PointIcon(asset: 'assets/img/HomeCliente/punto_desde.png'),
-              const SizedBox(width: 9),
-              Expanded(
-                child: PlaceAutocompleteField(
-                  controller: origin,
-                  label: 'Desde',
-                  hint: 'Selecciona el punto de recogida',
-                  bare: true,
-                  onSelected: onOriginSelected,
-                ),
-              ),
-            ],
-          ),
-          Container(
-            height: 1,
-            margin: const EdgeInsets.only(left: 31, top: 2, bottom: 2),
-            color: Colors.white.withValues(alpha: .28),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _PointIcon(asset: 'assets/img/HomeCliente/punto_hasta.png'),
-              const SizedBox(width: 9),
-              Expanded(
-                child: PlaceAutocompleteField(
-                  controller: destination,
-                  label: 'Destino',
-                  hint: '¿A dónde va tu pedido?',
-                  bare: true,
-                  onSelected: onDestinationSelected,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: TextButton(
-                  onPressed: destination.text.trim().isEmpty ? null : onMap,
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    backgroundColor: accentBlue,
-                    disabledBackgroundColor: Colors.white.withValues(alpha: .10),
-                    padding: const EdgeInsets.symmetric(horizontal: 15),
-                    minimumSize: const Size(58, 30),
-                    shape: const StadiumBorder(),
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _PointIcon(asset: 'assets/img/HomeCliente/punto_desde.png'),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: PlaceAutocompleteField(
+                    controller: origin,
+                    label: 'Desde',
+                    hint: 'Selecciona el punto de recogida',
+                    bare: true,
+                    onSelected: onOriginSelected,
                   ),
-                  child: Text(
-                    selectionOnly ? 'Mapa' : 'Mapa',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Figtree',
+                ),
+              ],
+            ),
+            Container(
+              height: 1,
+              margin: const EdgeInsets.only(left: 31, top: 2, bottom: 2),
+              color: Colors.white.withValues(alpha: .28),
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _PointIcon(asset: 'assets/img/HomeCliente/punto_hasta.png'),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: PlaceAutocompleteField(
+                    controller: destination,
+                    label: 'Destino',
+                    hint: '¿A dónde va tu pedido?',
+                    bare: true,
+                    onSelected: onDestinationSelected,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: TextButton(
+                    onPressed: destination.text.trim().isEmpty ? null : onMap,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: accentBlue,
+                    disabledBackgroundColor: Colors.white.withValues(alpha: .10),
+                      padding: const EdgeInsets.symmetric(horizontal: 15),
+                      minimumSize: const Size(58, 30),
+                      shape: const StadiumBorder(),
+                    ),
+                    child: Text(
+                      selectionOnly ? 'Mapa' : 'Mapa',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
         ),
       ),
     );

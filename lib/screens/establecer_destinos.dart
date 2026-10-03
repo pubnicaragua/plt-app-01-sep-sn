@@ -53,9 +53,9 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
   }
 
   List<_RoutePoint> get points => [
-        _RoutePoint('A', origin, originPlace),
+        _RoutePoint('Origen', origin, originPlace),
         ...stops.map((stop) => _RoutePoint(
-              String.fromCharCode(66 + stop.order - 1),
+              '${stop.order}',
               stop.address,
               PlaceSuggestion(
                 placeId: stop.id ?? 'stop-${stop.order}',
@@ -66,7 +66,7 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
                 longitude: stop.longitude,
               ),
             )),
-        _RoutePoint('Destino', destination, destinationPlace),
+        _RoutePoint('Destino final', destination, destinationPlace),
       ];
 
   Future<void> _editEndpoint({required bool isOrigin}) async {
@@ -149,7 +149,8 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
         .toList();
     if (mapController == null || coordinates.isEmpty) return;
     if (coordinates.length == 1) {
-      mapController!.animateCamera(CameraUpdate.newLatLngZoom(coordinates.first, 14));
+      mapController!
+          .animateCamera(CameraUpdate.newLatLngZoom(coordinates.first, 14));
       return;
     }
     var minLat = coordinates.first.latitude;
@@ -226,7 +227,6 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
     return Scaffold(
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
-        backgroundLogoOpacity: .62,
         child: SafeArea(
           child: Column(
             children: [
@@ -302,77 +302,73 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
                         ],
                       ),
                     ),
-                    AppGlassSurface(
-                      borderRadius: 18,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
-                        child: Column(
-                          children: [
-                            for (var index = 0; index < points.length; index++)
-                              Column(
-                                key: ValueKey(
-                                    'route-point-${points[index].place?.placeId ?? points[index].label}'),
-                                children: [
-                                  _RouteRow(
-                                    point: points[index],
-                                    removable: index > 0 &&
-                                        index < points.length - 1,
-                                    showMap: index == points.length - 1,
-                                    onMap: _openMap,
-                                    showEdit: index == 0 ||
-                                        index == points.length - 1,
-                                    onEdit: () =>
-                                        _editEndpoint(isOrigin: index == 0),
-                                    onRemove:
-                                        index > 0 && index < points.length - 1
-                                            ? () => setState(() {
-                                                  stops.removeAt(index - 1);
-                                                  for (var i = 0;
-                                                      i < stops.length;
-                                                      i++) {
-                                                    stops[i] = TripStop(
-                                                      id: stops[i].id,
-                                                      label: stops[i].label,
-                                                      address: stops[i].address,
-                                                      order: i + 1,
-                                                      latitude:
-                                                          stops[i].latitude,
-                                                      longitude:
-                                                          stops[i].longitude,
-                                                      refs: stops[i].refs,
-                                                      recipientName:
-                                                          stops[i].recipientName,
-                                                      recipientPhone:
-                                                          stops[i].recipientPhone,
-                                                    );
-                                                  }
-                                                })
-                                            : null,
-                                  ),
-                                  if (index < points.length - 1)
-                                    Container(
-                                      height: 1,
-                                      margin: const EdgeInsets.only(
-                                          left: 37, top: 2, bottom: 2),
-                                      color: Colors.white
-                                          .withValues(alpha: .25),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: AppGlassSurface(
+                        borderRadius: 18,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(15, 14, 15, 14),
+                          child: Column(
+                            children: [
+                              for (var index = 0;
+                                  index < points.length;
+                                  index++)
+                                Column(
+                                  key: ValueKey(
+                                      'route-point-${points[index].place?.placeId ?? points[index].label}'),
+                                  children: [
+                                    _RouteRow(
+                                      point: points[index],
+                                      removable: index > 0 &&
+                                          index < points.length - 1,
+                                      showMap: index == points.length - 1,
+                                      onMap: _openMap,
+                                      showEdit: index == 0 ||
+                                          index == points.length - 1,
+                                      onEdit: () =>
+                                          _editEndpoint(isOrigin: index == 0),
+                                      onRemove: index > 0 &&
+                                              index < points.length - 1
+                                          ? () => setState(() {
+                                                stops.removeAt(index - 1);
+                                                for (var i = 0;
+                                                    i < stops.length;
+                                                    i++) {
+                                                  stops[i] = TripStop(
+                                                    id: stops[i].id,
+                                                    label: stops[i].label,
+                                                    address: stops[i].address,
+                                                    order: i + 1,
+                                                    latitude: stops[i].latitude,
+                                                    longitude: stops[i].longitude,
+                                                    refs: stops[i].refs,
+                                                    recipientName:
+                                                        stops[i].recipientName,
+                                                    recipientPhone:
+                                                        stops[i].recipientPhone,
+                                                  );
+                                                }
+                                              })
+                                          : null,
                                     ),
-                                ],
-                              ),
-                          ],
+                                    if (index < points.length - 1)
+                                      Container(
+                                        height: 1,
+                                        margin: const EdgeInsets.only(
+                                            left: 37, top: 5, bottom: 5),
+                                        color: Colors.white
+                                            .withValues(alpha: .25),
+                                      ),
+                                  ],
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: GlassButton(
-                        label: 'Agregar ruta adicional',
-                        onPressed: _addDestination,
-                        icon: Icons.add_rounded,
-                        filled: true,
-                        height: 40,
-                        fontSize: 12,
-                      ),
+                      child: _RouteAddButton(onPressed: _addDestination),
                     ),
                   ],
                 ),
@@ -460,7 +456,8 @@ class _DestinationContactInput extends StatelessWidget {
           fontFamily: 'Figtree',
         ),
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
         filled: true,
         fillColor: Colors.white.withValues(alpha: .08),
         enabledBorder: OutlineInputBorder(
@@ -498,32 +495,40 @@ class _RouteRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          Container(
-            width: 27,
-            height: 27,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: point.label == 'A' ? cyan : accentBlue,
-              shape: BoxShape.circle,
-            ),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
+          if (point.label == 'Origen')
+            Image.asset(
+              'assets/img/HomeCliente/route_origin_home.png',
+              width: 27,
+              height: 27,
+            )
+          else if (point.label == 'Destino final')
+            Image.asset(
+              'assets/img/HomeCliente/route_destination_flag.png',
+              width: 27,
+              height: 27,
+            )
+          else
+            Container(
+              width: 27,
+              height: 27,
               alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: accentBlue,
+                shape: BoxShape.circle,
+              ),
               child: Text(
                 point.label,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: FontWeight.w800,
                   fontFamily: 'Figtree',
-                  letterSpacing: -0.35,
                 ),
               ),
             ),
-          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -538,17 +543,7 @@ class _RouteRow extends StatelessWidget {
               ),
             ),
           ),
-          if (showEdit)
-            GlassButton(
-              label: 'Editar',
-              icon: Icons.edit_outlined,
-              onPressed: onEdit,
-              width: 70,
-              height: 28,
-              fontSize: 9,
-              filled: false,
-              backgroundColor: Colors.white.withValues(alpha: .08),
-            ),
+          if (showEdit) _RouteEditButton(onPressed: onEdit),
           if (showMap) ...[
             if (showEdit) const SizedBox(width: 7),
             GlassButton(
@@ -576,6 +571,136 @@ class _RouteRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RouteEditButton extends StatelessWidget {
+  const _RouteEditButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGlassSurface(
+      borderRadius: 18,
+      child: SizedBox(
+        width: 76,
+        height: 30,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(18),
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/img/HomeCliente/route_edit_pencil.png',
+                    width: 13,
+                    height: 13,
+                  ),
+                  const SizedBox(width: 5),
+                  const Text(
+                    'Editar',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteAddButton extends StatelessWidget {
+  const _RouteAddButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _DashedRouteBorderPainter(),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            height: 82,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/img/HomeCliente/route_add_plus.png',
+                  width: 38,
+                  height: 38,
+                ),
+                const SizedBox(width: 14),
+                const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Agregar parada adicional',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Puedes agregar más paradas si lo necesitas.',
+                      style: TextStyle(
+                        color: Color(0xCFFFFFFF),
+                        fontSize: 10,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedRouteBorderPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = accentBlue
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+        Offset.zero & size,
+        const Radius.circular(16),
+      ));
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = math.min(distance + 8, metric.length).toDouble();
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance += 13;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _EditRoutePointPage extends StatefulWidget {
@@ -659,9 +784,7 @@ class _EditRoutePointPageState extends State<_EditRoutePointPage> {
                   controller: controller,
                   label: isOrigin ? 'Origen' : 'Destino final',
                   hint: 'Busca una dirección o referencia',
-                  icon: isOrigin
-                      ? Icons.home_outlined
-                      : Icons.flag_outlined,
+                  icon: isOrigin ? Icons.home_outlined : Icons.flag_outlined,
                   onSelected: (place) => setState(() => selected = place),
                 ),
               ),
@@ -719,14 +842,14 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
     final icons = <String, BitmapDescriptor>{};
     for (var index = 0; index < widget.points.length; index++) {
       final label = widget.points[index].label;
-      icons[label] = await _createLabelMarker(
-        label,
-        index == 0
-            ? const Color(0xFF16C5E8)
-            : index == widget.points.length - 1
-                ? const Color(0xFFE53935)
-                : accentBlue,
-      );
+      final asset = index == 0
+          ? 'assets/img/HomeCliente/route_origin_home.png'
+          : index == widget.points.length - 1
+              ? 'assets/img/HomeCliente/route_destination_flag.png'
+              : null;
+      icons[label] = asset != null
+          ? await _createAssetMarker(asset)
+          : await _createLabelMarker(label, accentBlue);
     }
     final route = await _loadRoadRoute();
     if (!mounted) return;
@@ -767,15 +890,29 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
         center.dy - textPainter.height / 2,
       ),
     );
-    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final image =
+        await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+  }
+
+  Future<BitmapDescriptor> _createAssetMarker(String assetPath) async {
+    final data = await DefaultAssetBundle.of(context).load(assetPath);
+    final codec = await ui.instantiateImageCodec(
+      data.buffer.asUint8List(),
+      targetWidth: 48,
+      targetHeight: 48,
+    );
+    final frame = await codec.getNextFrame();
+    final bytes = await frame.image.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
   Future<List<LatLng>> _loadRoadRoute() async {
     final route = <LatLng>[];
     for (var index = 0; index < coordinates.length - 1; index++) {
-      final leg = await _loadRoadLeg(coordinates[index], coordinates[index + 1]);
+      final leg =
+          await _loadRoadLeg(coordinates[index], coordinates[index + 1]);
       if (leg.length < 2) return const [];
       route.addAll(route.isEmpty ? leg : leg.skip(1));
     }
@@ -789,7 +926,8 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
       defaultValue: 'AIzaSyCMwxArmM-BEJuxgbjOiON8KdH_IsNH1F4',
     );
     if (!kIsWeb && mapsKey.isNotEmpty) {
-      requests.add(Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
+      requests
+          .add(Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
         'origin': '${from.latitude},${from.longitude}',
         'destination': '${to.latitude},${to.longitude}',
         'mode': 'driving',
@@ -819,7 +957,8 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
               final steps = leg['steps'];
               if (steps is! List) continue;
               for (final step in steps.whereType<Map>()) {
-                final encoded = (step['polyline'] as Map?)?['points']?.toString();
+                final encoded =
+                    (step['polyline'] as Map?)?['points']?.toString();
                 if (encoded == null || encoded.isEmpty) continue;
                 final decoded = _decodePolyline(encoded);
                 result.addAll(result.isEmpty ? decoded : decoded.skip(1));
@@ -830,7 +969,8 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
         } else {
           if (payload is! Map || payload['code'] != 'Ok') continue;
           final routes = payload['routes'];
-          final route = routes is List && routes.isNotEmpty ? routes.first : null;
+          final route =
+              routes is List && routes.isNotEmpty ? routes.first : null;
           final geometry = route is Map ? route['geometry'] : null;
           final values = geometry is Map ? geometry['coordinates'] : null;
           if (values is! List) continue;
@@ -915,7 +1055,9 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
       ),
       body: GoogleMap(
         initialCameraPosition: CameraPosition(
-          target: coordinates.isEmpty ? const LatLng(12.1026, -86.2632) : coordinates.first,
+          target: coordinates.isEmpty
+              ? const LatLng(12.1026, -86.2632)
+              : coordinates.first,
           zoom: 12.5,
         ),
         onMapCreated: (value) {
@@ -936,14 +1078,10 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
                   title: 'Ruta ${widget.points[index].label}',
                   snippet: widget.points[index].name,
                 ),
-                icon: index == widget.points.length - 1
-                    ? BitmapDescriptor.defaultMarkerWithHue(
-                        BitmapDescriptor.hueRed,
-                      )
-                    : markerIcons[widget.points[index].label] ??
-                        BitmapDescriptor.defaultMarkerWithHue(
-                          BitmapDescriptor.hueAzure,
-                        ),
+                icon: markerIcons[widget.points[index].label] ??
+                    BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueAzure,
+                    ),
               ),
         },
         polylines: {
@@ -990,7 +1128,6 @@ class _AddDestinationPageState extends State<_AddDestinationPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
-        backgroundLogoOpacity: .62,
         child: SafeArea(
           child: Column(
             children: [
@@ -1113,7 +1250,8 @@ class _AddDestinationPageState extends State<_AddDestinationPage> {
                             ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accentBlue,
-                      disabledBackgroundColor: Colors.white.withValues(alpha: .12),
+                      disabledBackgroundColor:
+                          Colors.white.withValues(alpha: .12),
                       foregroundColor: Colors.white,
                       shape: const StadiumBorder(),
                     ),

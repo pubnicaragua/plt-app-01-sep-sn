@@ -14,6 +14,7 @@ import 'confirmar_pedido.dart';
 import 'crear_envio3.dart';
 import 'establecer_destinos.dart';
 import 'ida_vuelta.dart';
+import 'ida_vuelta_envio.dart';
 import 'mas_vehiculos.dart';
 
 class CrearEnvio2 extends StatefulWidget {
@@ -24,6 +25,9 @@ class CrearEnvio2 extends StatefulWidget {
     this.weight = 10,
     this.weightUnit = 'kg',
     this.bundles = 1,
+    this.packageType = '',
+    this.initialProductPhotos = const [],
+    this.initialFragile,
     this.originPlace,
     this.destinationPlace,
     this.transport = 'Moto',
@@ -38,6 +42,9 @@ class CrearEnvio2 extends StatefulWidget {
     this.startScheduled = false,
     this.startDate,
     this.startTime,
+    this.initialTruckType,
+    this.initialTruckBodyType,
+    this.initialTruckEquipment,
   });
 
   final String origin;
@@ -45,6 +52,9 @@ class CrearEnvio2 extends StatefulWidget {
   final int weight;
   final String weightUnit;
   final int bundles;
+  final String packageType;
+  final List<Uint8List> initialProductPhotos;
+  final bool? initialFragile;
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
   final String transport;
@@ -59,6 +69,9 @@ class CrearEnvio2 extends StatefulWidget {
   final bool startScheduled;
   final String? startDate;
   final String? startTime;
+  final String? initialTruckType;
+  final String? initialTruckBodyType;
+  final String? initialTruckEquipment;
 
   @override
   State<CrearEnvio2> createState() => _CrearEnvio2State();
@@ -77,6 +90,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   late final TextEditingController description;
   late final TextEditingController invoicePrice;
   late final TextEditingController invoiceNumber;
+  late final TextEditingController pickupName;
+  late final TextEditingController pickupPhone;
+  late final TextEditingController pickupReferences;
+  late final TextEditingController pickupNotes;
   late final TextEditingController recipient;
   late final TextEditingController phone;
   late final TextEditingController references;
@@ -106,21 +123,30 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     weight = widget.weight.clamp(1, 1500).toInt();
     weightUnit = widget.weightUnit == 'lb' ? 'lb' : 'kg';
     bundles = widget.bundles.clamp(1, 99).toInt();
-    truckType = _truckTypes.first.label;
-    fragile = widget.transport == 'Vehículo' || widget.transport == 'Camión';
-    description = TextEditingController();
+    truckType = widget.initialTruckType?.trim().isNotEmpty == true
+        ? widget.initialTruckType!.trim()
+        : _truckTypes.first.label;
+    fragile = widget.initialFragile ??
+        (widget.transport == 'Vehículo' || widget.transport == 'Camión');
+    description = TextEditingController(text: widget.packageType);
     invoicePrice = TextEditingController();
     invoiceNumber = TextEditingController();
+    pickupName = TextEditingController();
+    pickupPhone = TextEditingController();
+    pickupReferences = TextEditingController(text: widget.originRefs);
+    pickupNotes = TextEditingController();
     recipient = TextEditingController(text: widget.recipientName);
     phone = TextEditingController(text: widget.recipientPhone);
     references = TextEditingController(text: widget.destinationRefs);
     additionalNotes = TextEditingController();
+    productPhotos.addAll(widget.initialProductPhotos);
     apiClient.getSettings().then((value) {
       if (mounted) {
         setState(() {
           settings = value;
           final truckOptions = _truckCatalog;
-          if (truckOptions.isNotEmpty &&
+          if (widget.initialTruckType == null &&
+              truckOptions.isNotEmpty &&
               !truckOptions.any((item) => item.title == truckType)) {
             truckType = truckOptions.first.title;
           }
@@ -140,7 +166,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         setState(() {
           settings = value;
           final truckOptions = _truckCatalog;
-          if (truckOptions.isNotEmpty &&
+          if (widget.initialTruckType == null &&
+              truckOptions.isNotEmpty &&
               !truckOptions.any((item) => item.title == truckType)) {
             truckType = truckOptions.first.title;
           }
@@ -155,6 +182,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     description.dispose();
     invoicePrice.dispose();
     invoiceNumber.dispose();
+    pickupName.dispose();
+    pickupPhone.dispose();
+    pickupReferences.dispose();
+    pickupNotes.dispose();
     recipient.dispose();
     phone.dispose();
     references.dispose();
@@ -242,23 +273,50 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       _pickImage(invoice: true, source: ImageSource.gallery);
 
   void _continue() {
-    if (recipient.text.trim().isEmpty || phone.text.trim().isEmpty) {
+    final isShipping = widget.serviceMode == 'Envíos';
+    final missingShippingContact = isShipping &&
+        (pickupName.text.trim().isEmpty ||
+            pickupPhone.text.trim().isEmpty ||
+            recipient.text.trim().isEmpty ||
+            phone.text.trim().isEmpty);
+    if (missingShippingContact ||
+        (!isShipping &&
+            (recipient.text.trim().isEmpty || phone.text.trim().isEmpty))) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           behavior: SnackBarBehavior.floating,
           content: Text(
-            'Completa el nombre del destinatario y el teléfono.',
+            isShipping
+                ? 'Completa nombre y teléfono de recojo y de envío.'
+                : 'Completa el nombre del destinatario y el teléfono.',
             style: TextStyle(fontFamily: 'Figtree'),
           ),
         ),
       );
       return;
     }
+    final shippingDetails = isShipping
+        ? [
+            'Recojo: ${pickupName.text.trim()} · Teléfono: ${pickupPhone.text.trim()}',
+            if (pickupReferences.text.trim().isNotEmpty)
+              'Referencia de recojo: ${pickupReferences.text.trim()}',
+            if (pickupNotes.text.trim().isNotEmpty)
+              'Indicaciones de recojo: ${pickupNotes.text.trim()}',
+            'Envío: ${recipient.text.trim()} · Teléfono: ${phone.text.trim()}',
+            if (references.text.trim().isNotEmpty)
+              'Referencia de envío: ${references.text.trim()}',
+          ].join(' · ')
+        : '';
     final extraDescription = [
       if (widget.transport == 'Camión') 'Tipo de camión: $truckType',
+      if (widget.initialTruckBodyType?.trim().isNotEmpty == true)
+        'Carrocería: ${widget.initialTruckBodyType}',
+      if (widget.initialTruckEquipment?.trim().isNotEmpty == true)
+        'Equipamiento: ${widget.initialTruckEquipment}',
       if (needsAdditional)
         'Servicio adicional: ${_selectedOption?.title ?? additionalOption}',
       if (_returnTripDetails != null) _returnTripDetails!,
+      if (shippingDetails.isNotEmpty) shippingDetails,
       if (additionalNotes.text.trim().isNotEmpty)
         'Indicaciones: ${additionalNotes.text.trim()}',
     ].join(' · ');
@@ -332,7 +390,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           productPhotos: List<Uint8List>.of(productPhotos),
           invoicePhoto: invoicePhoto,
           invoiceFileName: invoiceFileName,
-          originRefs: widget.originRefs,
+          originRefs:
+              isShipping ? pickupReferences.text.trim() : widget.originRefs,
           destinationRefs: references.text.trim(),
           recipientName: recipient.text.trim(),
           recipientPhone: phone.text.trim(),
@@ -437,7 +496,16 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     final reminder = config.waitMode == ReturnWaitMode.scheduledReturn
         ? ' [INCOEX_RETURN_AT=${returnAt.toIso8601String()};MODE=scheduled]'
         : '';
-    return 'Regreso de ida y vuelta · Pasajeros: ${config.passengerCount} · '
+    final returnDetails = config.returnPackageType != null
+        ? 'Transporte: ${config.returnTransport ?? widget.transport} · '
+            'Paquete: ${config.returnPackageType} · '
+            'Peso: ${config.returnWeight ?? 0} kg · '
+            'Frágil: ${config.returnFragile ? 'Sí' : 'No'}'
+        : 'Pasajeros: ${config.passengerCount}';
+    if (config.returnPackageType != null) {
+      return 'Regreso de ida y vuelta · $returnDetails';
+    }
+    return 'Regreso de ida y vuelta · $returnDetails · '
         'Hora aproximada: $time · $modeLabel$reminder';
   }
 
@@ -449,7 +517,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       if (_returnTripDetails != null) _returnTripDetails!,
       if (item.code.endsWith('more-vehicles'))
         'Cantidad de vehículos adicionales: $additionalVehicleCount · '
-            'Tipo: ${widget.taxiVariant}',
+            'Tipo: ${widget.serviceMode == 'Envíos' ? widget.transport : widget.taxiVariant}',
     ];
     return [
       TripOptionSelection(
@@ -529,12 +597,32 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       });
       return;
     }
+    if (code.contains('round-trip') && widget.serviceMode == 'Envíos') {
+      final result = await Navigator.of(context).push<IdaVueltaConfig>(
+        MaterialPageRoute(
+          builder: (_) => IdaVueltaEnvioScreen(
+            transport: widget.transport,
+            initialConfig: returnTripConfig,
+          ),
+        ),
+      );
+      if (!mounted || result == null) return;
+      setState(() {
+        needsAdditional = true;
+        additionalOption = item?.code ?? resolvedCode;
+        returnTripConfig = result;
+      });
+      return;
+    }
     if (code.contains('more-vehicles') &&
-        widget.serviceMode == 'Taxi Privado') {
+        (widget.serviceMode == 'Taxi Privado' ||
+            widget.serviceMode == 'Envíos')) {
       final result = await Navigator.of(context).push<int>(
         MaterialPageRoute(
           builder: (_) => MasVehiculosScreen(
-            vehicleType: widget.taxiVariant,
+            vehicleType: widget.serviceMode == 'Envíos'
+                ? (widget.transport == 'Moto' ? 'Moto' : 'Auto')
+                : widget.taxiVariant,
             initialCount: additionalVehicleCount,
           ),
         ),
@@ -616,7 +704,6 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       backgroundColor: const Color(0xFF0C1C53),
       body: AppBackground(
         darken: .04,
-        backgroundLogoOpacity: .62,
         child: SafeArea(
           child: Column(
             children: [
@@ -627,16 +714,24 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                   padding: const EdgeInsets.fromLTRB(12, 9, 12, 18),
                   children: [
                     _PageHeader(
-                      title: widget.serviceMode == 'Taxi Privado'
-                          ? 'Taxi Privado'
-                          : widget.transport == 'Moto'
-                              ? 'Motos'
-                              : widget.transport == 'Vehículo'
-                                  ? 'Autos'
-                                  : 'Carga',
+                      title: widget.serviceMode == 'Envíos'
+                          ? 'Envíos'
+                          : widget.serviceMode == 'Taxi Privado'
+                              ? 'Taxi Privado'
+                              : widget.transport == 'Moto'
+                                  ? 'Motos'
+                                  : widget.transport == 'Vehículo'
+                                      ? 'Autos'
+                                      : 'Carga',
                       onBack: () => Navigator.of(context).pop(),
+                      step: widget.serviceMode == 'Envíos' ? 3 : 1,
                     ),
-                    if (widget.transport == 'Camión') ...[
+                    if (widget.serviceMode == 'Taxi Privado') ...[
+                      const SizedBox(height: 10),
+                      _TaxiVehiclePreview(vehicle: widget.taxiVariant),
+                    ],
+                    if (widget.transport == 'Camión' &&
+                        widget.initialTruckType == null) ...[
                       const SizedBox(height: 12),
                       _TruckTypeSelector(
                         selected: truckType,
@@ -646,66 +741,86 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       const SizedBox(height: 14),
                     ],
                     const SizedBox(height: 14),
-                    _FormSectionTitle(
-                      icon: widget.serviceMode == 'Taxi Privado'
-                          ? Icons.local_taxi_outlined
-                          : Icons.inventory_2_outlined,
-                      title: widget.serviceMode == 'Taxi Privado'
-                          ? 'Detalles del viaje'
-                          : 'Detalles de envío',
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _InputPill(
-                            controller: recipient,
-                            label: widget.serviceMode == 'Taxi Privado'
-                                ? 'Pasajero principal'
-                                : 'Destinatario(s)',
-                            iconAsset: widget.serviceMode == 'Taxi Privado'
-                                ? 'assets/img/HomeCliente/carga_ayudante.png'
-                                : 'assets/img/HomeCliente/detalle_destinatario.png',
-                            textInputAction: TextInputAction.next,
-                            large: widget.transport != 'Camión',
+                    if (widget.serviceMode == 'Envíos') ...[
+                      _shippingContactSection(
+                        title: 'Detalles de recojo',
+                        subtitle: 'Persona que entrega el paquete',
+                        nameController: pickupName,
+                        phoneController: pickupPhone,
+                        referencesController: pickupReferences,
+                        notesController: pickupNotes,
+                      ),
+                      const SizedBox(height: 14),
+                      _shippingContactSection(
+                        title: 'Detalles de envío',
+                        subtitle: 'Persona que recibe el paquete',
+                        nameController: recipient,
+                        phoneController: phone,
+                        referencesController: references,
+                        notesController: additionalNotes,
+                      ),
+                    ] else ...[
+                      _FormSectionTitle(
+                        icon: widget.serviceMode == 'Taxi Privado'
+                            ? Icons.local_taxi_outlined
+                            : Icons.inventory_2_outlined,
+                        title: widget.serviceMode == 'Taxi Privado'
+                            ? 'Detalles del viaje'
+                            : 'Detalles de recojo',
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _InputPill(
+                              controller: recipient,
+                              label: widget.serviceMode == 'Taxi Privado'
+                                  ? 'Pasajero principal'
+                                  : 'Destinatario(s)',
+                              iconAsset: widget.serviceMode == 'Taxi Privado'
+                                  ? 'assets/img/HomeCliente/carga_ayudante.png'
+                                  : 'assets/img/HomeCliente/detalle_destinatario.png',
+                              textInputAction: TextInputAction.next,
+                              large: widget.transport != 'Camión',
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _InputPill(
-                            controller: phone,
-                            label: widget.serviceMode == 'Taxi Privado'
-                                ? 'Teléfono'
-                                : 'Teléfono(s)',
-                            iconAsset:
-                                'assets/img/HomeCliente/detalle_telefono.png',
-                            keyboardType: TextInputType.phone,
-                            textInputAction: TextInputAction.next,
-                            large: widget.transport != 'Camión',
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _InputPill(
+                              controller: phone,
+                              label: widget.serviceMode == 'Taxi Privado'
+                                  ? 'Teléfono'
+                                  : 'Teléfono(s)',
+                              iconAsset:
+                                  'assets/img/HomeCliente/detalle_telefono.png',
+                              keyboardType: TextInputType.phone,
+                              textInputAction: TextInputAction.next,
+                              large: widget.transport != 'Camión',
+                            ),
                           ),
+                        ],
+                      ),
+                      if (widget.serviceMode != 'Taxi Privado') ...[
+                        const SizedBox(height: 8),
+                        _InputPill(
+                          controller: references,
+                          label: 'Referencias',
+                          iconAsset: 'assets/img/HomeCliente/detalle_lista.png',
+                          textInputAction: TextInputAction.done,
+                          large: widget.transport != 'Camión',
                         ),
                       ],
-                    ),
-                    if (widget.serviceMode != 'Taxi Privado') ...[
                       const SizedBox(height: 8),
                       _InputPill(
-                        controller: references,
-                        label: 'Referencias',
+                        controller: additionalNotes,
+                        label: 'Indicaciones adicionales (Opcional)',
                         iconAsset: 'assets/img/HomeCliente/detalle_lista.png',
-                        textInputAction: TextInputAction.done,
+                        enabled: true,
+                        maxLines: 1,
+                        compact: true,
                         large: widget.transport != 'Camión',
                       ),
                     ],
-                    const SizedBox(height: 8),
-                    _InputPill(
-                      controller: additionalNotes,
-                      label: 'Indicaciones adicionales (Opcional)',
-                      iconAsset: 'assets/img/HomeCliente/detalle_lista.png',
-                      enabled: true,
-                      maxLines: 1,
-                      compact: true,
-                      large: widget.transport != 'Camión',
-                    ),
                     if (widget.serviceMode == 'Taxi Privado') ...[
                       const SizedBox(height: 12),
                       const _FormSectionTitle(
@@ -765,7 +880,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                     ],
                     const SizedBox(height: 14),
                     _additionalBlock(),
-                    if (widget.serviceMode != 'Taxi Privado' &&
+                    if (widget.serviceMode != 'Envíos' &&
+                        widget.serviceMode != 'Taxi Privado' &&
                         (widget.transport == 'Vehículo' ||
                             widget.transport == 'Camión')) ...[
                       const SizedBox(height: 14),
@@ -774,7 +890,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                     if (widget.serviceMode == 'Taxi Privado') ...[
                       const SizedBox(height: 14),
                       _paymentBlock(includeInvoice: false),
-                    ] else ...[
+                    ] else if (widget.serviceMode != 'Envíos') ...[
                       const SizedBox(height: 12),
                       _productPhotosBlock(),
                     ],
@@ -799,12 +915,209 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     );
   }
 
+  Widget _shippingContactSection({
+    required String title,
+    required String subtitle,
+    required TextEditingController nameController,
+    required TextEditingController phoneController,
+    required TextEditingController referencesController,
+    required TextEditingController notesController,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _FormSectionTitle(
+          icon: Icons.local_shipping_outlined,
+          title: title,
+          subtitle: subtitle,
+        ),
+        const SizedBox(height: 9),
+        Row(
+          children: [
+            Expanded(
+              child: _InputPill(
+                controller: nameController,
+                label: 'Nombre',
+                iconAsset: 'assets/img/HomeCliente/detalle_destinatario.png',
+                textInputAction: TextInputAction.next,
+                large: true,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _InputPill(
+                controller: phoneController,
+                label: 'Teléfono',
+                iconAsset: 'assets/img/HomeCliente/detalle_telefono.png',
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                large: true,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _InputPill(
+          controller: referencesController,
+          label: 'Referencia del lugar',
+          iconAsset: 'assets/img/HomeCliente/envio_location.png',
+          textInputAction: TextInputAction.next,
+          large: true,
+        ),
+        const SizedBox(height: 8),
+        _InputPill(
+          controller: notesController,
+          label: 'Indicaciones adicionales',
+          iconAsset: 'assets/img/HomeCliente/envio_info.png',
+          textInputAction: TextInputAction.done,
+          compact: true,
+          large: true,
+        ),
+      ],
+    );
+  }
+
   Widget _additionalBlock() {
     if (widget.transport == 'Camión') {
       return _cargoAdditionalBlock();
     }
+    if (widget.serviceMode == 'Envíos') {
+      return _shippingAdditionalBlock();
+    }
 
     return _standardAdditionalBlock();
+  }
+
+  Widget _shippingAdditionalBlock() {
+    final multiple = _serviceOption('delivery-multiple-stops',
+        fallbackTitle: 'Varios destinos');
+    final roundTrip =
+        _serviceOption('delivery-round-trip', fallbackTitle: 'Ida y vuelta');
+    final moreVehicles = _serviceOption('delivery-more-vehicles',
+        fallbackTitle: 'Más vehículos');
+    final isMoto = widget.transport == 'Moto';
+    final vehicleLabel = isMoto ? '¿Más motos?' : '¿Más autos?';
+    final vehicleSubtitle = isMoto ? 'A una misma ruta' : 'A una misma ruta';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _FormSectionTitle(
+                icon: Icons.settings_outlined,
+                title: 'Servicios adicionales',
+              ),
+            ),
+            TextButton(
+              onPressed: _showTaxiServicesSheet,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: accentBlue,
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                minimumSize: const Size(102, 34),
+                shape: const StadiumBorder(),
+                textStyle: const TextStyle(
+                  fontFamily: 'Figtree',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Ver todos'),
+                  SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, size: 18),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const Padding(
+          padding: EdgeInsets.only(left: 27, top: 2, bottom: 9),
+          child: Text(
+            'Añade servicios extra si los necesitas',
+            style: TextStyle(
+                color: Colors.white70, fontSize: 10, fontFamily: 'Figtree'),
+          ),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_regreso.png',
+                title: roundTrip?.title ?? 'Ida y vuelta',
+                subtitle: roundTrip?.description ?? 'Regreso al origen',
+                price: _priceLabel(roundTrip, 'C\$40 USD'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (roundTrip?.code ??
+                            _serviceCode('delivery-round-trip')),
+                enabled: true,
+                onTap: () =>
+                    _selectAdditional('delivery-round-trip', 'Ida y vuelta'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: isMoto
+                    ? 'assets/img/HomeCliente/ri_e-bike-fill.png'
+                    : 'assets/img/HomeCliente/vehiculo.png',
+                title: vehicleLabel,
+                subtitle: vehicleSubtitle,
+                price: _priceLabel(moreVehicles, 'C\$40 USD'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (moreVehicles?.code ??
+                            _serviceCode('delivery-more-vehicles')),
+                enabled: true,
+                onTap: () =>
+                    _selectAdditional('delivery-more-vehicles', vehicleLabel),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _AdditionalOptionCard(
+                iconAsset: 'assets/img/HomeCliente/adicional_destinos.png',
+                title: multiple?.title ?? 'Varios destinos',
+                subtitle: multiple?.description ?? 'Múltiples destinos',
+                price: _priceLabel(multiple, 'C\$40 USD'),
+                selected: needsAdditional &&
+                    additionalOption ==
+                        (multiple?.code ??
+                            _serviceCode('delivery-multiple-stops')),
+                enabled: true,
+                onTap: () => _selectAdditional(
+                    'delivery-multiple-stops', 'Varios destinos'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AdditionalOptionCard(
+                title: 'Próximamente...',
+                subtitle: '',
+                price: '',
+                selected: false,
+                enabled: false,
+                showLeadingIcon: false,
+                showSelectionControl: false,
+                hideMeta: true,
+                centerTitle: true,
+                disabledOpacity: .72,
+                onTap: () {},
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _standardAdditionalBlock() {
@@ -1079,6 +1392,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                   maxChildSize: .82,
                   expand: false,
                   builder: (context, scrollController) {
+                    final isShipping = widget.serviceMode == 'Envíos';
                     final multiple = _serviceOption('delivery-multiple-stops',
                         fallbackTitle: 'Varios destinos');
                     final roundTrip = _serviceOption('delivery-round-trip',
@@ -1107,19 +1421,28 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                             _serviceCode('delivery-round-trip'),
                         fallback: 'Ida y vuelta',
                       ),
+                      if (!isShipping)
+                        (
+                          icon: 'assets/img/HomeCliente/adicional_seguro.png',
+                          title: insurance?.title ?? 'Seguro',
+                          subtitle: insurance?.description ??
+                              'Asegura a los pasajeros',
+                          price: _priceLabel(insurance, 'C\$40 USD'),
+                          code: insurance?.code ??
+                              _serviceCode('delivery-insurance'),
+                          fallback: 'Seguro',
+                        ),
                       (
-                        icon: 'assets/img/HomeCliente/adicional_seguro.png',
-                        title: insurance?.title ?? 'Seguro',
-                        subtitle:
-                            insurance?.description ?? 'Asegura a los pasajeros',
-                        price: _priceLabel(insurance, 'C\$40 USD'),
-                        code: insurance?.code ??
-                            _serviceCode('delivery-insurance'),
-                        fallback: 'Seguro',
-                      ),
-                      (
-                        icon: 'assets/img/HomeCliente/taxi_more_vehicles.png',
-                        title: moreVehicles?.title ?? 'Más vehículos',
+                        icon: isShipping
+                            ? (widget.transport == 'Moto'
+                                ? 'assets/img/HomeCliente/ri_e-bike-fill.png'
+                                : 'assets/img/HomeCliente/vehiculo.png')
+                            : 'assets/img/HomeCliente/taxi_more_vehicles.png',
+                        title: isShipping
+                            ? (widget.transport == 'Moto'
+                                ? '¿Más motos?'
+                                : '¿Más autos?')
+                            : moreVehicles?.title ?? 'Más vehículos',
                         subtitle:
                             moreVehicles?.description ?? 'A una misma ruta',
                         price: _priceLabel(moreVehicles, 'US\$40'),
@@ -2035,10 +2358,15 @@ class _TruckTypeSelector extends StatelessWidget {
 }
 
 class _FormSectionTitle extends StatelessWidget {
-  const _FormSectionTitle({required this.icon, required this.title});
+  const _FormSectionTitle({
+    required this.icon,
+    required this.title,
+    this.subtitle = '',
+  });
 
   final IconData icon;
   final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -2046,15 +2374,29 @@ class _FormSectionTitle extends StatelessWidget {
       children: [
         Icon(icon, color: Colors.white, size: 17),
         const SizedBox(width: 7),
-        Flexible(
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              fontFamily: 'Figtree',
-            ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              if (subtitle.isNotEmpty)
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 9,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+            ],
           ),
         ),
       ],
@@ -2368,11 +2710,59 @@ class _DashedBorderPainter extends CustomPainter {
       oldDelegate.color != color || oldDelegate.radius != radius;
 }
 
+class _ShippingInfoPill extends StatelessWidget {
+  const _ShippingInfoPill({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final String icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => AppGlassSurface(
+        borderRadius: 13,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Row(
+            children: [
+              Image.asset(icon, width: 18, height: 18, fit: BoxFit.contain),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree')),
+                    const SizedBox(height: 2),
+                    Text(value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 8.5,
+                            fontFamily: 'Figtree')),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
 class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.title, required this.onBack});
+  const _PageHeader({required this.title, required this.onBack, this.step = 1});
 
   final String title;
   final VoidCallback onBack;
+  final int step;
 
   @override
   Widget build(BuildContext context) {
@@ -2397,8 +2787,199 @@ class _PageHeader extends StatelessWidget {
             ),
           ),
         ),
-        const _StepPill(text: 'Paso 1'),
+        _StepPill(text: 'Paso $step'),
       ],
+    );
+  }
+}
+
+class _ShippingVehiclePreview extends StatelessWidget {
+  const _ShippingVehiclePreview({required this.transport});
+
+  final String transport;
+
+  @override
+  Widget build(BuildContext context) {
+    final isMoto = transport == 'Moto';
+    return AppGlassSurface(
+      borderRadius: 18,
+      selected: true,
+      fillColor: const Color(0x30284678),
+      child: SizedBox(
+        height: 196,
+        child: Stack(
+          children: [
+            Positioned(
+              top: 12,
+              left: 14,
+              child: Text(
+                isMoto ? 'Moto' : 'Auto',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 14,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentBlue,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white, size: 11),
+                    SizedBox(width: 4),
+                    Text(
+                      'Seleccionado',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned.fill(
+              top: 28,
+              bottom: 2,
+              child: Image.asset(
+                isMoto
+                    ? 'assets/img/HomeCliente/figma_moto.png'
+                    : 'assets/img/HomeCliente/figma_auto.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaxiVehiclePreview extends StatelessWidget {
+  const _TaxiVehiclePreview({required this.vehicle});
+
+  final String vehicle;
+
+  String get _asset {
+    switch (vehicle) {
+      case 'SUV':
+        return 'assets/img/HomeCliente/taxi_suv.png';
+      case 'Microbus':
+        return 'assets/img/HomeCliente/taxi_microbus.png';
+      default:
+        return 'assets/img/HomeCliente/taxi_sedan.png';
+    }
+  }
+
+  String get _passengerLabel {
+    switch (vehicle) {
+      case 'SUV':
+        return '6 pasajeros';
+      case 'Microbus':
+        return '12 pasajeros';
+      default:
+        return '4 pasajeros';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGlassSurface(
+      borderRadius: 18,
+      selected: true,
+      fillColor: const Color(0x30284678),
+      child: SizedBox(
+        height: 174,
+        child: Stack(
+          children: [
+            Positioned(
+              top: 10,
+              left: 13,
+              child: Text(
+                vehicle,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Figtree',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 13,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentBlue,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/img/HomeCliente/taxi_selected.png',
+                      width: 11,
+                      height: 11,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'Seleccionado',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Figtree',
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned.fill(
+              top: 30,
+              bottom: 17,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Image.asset(
+                  _asset,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.directions_car_filled,
+                    color: Colors.white70,
+                    size: 62,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 13,
+              bottom: 9,
+              child: Text(
+                _passengerLabel,
+                style: const TextStyle(
+                  color: Color(0xD9FFFFFF),
+                  fontFamily: 'Figtree',
+                  fontSize: 9,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
