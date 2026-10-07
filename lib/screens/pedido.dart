@@ -7,18 +7,19 @@ import '../widgets/glass.dart';
 import 'crear_envio2.dart';
 import 'seguimiento_pedido.dart';
 import 'resumen_cliente.dart';
+export 'envios.dart';
 
-class MisEnvios extends StatefulWidget {
-  const MisEnvios({super.key, this.onRefresh, this.embedded = false});
+class _LegacyMisEnvios extends StatefulWidget {
+  const _LegacyMisEnvios({super.key, this.onRefresh, this.embedded = false});
 
   final VoidCallback? onRefresh;
   final bool embedded;
 
   @override
-  State<MisEnvios> createState() => _MisEnviosState();
+  State<_LegacyMisEnvios> createState() => _LegacyMisEnviosState();
 }
 
-class _MisEnviosState extends State<MisEnvios> {
+class _LegacyMisEnviosState extends State<_LegacyMisEnvios> {
   late Future<List<Trip>> trips;
   String filter = 'Activos';
 

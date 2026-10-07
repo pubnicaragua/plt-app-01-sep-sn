@@ -925,18 +925,6 @@ class _HomeTabState extends State<_HomeTab> {
       );
       return;
     }
-    if (candidate.isAfter(now.add(const Duration(hours: 24)))) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(
-            'Solo se puede programar dentro de las próximas 24 horas.',
-            style: TextStyle(fontFamily: 'Figtree'),
-          ),
-        ),
-      );
-      return;
-    }
     final parts = hour.split(':');
     setState(() {
       agendaDate = candidate;
@@ -1870,7 +1858,7 @@ class _ScheduleCard extends StatelessWidget {
               ),
               const SizedBox(height: 5),
               const Text(
-                'Solo se permite programar dentro de las próximas 24 horas. Fechas pasadas quedan bloqueadas.',
+                'Elige la fecha y hora que prefieras. Las fechas pasadas quedan bloqueadas.',
                 style: TextStyle(
                   color: Color(0xFFB9D4FF),
                   fontSize: 10.5,

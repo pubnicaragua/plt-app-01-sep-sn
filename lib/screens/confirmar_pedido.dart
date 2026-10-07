@@ -10,6 +10,7 @@ import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/wizard.dart';
 import 'crear_envio3.dart';
+import 'seguro_envio.dart';
 
 class Confirmarpedido extends StatefulWidget {
   const Confirmarpedido({
@@ -276,7 +277,37 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   String _money(double value) =>
       formatFareCs(value, settings?.fareRoundingCs ?? 5);
 
-  Future<void> _submit() async {
+  double get _insurancePriceCs {
+    final preferredCode = widget.transport == 'Camión'
+        ? 'cargo-insurance'
+        : 'delivery-insurance';
+    final catalog = settings?.serviceCatalog ?? const <ServiceCatalogItem>[];
+    for (final item in catalog) {
+      if (item.enabled && item.code == preferredCode) return item.priceCs;
+    }
+    return 15;
+  }
+
+  Future<void> _next() async {
+    if (widget.serviceMode == 'Taxi Privado') {
+      await _submit();
+      return;
+    }
+    final shipping = _shippingFor(selectedTransport);
+    final baseTotal = shipping + _invoiceToCollect;
+    final result = await Navigator.of(context).push<InsuranceSelectionResult>(
+      MaterialPageRoute(
+        builder: (_) => SeguroEnvioScreen(
+          baseTotal: baseTotal,
+          insurancePrice: _insurancePriceCs,
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    await _submit(insurance: result.option);
+  }
+
+  Future<void> _submit({TripOptionSelection? insurance}) async {
     if (submitting) return;
     setState(() {
       submitting = true;
@@ -317,7 +348,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           passengerCount: widget.passengerCount,
           returnTrip: widget.returnTrip,
           stops: widget.stops,
-          options: widget.options,
+          options: [
+            ...widget.options,
+            if (insurance != null) insurance,
+          ],
         ),
       ),
     );
@@ -446,11 +480,11 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           ),
           const SizedBox(height: 24),
           GlassButton(
-            label: submitting ? 'Creando envío…' : 'Confirmar envío',
+            label: submitting ? 'Creando envío…' : 'Siguiente',
             filled: true,
             height: 44,
             textColor: Colors.white,
-            onPressed: submitting ? () {} : _submit,
+            onPressed: submitting ? () {} : _next,
           ),
         ],
       ),

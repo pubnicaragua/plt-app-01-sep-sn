@@ -25,6 +25,8 @@ class _IdaVueltaEnvioScreenState extends State<IdaVueltaEnvioScreen> {
   final picker = ImagePicker();
   late String packageType;
   late int weight;
+  late final TextEditingController packageTypeController;
+  late final TextEditingController weightController;
   late TimeOfDay returnTime;
   late ReturnWaitMode waitMode;
   late bool fragile;
@@ -34,12 +36,21 @@ class _IdaVueltaEnvioScreenState extends State<IdaVueltaEnvioScreen> {
   void initState() {
     super.initState();
     final config = widget.initialConfig;
-    packageType = config?.returnPackageType ?? 'Ropa y artículos personales';
+    packageType = config?.returnPackageType ?? '';
     weight = config?.returnWeight ?? 2;
+    packageTypeController = TextEditingController(text: packageType);
+    weightController = TextEditingController(text: '$weight');
     returnTime = config?.returnTime ?? const TimeOfDay(hour: 18, minute: 0);
     waitMode = config?.waitMode ?? ReturnWaitMode.scheduledReturn;
     fragile = config?.returnFragile ?? false;
     photos.addAll(config?.returnPhotos ?? const []);
+  }
+
+  @override
+  void dispose() {
+    packageTypeController.dispose();
+    weightController.dispose();
+    super.dispose();
   }
 
   Future<void> _pickPhotos() async {
@@ -52,13 +63,46 @@ class _IdaVueltaEnvioScreenState extends State<IdaVueltaEnvioScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _chooseReturnTime() async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: returnTime,
+      helpText: 'Hora aproximada de regreso',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: accentBlue,
+                surface: const Color(0xFF102755),
+                onSurface: Colors.white,
+              ),
+          timePickerTheme: const TimePickerThemeData(
+            backgroundColor: Color(0xFF102755),
+            dialHandColor: accentBlue,
+            hourMinuteColor: Color(0xFF18386B),
+            hourMinuteTextColor: Colors.white,
+            dayPeriodColor: Color(0xFF18386B),
+            dayPeriodTextColor: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (selected != null && mounted) setState(() => returnTime = selected);
+  }
+
+  String _timeLabel(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    return '$hour:${time.minute.toString().padLeft(2, '0')} '
+        '${time.period == DayPeriod.am ? 'AM' : 'PM'}';
+  }
+
   void _save() => Navigator.of(context).pop(
         IdaVueltaConfig(
           passengerCount: 1,
           returnTime: returnTime,
           waitMode: waitMode,
           returnTransport: widget.transport,
-          returnPackageType: packageType,
+          returnPackageType: packageTypeController.text.trim(),
           returnWeight: weight,
           returnPhotos: List<Uint8List>.of(photos),
           returnFragile: fragile,
@@ -101,25 +145,89 @@ class _IdaVueltaEnvioScreenState extends State<IdaVueltaEnvioScreen> {
                     _ReturnField(
                       icon: 'assets/img/HomeCliente/envio_package.png',
                       label: '¿Qué vamos a transportar devuelta?',
-                      value: packageType,
-                      onTap: _choosePackageType,
+                      value: '',
+                      content: TextField(
+                        controller: packageTypeController,
+                        style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 15.5,
+                            fontFamily: 'Figtree'),
+                        decoration: const InputDecoration(
+                          hintText: 'Escribe qué vas a transportar',
+                          hintStyle: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 13,
+                              fontFamily: 'Figtree'),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        onChanged: (value) => packageType = value,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     _ReturnField(
                       icon: 'assets/img/HomeCliente/envio_weight.png',
                       label: 'Peso aproximado',
-                      value: '$weight kg',
+                      value: '',
+                      content: SizedBox(
+                        width: 105,
+                        child: TextField(
+                          controller: weightController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: false),
+                          style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 15.5,
+                              fontFamily: 'Figtree'),
+                          decoration: const InputDecoration(
+                            hintText: 'Escribe el peso',
+                            hintStyle: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 13,
+                                fontFamily: 'Figtree'),
+                            suffixText: 'kg',
+                            suffixStyle: TextStyle(
+                                color: Color(0xFFB9D4FF),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'Figtree'),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onChanged: (value) {
+                            final parsed = int.tryParse(value);
+                            if (parsed != null && parsed > 0) {
+                              setState(() =>
+                                  weight = parsed.clamp(1, 9999).toInt());
+                            }
+                          },
+                        ),
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
                             onPressed: weight > 1
-                                ? () => setState(() => weight--)
+                                ? () {
+                                    final next = weight - 1;
+                                    setState(() {
+                                      weight = next;
+                                      weightController.text = '$next';
+                                    });
+                                  }
                                 : null,
                             icon: const Icon(Icons.remove, color: Colors.white),
                           ),
                           IconButton(
-                            onPressed: () => setState(() => weight++),
+                            onPressed: () {
+                              final next = (weight + 1).clamp(1, 9999).toInt();
+                              setState(() {
+                                weight = next;
+                                weightController.text = '$next';
+                              });
+                            },
                             icon: const Icon(Icons.add, color: Colors.white),
                           ),
                         ],
@@ -195,6 +303,64 @@ class _IdaVueltaEnvioScreenState extends State<IdaVueltaEnvioScreen> {
                     ),
                     const SizedBox(height: 12),
                     const _ReturnInfoNote(),
+                    if (widget.transport == 'Camión') ...[
+                      const SizedBox(height: 14),
+                      const _ReturnScheduleHeading(),
+                      const SizedBox(height: 10),
+                      AppGlassSurface(
+                        borderRadius: 13,
+                        fillColor: const Color(0x30284678),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 11, vertical: 8),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Hora aproximada de regreso',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Figtree',
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                              Material(
+                                color: accentBlue,
+                                borderRadius: BorderRadius.circular(22),
+                                child: InkWell(
+                                  onTap: _chooseReturnTime,
+                                  borderRadius: BorderRadius.circular(22),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          _timeLabel(returnTime),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontFamily: 'Figtree',
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        const Icon(
+                                            Icons.keyboard_arrow_down_rounded,
+                                            color: Colors.white,
+                                            size: 17),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -215,33 +381,6 @@ class _IdaVueltaEnvioScreenState extends State<IdaVueltaEnvioScreen> {
     );
   }
 
-  Future<void> _choosePackageType() async {
-    const values = [
-      'Ropa y artículos personales',
-      'Documentos',
-      'Alimentos',
-      'Otro'
-    ];
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: const Color(0xFF102A68),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final value in values)
-              ListTile(
-                title: Text(value,
-                    style: const TextStyle(
-                        color: Colors.white, fontFamily: 'Figtree')),
-                onTap: () => Navigator.pop(context, value),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (selected != null && mounted) setState(() => packageType = selected);
-  }
 }
 
 class _ReturnHeader extends StatelessWidget {
@@ -275,6 +414,36 @@ class _ReturnHeader extends StatelessWidget {
       );
 }
 
+class _ReturnScheduleHeading extends StatelessWidget {
+  const _ReturnScheduleHeading();
+
+  @override
+  Widget build(BuildContext context) => const Row(
+        children: [
+          Icon(Icons.access_time_rounded, color: Colors.white, size: 20),
+          SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('¿Cuándo será el regreso?',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree')),
+                Text('Indica el horario aproximado del viaje de vuelta.',
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 9,
+                        fontFamily: 'Figtree')),
+              ],
+            ),
+          ),
+        ],
+      );
+}
+
 class _ReturnField extends StatelessWidget {
   const _ReturnField({
     required this.icon,
@@ -282,6 +451,7 @@ class _ReturnField extends StatelessWidget {
     required this.value,
     this.onTap,
     this.trailing,
+    this.content,
   });
 
   final String icon;
@@ -289,6 +459,7 @@ class _ReturnField extends StatelessWidget {
   final String value;
   final VoidCallback? onTap;
   final Widget? trailing;
+  final Widget? content;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -311,11 +482,12 @@ class _ReturnField extends StatelessWidget {
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'Figtree')),
-                      Text(value,
-                          style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 9,
-                              fontFamily: 'Figtree')),
+                      content ??
+                          Text(value,
+                              style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 9,
+                                  fontFamily: 'Figtree')),
                     ],
                   ),
                 ),

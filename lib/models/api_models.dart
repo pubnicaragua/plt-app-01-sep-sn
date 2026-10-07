@@ -236,7 +236,10 @@ class Trip {
       weight: (json['weight'] as num?)?.toDouble(),
       weightUnit: json['weightUnit']?.toString(),
       serviceMode: json['serviceMode']?.toString(),
-      vehicleVariant: json['vehicleVariant']?.toString(),
+      vehicleVariant: (json['vehicleVariant'] ??
+              json['vehicleType'] ??
+              json['vehicle'])
+          ?.toString(),
       truckType: json['truckType']?.toString(),
       passengerCount: (json['passengerCount'] as num?)?.toInt(),
       returnTrip: json['returnTrip'] == true || json['returnTrip']?.toString() == 'true',

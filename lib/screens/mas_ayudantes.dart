@@ -3,81 +3,26 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../widgets/glass.dart';
 
-class MasVehiculosScreen extends StatefulWidget {
-  const MasVehiculosScreen({
+class MasAyudantesScreen extends StatefulWidget {
+  const MasAyudantesScreen({
     super.key,
-    required this.vehicleType,
     this.initialCount = 2,
   });
 
-  final String vehicleType;
   final int initialCount;
 
   @override
-  State<MasVehiculosScreen> createState() => _MasVehiculosScreenState();
+  State<MasAyudantesScreen> createState() => _MasAyudantesScreenState();
 }
 
-class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
-  static const _maxVehicles = 99;
+class _MasAyudantesScreenState extends State<MasAyudantesScreen> {
+  static const _maxHelpers = 99;
   late int count;
 
   @override
   void initState() {
     super.initState();
-    count = widget.initialCount.clamp(1, _maxVehicles).toInt();
-  }
-
-  String get _pluralVehicleName {
-    switch (widget.vehicleType.toLowerCase()) {
-      case 'suv':
-        return 'SUVs';
-      case 'microbus':
-        return 'Microbuses';
-      case 'sedán':
-      case 'sedan':
-        return 'Sedanes';
-      case 'camión extra pequeño':
-      case 'camion extra pequeno':
-        return 'Camiones extra pequeños';
-      case 'camión pequeño':
-      case 'camion pequeño':
-        return 'Camiones pequeños';
-      case 'camión mediano':
-      case 'camion mediano':
-        return 'Camiones medianos';
-      case 'camión grande':
-      case 'camion grande':
-        return 'Camiones grandes';
-      case 'camión':
-      case 'camion':
-        return 'Camiones';
-      default:
-        return '${widget.vehicleType}s';
-    }
-  }
-
-  bool get _isCargoVehicle {
-    final value = widget.vehicleType.toLowerCase();
-    return value.contains('camión') || value.contains('camion');
-  }
-
-  bool get _isShippingVehicle =>
-      widget.vehicleType.toLowerCase() == 'moto' ||
-      widget.vehicleType.toLowerCase() == 'auto';
-
-  String get _vehicleNamePlural {
-    if (widget.vehicleType.toLowerCase() == 'moto') return 'motos';
-    if (_isCargoVehicle) return 'camiones';
-    return 'autos';
-  }
-
-  String get _vehicleAsset {
-    if (_isCargoVehicle) {
-      return 'assets/img/HomeCliente/fluent_vehicle-truck-16-filled.png';
-    }
-    return widget.vehicleType.toLowerCase() == 'moto'
-        ? 'assets/img/HomeCliente/ri_e-bike-fill.png'
-        : 'assets/img/HomeCliente/vehiculo.png';
+    count = widget.initialCount.clamp(1, _maxHelpers).toInt();
   }
 
   void _save() => Navigator.of(context).pop(count);
@@ -128,33 +73,27 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                       children: [
                         AppGlassSurface(
                           borderRadius: 11,
-                          fillColor: const Color(0x33254A82),
                           child: SizedBox(
                             width: 46,
                             height: 46,
                             child: Center(
                               child: Image.asset(
-                                _isCargoVehicle || _isShippingVehicle
-                                    ? _vehicleAsset
-                                    : 'assets/img/HomeCliente/taxi_more_vehicles.png',
-                                width: 22,
-                                height: 22,
+                                'assets/img/HomeCliente/carga_ayudante.png',
+                                width: 25,
+                                height: 25,
+                                fit: BoxFit.contain,
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Expanded(
+                        const Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _isCargoVehicle
-                                    ? '¿Deseas añadir más camiones?'
-                                    : _isShippingVehicle
-                                    ? '¿Deseas añadir más $_vehicleNamePlural?'
-                                    : '¿Deseas añadir más vehículos?',
-                                style: const TextStyle(
+                                '¿Deseas añadir ayudantes?',
+                                style: TextStyle(
                                   color: Colors.white,
                                   fontFamily: 'Figtree',
                                   fontWeight: FontWeight.w800,
@@ -162,13 +101,9 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                                 ),
                               ),
                               Text(
-                                _isCargoVehicle
-                                    ? 'Agrega camiones para recoger tu mercancía.'
-                                    : _isShippingVehicle
-                                    ? 'Agrega $_vehicleNamePlural para recoger tu mercancía.'
-                                    : 'Agrega vehículos para recoger a tu personal.',
+                                'Agrega personal para ayudarte con la carga y descarga de tus productos.',
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: .82),
+                                  color: Color(0xD1FFFFFF),
                                   fontFamily: 'Figtree',
                                   fontSize: 10,
                                 ),
@@ -185,17 +120,13 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                         const Icon(Icons.settings_outlined,
                             color: Colors.white, size: 21),
                         const SizedBox(width: 7),
-                        Expanded(
+                        const Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _isCargoVehicle
-                                    ? '¿Cuántos camiones adicionales quieres?'
-                                    : _isShippingVehicle
-                                    ? '¿Cuántos $_vehicleNamePlural adicionales quieres?'
-                                    : '¿Cuántos vehículos adicionales quieres?',
-                                style: const TextStyle(
+                                '¿Cuántos ayudantes necesitas?',
+                                style: TextStyle(
                                   color: Colors.white,
                                   fontFamily: 'Figtree',
                                   fontWeight: FontWeight.w800,
@@ -204,12 +135,8 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                               ),
                               SizedBox(height: 2),
                               Text(
-                                _isCargoVehicle
-                                    ? 'Selecciona la cantidad de camiones'
-                                    : _isShippingVehicle
-                                    ? 'Selecciona la cantidad de $_vehicleNamePlural'
-                                    : 'Selecciona la cantidad de vehículos',
-                                style: const TextStyle(
+                                'Selecciona la cantidad de ayudantes',
+                                style: TextStyle(
                                   color: Color(0xFFD4E3FF),
                                   fontFamily: 'Figtree',
                                   fontSize: 10,
@@ -221,14 +148,14 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                       ],
                     ),
                     const SizedBox(height: 11),
-                    GlassCard(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 8),
-                      borderRadius: 14,
-                      color: const Color(0x35284678),
-                      child: Row(
-                        children: [
-                          _CountButton(
+                    AppGlassSurface(
+                      borderRadius: 11,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 8),
+                        child: Row(
+                          children: [
+                          _HelperCountButton(
                             icon: Icons.remove_rounded,
                             enabled: count > 1,
                             onTap: () => setState(() => count--),
@@ -243,48 +170,46 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                                       fontWeight: FontWeight.w800,
                                       fontSize: 20,
                                     )),
-                                Text(
-                                    _isCargoVehicle
-                                        ? 'camiones'
-                                        : _isShippingVehicle
-                                        ? _vehicleNamePlural
-                                        : 'Vehículos',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontFamily: 'Figtree',
-                                      fontSize: 10,
-                                    )),
+                                const Text(
+                                  'Ayudantes',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Figtree',
+                                    fontSize: 10,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                          _CountButton(
+                          _HelperCountButton(
                             icon: Icons.add_rounded,
-                            enabled: count < _maxVehicles,
+                            enabled: count < _maxHelpers,
                             filled: true,
                             onTap: () => setState(() => count++),
                           ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 9),
-                    GlassCard(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 11, vertical: 10),
-                      borderRadius: 12,
-                      color: const Color(0x30254A82),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
+                    AppGlassSurface(
+                      borderRadius: 11,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 11, vertical: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
                           Image.asset(
                             'assets/img/HomeCliente/taxi_passenger_info.png',
                             width: 18,
                             height: 18,
                           ),
                           const SizedBox(width: 9),
-                          Expanded(
+                          const Expanded(
                             child: Text.rich(
                               TextSpan(
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
                                   fontFamily: 'Figtree',
                                   fontSize: 9,
@@ -292,23 +217,19 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                                 ),
                                 children: [
                                   TextSpan(
-                                    text: _isCargoVehicle
-                                        ? 'Recuerda, los camiones que agregues son del mismo tipo que seleccionaste previamente.\n'
-                                        : _isShippingVehicle
-                                        ? 'Recuerda, los $_vehicleNamePlural que agregues son del mismo tipo que seleccionaste previamente.\n'
-                                        : 'Recuerda, los vehículos que agregues, son del mismo tipo que seleccionaste previamente.\n',
-                                  ),
+                                      text:
+                                          'Recomendamos según el tamaño de tu carga.\n'),
                                   TextSpan(
-                                    text:
-                                        'Ejemplo: ${widget.vehicleType} = cantidad de $_pluralVehicleName',
-                                    style: const TextStyle(
+                                    text: '2 Ayudantes',
+                                    style: TextStyle(
                                         fontWeight: FontWeight.w800),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -330,13 +251,9 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: const Color(0x40FFFFFF)),
                       ),
-                      child: Text(
-                        _isCargoVehicle
-                            ? 'Añadir camiones'
-                            : _isShippingVehicle
-                            ? 'Añadir $_vehicleNamePlural'
-                            : 'Añadir vehículos',
-                        style: const TextStyle(
+                      child: const Text(
+                        'Agregar ayudantes',
+                        style: TextStyle(
                           color: Colors.white,
                           fontFamily: 'Figtree',
                           fontWeight: FontWeight.w800,
@@ -355,8 +272,8 @@ class _MasVehiculosScreenState extends State<MasVehiculosScreen> {
   }
 }
 
-class _CountButton extends StatelessWidget {
-  const _CountButton({
+class _HelperCountButton extends StatelessWidget {
+  const _HelperCountButton({
     required this.icon,
     required this.enabled,
     required this.onTap,

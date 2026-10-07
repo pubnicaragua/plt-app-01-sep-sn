@@ -187,7 +187,8 @@ class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
                     _TruckHeader(onBack: () => Navigator.of(context).pop()),
                     const SizedBox(height: 12),
                     const _TruckSectionTitle(
-                      icon: 'assets/img/HomeCliente/carga_carroceria_cerrado.png',
+                      icon:
+                          'assets/img/HomeCliente/carga_carroceria_cerrado.png',
                       title: 'Selecciona tu camión',
                       subtitle: 'Según las características de tu carga.',
                     ),
@@ -198,7 +199,7 @@ class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
-                      height: 136,
+                      height: 180,
                       child: Row(
                         children: [
                           for (var index = 0;
@@ -220,7 +221,8 @@ class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
                     ),
                     const SizedBox(height: 14),
                     const _TruckSectionTitle(
-                      icon: 'assets/img/HomeCliente/carga_carroceria_cerrado.png',
+                      icon:
+                          'assets/img/HomeCliente/carga_carroceria_cerrado.png',
                       title: 'Tipo de carrocería',
                       subtitle:
                           'Selecciona el tipo de camión que mejor se adapte a tu carga.',
@@ -229,7 +231,8 @@ class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
                     _TruckFeatureRow(
                       options: bodyTypes,
                       selected: selectedBody,
-                      onChanged: (value) => setState(() => selectedBody = value),
+                      onChanged: (value) =>
+                          setState(() => selectedBody = value),
                     ),
                     const SizedBox(height: 14),
                     const _TruckSectionTitle(
@@ -384,7 +387,7 @@ class _SelectedTruckCard extends StatelessWidget {
         selected: true,
         fillColor: const Color(0x3A0A2C73),
         child: SizedBox(
-          height: 258,
+          height: 318,
           child: Column(
             children: [
               Padding(
@@ -393,49 +396,31 @@ class _SelectedTruckCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(truck.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 12,
+                              fontSize: 13,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'Figtree')),
                     ),
-                    Flexible(
+                    const SizedBox(width: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
                       child: Container(
-                        margin: const EdgeInsets.only(right: 8),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                            horizontal: 9, vertical: 5),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: .18),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(13),
                         ),
                         child: Text(truck.badge,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 7.5,
+                                fontSize: 8,
                                 fontFamily: 'Figtree')),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: accentBlue,
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle, color: Colors.white, size: 11),
-                          SizedBox(width: 4),
-                          Text('Seleccionado',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w800,
-                                  fontFamily: 'Figtree')),
-                        ],
                       ),
                     ),
                   ],
@@ -448,95 +433,115 @@ class _SelectedTruckCard extends StatelessWidget {
                   errorBuilder: (_, __, ___) => const Icon(
                     Icons.local_shipping_rounded,
                     color: Colors.white54,
-                    size: 72,
+                    size: 86,
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: .14),
-                  borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(18)),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                            child: _Metric(
-                                text: truck.capacity,
-                                asset:
-                                    'assets/img/HomeCliente/envio_weight.png')),
-                        Expanded(
-                            child: _Metric(
-                                text: truck.volume,
-                                asset:
-                                    'assets/img/HomeCliente/envio_package.png')),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Image.asset(
-                            'assets/img/HomeCliente/carga_precio_cotizacion.png',
-                            width: 18,
-                            height: 18,
-                            errorBuilder: (_, __, ___) => const Icon(
-                              Icons.attach_money_rounded,
-                              color: Colors.white,
-                              size: 18,
-                            )),
-                        const SizedBox(width: 6),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 7),
+                child: AppGlassSurface(
+                  borderRadius: 17,
+                  fillColor: const Color(0x3A0A2C73),
+                  child: SizedBox(
+                    height: 96,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(13, 9, 9, 8),
+                      child: Column(
+                        children: [
+                          Row(
                             children: [
-                              Text('Precio por cotización',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w800,
-                                      fontFamily: 'Figtree')),
-                              SizedBox(height: 1),
-                              Text(
-                                  'El precio se confirmará según tu ruta, tipo de carga y disponibilidad.',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 6.5,
-                                      fontFamily: 'Figtree')),
+                              Expanded(
+                                  child: _Metric(
+                                      text: truck.capacity,
+                                      fontSize: 10,
+                                      iconSize: 16,
+                                      asset:
+                                          'assets/img/HomeCliente/envio_weight.png')),
+                              Expanded(
+                                  child: _Metric(
+                                      text: truck.volume,
+                                      fontSize: 10,
+                                      iconSize: 16,
+                                      asset:
+                                          'assets/img/HomeCliente/envio_package.png')),
                             ],
                           ),
-                        ),
-                        TextButton.icon(
-                          onPressed: onDetails,
-                          style: TextButton.styleFrom(
-                            backgroundColor: accentBlue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 9),
-                            minimumSize: const Size(0, 26),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            shape: const StadiumBorder(),
+                          Container(
+                            height: 1,
+                            margin: const EdgeInsets.symmetric(vertical: 6),
+                            color: Colors.white.withValues(alpha: .18),
                           ),
-                          icon: const SizedBox.shrink(),
-                          label: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('Ver detalles',
-                                  style: TextStyle(
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w800,
-                                      fontFamily: 'Figtree')),
-                              SizedBox(width: 3),
-                              Icon(Icons.chevron_right_rounded, size: 13),
-                            ],
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Image.asset(
+                                    'assets/img/HomeCliente/carga_precio_cotizacion.png',
+                                    width: 20,
+                                    height: 20,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                          Icons.attach_money_rounded,
+                                          color: Colors.white,
+                                          size: 20,
+                                        )),
+                                const SizedBox(width: 6),
+                                const Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Precio por cotización',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                              fontFamily: 'Figtree')),
+                                      SizedBox(height: 1),
+                                      Text(
+                                          'El precio se confirmará según tu ruta, tipo de carga y disponibilidad.',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 7.5,
+                                              fontFamily: 'Figtree')),
+                                    ],
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: onDetails,
+                                  style: TextButton.styleFrom(
+                                    backgroundColor: accentBlue,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10),
+                                    minimumSize: const Size(0, 28),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    shape: const StadiumBorder(),
+                                  ),
+                                  icon: const SizedBox.shrink(),
+                                  label: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text('Ver detalles',
+                                          style: TextStyle(
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.w800,
+                                              fontFamily: 'Figtree')),
+                                      SizedBox(width: 3),
+                                      Icon(Icons.chevron_right_rounded,
+                                          size: 13),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -546,26 +551,36 @@ class _SelectedTruckCard extends StatelessWidget {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({required this.text, this.asset});
+  const _Metric({
+    required this.text,
+    this.asset,
+    this.fontSize = 8,
+    this.iconSize = 14,
+  });
 
   final String text;
   final String? asset;
+  final double fontSize;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) => Row(
         children: [
           if (asset != null)
-            Image.asset(asset!, width: 14, height: 14, fit: BoxFit.contain)
+            Image.asset(asset!,
+                width: iconSize, height: iconSize, fit: BoxFit.contain)
           else
-            const Icon(Icons.inventory_2_outlined,
-                color: Colors.white, size: 14),
-          const SizedBox(width: 5),
+            Icon(Icons.inventory_2_outlined,
+                color: Colors.white, size: iconSize),
+          SizedBox(width: iconSize == 14 ? 5 : 6),
           Flexible(
             child: Text(text,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white70, fontSize: 8, fontFamily: 'Figtree')),
+                style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: fontSize,
+                    fontFamily: 'Figtree')),
           ),
         ],
       );
@@ -588,77 +603,116 @@ class _TruckMiniCard extends StatelessWidget {
         child: AppGlassSurface(
           borderRadius: 11,
           selected: selected,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 5),
+          child: SizedBox(
+            height: 180,
             child: Column(
               children: [
                 Expanded(
-                  child: Image.asset(
-                    truck.asset,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.local_shipping_rounded,
-                      color: Colors.white54,
-                      size: 34,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Image.asset(
+                            truck.asset,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.local_shipping_rounded,
+                              color: Colors.white54,
+                              size: 34,
+                            ),
+                          ),
+                        ),
+                        Text(truck.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'Figtree')),
+                        const SizedBox(height: 2),
+                        Text(truck.badge,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 6.5,
+                                fontFamily: 'Figtree')),
+                      ],
                     ),
                   ),
                 ),
-                Text(truck.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Figtree')),
-                const SizedBox(height: 2),
-                Text(truck.badge,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 6.5,
-                        fontFamily: 'Figtree')),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _Metric(
-                          text: truck.capacity,
-                          asset: 'assets/img/HomeCliente/envio_weight.png'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: AppGlassSurface(
+                    borderRadius: 10,
+                    selected: selected,
+                    fillColor: const Color(0x3A0A2C73),
+                    child: SizedBox(
+                      height: 54,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: _Metric(
+                                  text: truck.capacity,
+                                  fontSize: 6.5,
+                                  iconSize: 11,
+                                  asset:
+                                      'assets/img/HomeCliente/envio_weight.png'),
+                            ),
+                            Container(
+                              height: 1,
+                              color: Colors.white.withValues(alpha: .14),
+                            ),
+                            Expanded(
+                              child: _Metric(
+                                  text: truck.volume,
+                                  fontSize: 6.5,
+                                  iconSize: 11,
+                                  asset:
+                                      'assets/img/HomeCliente/envio_package.png'),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    Expanded(
-                      child: _Metric(
-                          text: truck.volume,
-                          asset: 'assets/img/HomeCliente/envio_package.png'),
-                    ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 2),
-                SizedBox(
-                  height: 19,
-                  child: TextButton.icon(
-                    onPressed: onTap,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor: accentBlue,
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      shape: const StadiumBorder(),
-                    ),
-                    icon: const SizedBox.shrink(),
-                    label: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Ver detalles',
-                            style: TextStyle(
-                                fontSize: 6.5,
-                                fontWeight: FontWeight.w800,
-                                fontFamily: 'Figtree')),
-                        SizedBox(width: 2),
-                        Icon(Icons.chevron_right_rounded, size: 11),
-                      ],
+                const SizedBox(height: 3),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 5),
+                  child: FractionallySizedBox(
+                    widthFactor: .78,
+                    child: SizedBox(
+                      height: 21,
+                      child: TextButton.icon(
+                        onPressed: onTap,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: accentBlue,
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: const StadiumBorder(),
+                        ),
+                        icon: const SizedBox.shrink(),
+                        label: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('Ver detalles',
+                                style: TextStyle(
+                                    fontSize: 6.5,
+                                    fontWeight: FontWeight.w800,
+                                    fontFamily: 'Figtree')),
+                            SizedBox(width: 2),
+                            Icon(Icons.chevron_right_rounded, size: 11),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -695,8 +749,11 @@ class _TruckFeatureRow extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Image.asset(options[index].asset,
-                            width: 23, height: 23, fit: BoxFit.contain),
+                        Opacity(
+                          opacity: options[index].label == selected ? 1 : .68,
+                          child: Image.asset(options[index].asset,
+                              width: 23, height: 23, fit: BoxFit.contain),
+                        ),
                         const SizedBox(height: 4),
                         Text(options[index].label,
                             style: const TextStyle(

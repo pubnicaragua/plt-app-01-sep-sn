@@ -1,12 +1,13 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 
 import '../core/api_client.dart';
+import '../core/shipment_flow.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
+import '../widgets/sprite_truck_animation.dart';
+import 'envio_asignado.dart';
 import 'seguimiento_pedido.dart';
 
 class CrearEnvio3 extends StatefulWidget {
@@ -196,13 +197,27 @@ class _CrearEnvio3State extends State<CrearEnvio3>
               : 0,
         );
       }
-      await Future<void>.delayed(const Duration(milliseconds: 2200));
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => SeguimientoPedido(trip: created),
-        ),
+      final isScheduledFlow =
+          widget.isScheduled || widget.serviceType == 'Programado';
+      final completionRoute = completionRouteForShipment(
+        isScheduled: isScheduledFlow,
       );
+      if (completionRoute == ShipmentCompletionRoute.assignment) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => EnvioAsignadoScreen(trip: created)),
+        );
+        return;
+      }
+      if (completionRoute == ShipmentCompletionRoute.tracking) {
+        if (widget.serviceMode == 'Taxi Privado') {
+          await Future<void>.delayed(const Duration(milliseconds: 2200));
+          if (!mounted) return;
+        }
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => SeguimientoPedido(trip: created)),
+        );
+      }
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -221,6 +236,8 @@ class _CrearEnvio3State extends State<CrearEnvio3>
 
   @override
   Widget build(BuildContext context) {
+    final isCargoFlow =
+        widget.serviceMode != 'Taxi Privado' && widget.transport == 'Camión';
     return Scaffold(
       backgroundColor: navy,
       body: Container(
@@ -282,25 +299,30 @@ class _CrearEnvio3State extends State<CrearEnvio3>
                           SizedBox(
                             height: imageHeight,
                             width: double.infinity,
-                            child: AnimatedBuilder(
-                              animation: characterAnimation,
-                              builder: (context, child) {
-                                final value = characterAnimation.value;
-                                return Transform.translate(
-                                  offset: Offset(0, -5 * value),
-                                  child: Transform.scale(
-                                    scale: .98 + value * .02,
-                                    child: child,
+                            child: isCargoFlow
+                                ? const SpriteTruckAnimation(
+                                    asset:
+                                        'assets/img/EstadosCrearEnvio/camion_asignacion_sprite.png',
+                                  )
+                                : AnimatedBuilder(
+                                    animation: characterAnimation,
+                                    builder: (context, child) {
+                                      final value = characterAnimation.value;
+                                      return Transform.translate(
+                                        offset: Offset(0, -5 * value),
+                                        child: Transform.scale(
+                                          scale: .98 + value * .02,
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                    child: Image.asset(
+                                      'assets/img/EstadosCrearEnvio/crearenvio.png',
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) =>
+                                          const SizedBox.shrink(),
+                                    ),
                                   ),
-                                );
-                              },
-                              child: Image.asset(
-                                'assets/img/EstadosCrearEnvio/crearenvio.png',
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) =>
-                                    const SizedBox.shrink(),
-                              ),
-                            ),
                           ),
                           const SizedBox(height: 15),
                           Container(
@@ -326,9 +348,7 @@ class _CrearEnvio3State extends State<CrearEnvio3>
                                   ),
                                 if (!failed) const SizedBox(width: 5),
                                 Text(
-                                  failed
-                                      ? 'No se pudo asignar'
-                                      : 'Buscando conductor...',
+                                  failed ? 'No se pudo crear' : 'Buscando conductor...',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 9.5,

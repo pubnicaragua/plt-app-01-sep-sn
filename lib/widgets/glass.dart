@@ -44,6 +44,28 @@ class AppBackground extends StatelessWidget {
   }
 }
 
+class EstadoBackground extends StatelessWidget {
+  const EstadoBackground({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset(
+          'assets/img/EstadosCrearEnvio/fondo_estados.png',
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+        ),
+        Container(color: const Color(0x22030E35)),
+        child,
+      ],
+    );
+  }
+}
+
 class _ResponsiveBackgroundArtwork extends StatelessWidget {
   const _ResponsiveBackgroundArtwork();
 

@@ -1004,9 +1004,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             children: [
               Icon(Icons.access_time_rounded, color: Colors.white, size: 17),
               SizedBox(width: 7),
-              Text(isTrip || isCargo
-                  ? 'Horario de recogida'
-                  : 'Horario de envío',
+              Text(
+                  isTrip || isCargo
+                      ? 'Horario de recogida'
+                      : 'Horario de envío',
                   style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -1067,9 +1068,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                 elevation: 0,
                 shape: const StadiumBorder(),
               ),
-              child: Text(isTrip || isCargo
-                  ? 'Confirmar y continuar'
-                  : 'Programar envío',
+              child: Text(
+                  isTrip || isCargo
+                      ? 'Confirmar y continuar'
+                      : 'Programar envío',
                   style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
@@ -1574,6 +1576,7 @@ class _CargaDetailsPage extends StatefulWidget {
 class _CargaDetailsState extends State<_CargaDetailsPage> {
   int weight = 10;
   String weightUnit = 'kg';
+  late final TextEditingController weightController;
   int bundles = 1;
   late String transport;
   late final TextEditingController origin;
@@ -1602,6 +1605,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
     destination = TextEditingController(text: widget.startDestination);
     recipient = TextEditingController(text: widget.startRecipientName);
     phone = TextEditingController(text: widget.startRecipientPhone);
+    weightController = TextEditingController(text: '$weight');
     originPlace = widget.startOriginPlace;
     destinationPlace = widget.startDestinationPlace;
     if (origin.text.isEmpty && widget.startOriginPlace == null) {
@@ -1641,6 +1645,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
     origin.dispose();
     destination.dispose();
     description.dispose();
+    weightController.dispose();
     invoicePrice.dispose();
     invoiceNumber.dispose();
     recipient.dispose();
@@ -1736,6 +1741,17 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
   double get _weightKg =>
       weightUnit == 'lb' ? weight / 2.20462 : weight.toDouble();
 
+  void _updateWeight(int value) {
+    final next = value.clamp(1, 9999).toInt();
+    setState(() {
+      weight = next;
+      weightController.value = TextEditingValue(
+        text: '$next',
+        selection: TextSelection.collapsed(offset: '$next'.length),
+      );
+    });
+  }
+
   String get _recommended {
     if (_weightKg <= 20) return 'Moto';
     if (_weightKg <= 200) return 'Vehículo';
@@ -1829,23 +1845,49 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                     RoundStep(
                       icon: Icons.remove,
                       onTap:
-                          weight > 1 ? () => setState(() => weight -= 1) : null,
+                          weight > 1 ? () => _updateWeight(weight - 1) : null,
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      child: Text(
-                        '$weight $weightUnit',
+                    const SizedBox(width: 14),
+                    SizedBox(
+                      width: 122,
+                      child: TextField(
+                        controller: weightController,
+                        textAlign: TextAlign.center,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: false,
+                        ),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 26,
                           fontWeight: FontWeight.w800,
                           fontFamily: 'Figtree',
                         ),
+                        decoration: InputDecoration(
+                          suffixText: weightUnit,
+                          suffixStyle: const TextStyle(
+                            color: Color(0xFFB9D4FF),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Figtree',
+                          ),
+                          hintText: '0',
+                          hintStyle: const TextStyle(color: Colors.white54),
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
+                        onChanged: (value) {
+                          final parsed = int.tryParse(value);
+                          if (parsed != null && parsed > 0) {
+                            setState(
+                                () => weight = parsed.clamp(1, 9999).toInt());
+                          }
+                        },
                       ),
                     ),
+                    const SizedBox(width: 14),
                     RoundStep(
                       icon: Icons.add,
-                      onTap: () => setState(() => weight += 1),
+                      onTap: () => _updateWeight(weight + 1),
                     ),
                   ],
                 ),
@@ -1862,7 +1904,12 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                                 ? (weight * 2.20462).round().clamp(1, 9999)
                                 : (weight / 2.20462).round().clamp(1, 9999);
                             weightUnit = unit;
-                            weight = converted;
+                            weight = converted.toInt();
+                            weightController.value = TextEditingValue(
+                              text: '$weight',
+                              selection: TextSelection.collapsed(
+                                  offset: '$weight'.length),
+                            );
                           });
                         },
                         child: Container(
@@ -1904,22 +1951,6 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                       fontFamily: 'Figtree',
                     ),
                   ),
-                ),
-                const SizedBox(height: 13),
-                const Text(
-                  'Atajo:',
-                  style: TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 10.5,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Wrap(
-                  spacing: 9,
-                  children: [
-                    for (final value in [5, 10, 40, 405]) _weightChip(value),
-                  ],
                 ),
                 const SizedBox(height: 18),
                 Divider(color: Colors.white.withValues(alpha: .14), height: 1),
@@ -2039,7 +2070,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'DESCRIPCIÓN DEL PAQUETE',
+                  'TIPO DE PAQUETE',
                   style: TextStyle(
                     color: Color(0xFFB9D4FF),
                     fontSize: 9.5,
@@ -2050,7 +2081,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                 ),
                 const SizedBox(height: 8),
                 GlassField(
-                  label: 'Descripción',
+                  label: 'Escribe qué vas a transportar',
                   hint: 'Ej. Electrónicos, ropa, documentos…',
                   controller: description,
                 ),

@@ -15,6 +15,7 @@ import 'crear_envio3.dart';
 import 'establecer_destinos.dart';
 import 'ida_vuelta.dart';
 import 'ida_vuelta_envio.dart';
+import 'mas_ayudantes.dart';
 import 'mas_vehiculos.dart';
 
 class CrearEnvio2 extends StatefulWidget {
@@ -102,8 +103,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   bool fragile = false;
   bool needsAdditional = false;
   String additionalOption = '';
+  final Set<String> additionalOptions = <String>{};
   IdaVueltaConfig? returnTripConfig;
   int additionalVehicleCount = 2;
+  int additionalHelperCount = 2;
   final additionalStops = <TripStop>[];
   String paymentStatus = 'Pendiente';
   String paymentMethod = 'Efectivo';
@@ -308,13 +311,15 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           ].join(' · ')
         : '';
     final extraDescription = [
+      if (widget.serviceMode == 'Taxi Privado')
+        'Tipo de vehículo: ${widget.taxiVariant}',
       if (widget.transport == 'Camión') 'Tipo de camión: $truckType',
       if (widget.initialTruckBodyType?.trim().isNotEmpty == true)
         'Carrocería: ${widget.initialTruckBodyType}',
       if (widget.initialTruckEquipment?.trim().isNotEmpty == true)
         'Equipamiento: ${widget.initialTruckEquipment}',
       if (needsAdditional)
-        'Servicio adicional: ${_selectedOption?.title ?? additionalOption}',
+        'Servicios adicionales: ${_selectedAdditionalItems.map((item) => item.title).join(', ')}',
       if (_returnTripDetails != null) _returnTripDetails!,
       if (shippingDetails.isNotEmpty) shippingDetails,
       if (additionalNotes.text.trim().isNotEmpty)
@@ -340,6 +345,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             paymentStatus: paymentStatus,
             paymentMethod: paymentMethod,
             serviceMode: widget.serviceMode,
+            vehicleVariant: widget.taxiVariant,
             passengerCount: passengerCount,
             returnTrip: _isReturnTrip,
             stops: List<TripStop>.of(additionalStops),
@@ -424,11 +430,35 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   ServiceCatalogItem? _serviceOption(String code, {String? fallbackTitle}) =>
       _findOption(_serviceCode(code), fallbackTitle: fallbackTitle);
 
-  ServiceCatalogItem? get _selectedOption {
-    if (additionalOption.isEmpty) return null;
-    final item = _findOption(additionalOption);
-    if (item != null) return item;
-    if (additionalOption == 'cargo-refrigerated') {
+  bool _isAdditionalSelected(String code) {
+    final resolvedCode = _serviceCode(code);
+    final item = _findOption(resolvedCode);
+    return additionalOptions.contains(item?.code ?? resolvedCode);
+  }
+
+  void _setAdditionalSelected(String code, bool selected) {
+    setState(() {
+      if (selected) {
+        additionalOptions.add(code);
+      } else {
+        additionalOptions.remove(code);
+      }
+      needsAdditional = additionalOptions.isNotEmpty;
+      additionalOption = additionalOptions.isEmpty
+          ? ''
+          : additionalOptions.first;
+    });
+  }
+
+  List<ServiceCatalogItem> get _selectedAdditionalItems {
+    return additionalOptions
+        .map((code) => _findOption(code) ?? _localAdditionalOption(code))
+        .whereType<ServiceCatalogItem>()
+        .toList();
+  }
+
+  ServiceCatalogItem? _localAdditionalOption(String code) {
+    if (code == 'cargo-refrigerated') {
       return const ServiceCatalogItem(
         id: 'local-cargo-refrigerated',
         code: 'cargo-refrigerated',
@@ -444,7 +474,23 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         sortOrder: 70,
       );
     }
-    if (additionalOption == 'taxi-more-vehicles') {
+    if (code == 'cargo-more-trucks') {
+      return const ServiceCatalogItem(
+        id: 'local-cargo-more-trucks',
+        code: 'cargo-more-trucks',
+        kind: 'option',
+        service: 'cargo',
+        transport: 'Camión',
+        title: '¿Más camiones?',
+        description: 'Escoge tu producto',
+        priceCs: 40,
+        currency: 'USD',
+        pricingMode: 'flat',
+        enabled: true,
+        sortOrder: 60,
+      );
+    }
+    if (code == 'taxi-more-vehicles') {
       return const ServiceCatalogItem(
         id: 'local-taxi-more-vehicles',
         code: 'taxi-more-vehicles',
@@ -463,7 +509,16 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     return null;
   }
 
-  bool get _isReturnTrip => additionalOption.contains('round-trip');
+  ServiceCatalogItem? get _selectedOption {
+    if (additionalOption.isEmpty) return null;
+    final item = _findOption(additionalOption) ??
+        _localAdditionalOption(additionalOption);
+    if (item != null) return item;
+    return null;
+  }
+
+  bool get _isReturnTrip =>
+      additionalOptions.any((code) => code.contains('round-trip'));
 
   String? get _returnTripDetails {
     final config = returnTripConfig;
@@ -510,23 +565,26 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   List<TripOptionSelection> get _selectedTripOptions {
-    final item = _selectedOption;
-    if (item == null) return const [];
-    final descriptions = [
-      if (item.description.trim().isNotEmpty) item.description.trim(),
-      if (_returnTripDetails != null) _returnTripDetails!,
-      if (item.code.endsWith('more-vehicles'))
-        'Cantidad de vehículos adicionales: $additionalVehicleCount · '
-            'Tipo: ${widget.serviceMode == 'Envíos' ? widget.transport : widget.taxiVariant}',
-    ];
     return [
-      TripOptionSelection(
-        code: item.code,
-        title: item.title,
-        description: descriptions.isEmpty ? null : descriptions.join(' · '),
-        priceCs: item.priceCs,
-        currency: item.currency,
-      ),
+      for (final item in _selectedAdditionalItems)
+        TripOptionSelection(
+          code: item.code,
+          title: item.title,
+          description: [
+            if (item.description.trim().isNotEmpty) item.description.trim(),
+            if (item.code.contains('round-trip') &&
+                _returnTripDetails != null)
+              _returnTripDetails!,
+            if (item.code.endsWith('more-vehicles') ||
+                item.code.endsWith('more-trucks'))
+              'Cantidad de ${item.code.endsWith('more-trucks') ? 'camiones' : 'vehículos'} adicionales: $additionalVehicleCount · '
+                  'Tipo: ${widget.serviceMode == 'Envíos' ? widget.transport : widget.taxiVariant}',
+            if (item.code == 'cargo-helper')
+              'Cantidad de ayudantes: $additionalHelperCount',
+          ].join(' · '),
+          priceCs: item.priceCs,
+          currency: item.currency,
+        ),
     ];
   }
 
@@ -579,6 +637,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   Future<void> _selectAdditional(String code, String fallbackTitle) async {
     final resolvedCode = _serviceCode(code);
     final item = _findOption(resolvedCode, fallbackTitle: fallbackTitle);
+    final selectedCode = item?.code ?? resolvedCode;
+    if (additionalOptions.contains(selectedCode)) {
+      _setAdditionalSelected(selectedCode, false);
+      if (selectedCode.contains('round-trip')) returnTripConfig = null;
+      if (selectedCode.contains('multiple-stops')) additionalStops.clear();
+      return;
+    }
     if (code.contains('round-trip') && widget.serviceMode == 'Taxi Privado') {
       final result = await Navigator.of(context).push<IdaVueltaConfig>(
         MaterialPageRoute(
@@ -591,8 +656,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       );
       if (!mounted || result == null) return;
       setState(() {
+        additionalOptions.add(selectedCode);
         needsAdditional = true;
-        additionalOption = item?.code ?? resolvedCode;
+        additionalOption = selectedCode;
         returnTripConfig = result;
       });
       return;
@@ -608,19 +674,23 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       );
       if (!mounted || result == null) return;
       setState(() {
+        additionalOptions.add(selectedCode);
         needsAdditional = true;
-        additionalOption = item?.code ?? resolvedCode;
+        additionalOption = selectedCode;
         returnTripConfig = result;
       });
       return;
     }
-    if (code.contains('more-vehicles') &&
-        (widget.serviceMode == 'Taxi Privado' ||
-            widget.serviceMode == 'Envíos')) {
+    if ((code.contains('more-vehicles') &&
+            (widget.serviceMode == 'Taxi Privado' ||
+                widget.serviceMode == 'Envíos')) ||
+        (code.contains('more-trucks') && widget.transport == 'Camión')) {
       final result = await Navigator.of(context).push<int>(
         MaterialPageRoute(
           builder: (_) => MasVehiculosScreen(
-            vehicleType: widget.serviceMode == 'Envíos'
+            vehicleType: widget.transport == 'Camión'
+                ? truckType
+                : widget.serviceMode == 'Envíos'
                 ? (widget.transport == 'Moto' ? 'Moto' : 'Auto')
                 : widget.taxiVariant,
             initialCount: additionalVehicleCount,
@@ -629,16 +699,36 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       );
       if (!mounted || result == null) return;
       setState(() {
+        additionalOptions.add(selectedCode);
         needsAdditional = true;
-        additionalOption = item?.code ?? resolvedCode;
+        additionalOption = selectedCode;
         additionalVehicleCount = result;
         returnTripConfig = null;
       });
       return;
     }
+    if (code == 'cargo-helper' && widget.transport == 'Camión') {
+      final result = await Navigator.of(context).push<int>(
+        MaterialPageRoute(
+          builder: (_) => MasAyudantesScreen(
+            initialCount: additionalHelperCount,
+          ),
+        ),
+      );
+      if (!mounted || result == null) return;
+      setState(() {
+        additionalOptions.add(selectedCode);
+        needsAdditional = true;
+        additionalOption = selectedCode;
+        additionalHelperCount = result;
+        returnTripConfig = null;
+      });
+      return;
+    }
     setState(() {
+      additionalOptions.add(selectedCode);
       needsAdditional = true;
-      additionalOption = item?.code ?? resolvedCode;
+      additionalOption = selectedCode;
       if (!code.contains('round-trip')) returnTripConfig = null;
     });
     if (code.contains('multiple-stops')) {
@@ -1011,7 +1101,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
               ),
             ),
             TextButton(
-              onPressed: _showTaxiServicesSheet,
+              onPressed: _showAdditionalServicesSheet,
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
                 backgroundColor: accentBlue,
@@ -1051,10 +1141,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: roundTrip?.title ?? 'Ida y vuelta',
                 subtitle: roundTrip?.description ?? 'Regreso al origen',
                 price: _priceLabel(roundTrip, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (roundTrip?.code ??
-                            _serviceCode('delivery-round-trip')),
+                selected: _isAdditionalSelected('delivery-round-trip'),
                 enabled: true,
                 onTap: () =>
                     _selectAdditional('delivery-round-trip', 'Ida y vuelta'),
@@ -1069,10 +1156,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: vehicleLabel,
                 subtitle: vehicleSubtitle,
                 price: _priceLabel(moreVehicles, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (moreVehicles?.code ??
-                            _serviceCode('delivery-more-vehicles')),
+                selected: _isAdditionalSelected('delivery-more-vehicles'),
                 enabled: true,
                 onTap: () =>
                     _selectAdditional('delivery-more-vehicles', vehicleLabel),
@@ -1089,10 +1173,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: multiple?.title ?? 'Varios destinos',
                 subtitle: multiple?.description ?? 'Múltiples destinos',
                 price: _priceLabel(multiple, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (multiple?.code ??
-                            _serviceCode('delivery-multiple-stops')),
+                selected: _isAdditionalSelected('delivery-multiple-stops'),
                 enabled: true,
                 onTap: () => _selectAdditional(
                     'delivery-multiple-stops', 'Varios destinos'),
@@ -1129,8 +1210,6 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         fallbackTitle: 'Varios destinos');
     final roundTrip =
         _serviceOption('delivery-round-trip', fallbackTitle: 'Ida y vuelta');
-    final insurance =
-        _serviceOption('delivery-insurance', fallbackTitle: 'Seguro');
     final waiting =
         _serviceOption('delivery-waiting', fallbackTitle: 'Espera en destino');
     return Column(
@@ -1163,10 +1242,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: multiple?.title ?? 'Varios destinos',
                 price: _priceLabel(multiple, 'C\$40 USD'),
                 subtitle: multiple?.description ?? 'Múltiples destinos',
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (multiple?.code ??
-                            _serviceCode('delivery-multiple-stops')),
+                selected: _isAdditionalSelected('delivery-multiple-stops'),
                 enabled: true,
                 large: true,
                 onTap: () => _selectAdditional(
@@ -1180,10 +1256,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: roundTrip?.title ?? 'Ida y vuelta',
                 subtitle: roundTrip?.description ?? 'Regreso al origen',
                 price: _priceLabel(roundTrip, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (roundTrip?.code ??
-                            _serviceCode('delivery-round-trip')),
+                selected: _isAdditionalSelected('delivery-round-trip'),
                 enabled: true,
                 large: true,
                 onTap: () =>
@@ -1197,28 +1270,11 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           children: [
             Expanded(
               child: _AdditionalOptionCard(
-                iconAsset: 'assets/img/HomeCliente/adicional_seguro.png',
-                title: insurance?.title ?? 'Seguro',
-                subtitle: insurance?.description ?? 'Asegura tu producto',
-                price: _priceLabel(insurance, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (insurance?.code ?? _serviceCode('delivery-insurance')),
-                enabled: true,
-                large: true,
-                onTap: () => _selectAdditional('delivery-insurance', 'Seguro'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _AdditionalOptionCard(
                 iconAsset: 'assets/img/HomeCliente/adicional_espera.png',
                 title: waiting?.title ?? 'Espera en destino',
                 subtitle: waiting?.description ?? '6 horas espera',
                 price: _priceLabel(waiting, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (waiting?.code ?? _serviceCode('delivery-waiting')),
+                selected: _isAdditionalSelected('delivery-waiting'),
                 enabled: true,
                 large: true,
                 onTap: () =>
@@ -1236,8 +1292,6 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         fallbackTitle: 'Varios destinos');
     final roundTrip =
         _serviceOption('delivery-round-trip', fallbackTitle: 'Ida y vuelta');
-    final insurance =
-        _serviceOption('delivery-insurance', fallbackTitle: 'Seguro');
     final moreVehicles = _serviceOption('delivery-more-vehicles',
         fallbackTitle: 'Más vehículos');
     return Column(
@@ -1252,7 +1306,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
               ),
             ),
             TextButton(
-              onPressed: _showTaxiServicesSheet,
+              onPressed: _showAdditionalServicesSheet,
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
                 backgroundColor: accentBlue,
@@ -1290,27 +1344,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: multiple?.title ?? 'Varios destinos',
                 subtitle: multiple?.description ?? 'Múltiples destinos',
                 price: _priceLabel(multiple, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (multiple?.code ??
-                            _serviceCode('delivery-multiple-stops')),
+                selected: _isAdditionalSelected('delivery-multiple-stops'),
                 enabled: true,
                 onTap: () => _selectAdditional(
                     'delivery-multiple-stops', 'Varios destinos'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _AdditionalOptionCard(
-                iconAsset: 'assets/img/HomeCliente/adicional_seguro.png',
-                title: insurance?.title ?? 'Seguro',
-                subtitle: insurance?.description ?? 'Asegura a los pasajeros',
-                price: _priceLabel(insurance, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (insurance?.code ?? _serviceCode('delivery-insurance')),
-                enabled: true,
-                onTap: () => _selectAdditional('delivery-insurance', 'Seguro'),
               ),
             ),
           ],
@@ -1324,10 +1361,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: roundTrip?.title ?? 'Ida y vuelta',
                 subtitle: roundTrip?.description ?? 'Regreso al origen',
                 price: _priceLabel(roundTrip, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (roundTrip?.code ??
-                            _serviceCode('delivery-round-trip')),
+                selected: _isAdditionalSelected('delivery-round-trip'),
                 enabled: true,
                 onTap: () =>
                     _selectAdditional('delivery-round-trip', 'Ida y vuelta'),
@@ -1340,10 +1374,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: moreVehicles?.title ?? 'Más vehículos',
                 subtitle: moreVehicles?.description ?? 'A una misma ruta',
                 price: _priceLabel(moreVehicles, 'US\$40'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (moreVehicles?.code ??
-                            _serviceCode('delivery-more-vehicles')),
+                selected: _isAdditionalSelected('delivery-more-vehicles'),
                 enabled: true,
                 onTap: () => _selectAdditional(
                     'delivery-more-vehicles', 'Más vehículos'),
@@ -1355,7 +1386,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     );
   }
 
-  void _showTaxiServicesSheet() {
+  void _showAdditionalServicesSheet({bool cargo = false}) {
     var dismissing = false;
     showGeneralDialog<void>(
       context: context,
@@ -1384,25 +1415,75 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 }
                 return false;
               },
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: DraggableScrollableSheet(
-                  initialChildSize: .53,
-                  minChildSize: .035,
-                  maxChildSize: .82,
-                  expand: false,
-                  builder: (context, scrollController) {
+              child: StatefulBuilder(
+                builder: (context, updateSheet) => Align(
+                  alignment: Alignment.bottomCenter,
+                  child: DraggableScrollableSheet(
+                    initialChildSize: .53,
+                    minChildSize: .035,
+                    maxChildSize: .82,
+                    expand: false,
+                    builder: (context, scrollController) {
+                    final isCargo = cargo || widget.transport == 'Camión';
                     final isShipping = widget.serviceMode == 'Envíos';
+                    final helper = _findOption('cargo-helper',
+                        fallbackTitle: 'Ayudante');
+                    final cargoMultiple = _findOption(
+                        'cargo-multiple-stops',
+                        fallbackTitle: 'Varios destinos');
+                    final cargoRoundTrip = _findOption('cargo-round-trip',
+                        fallbackTitle: 'Ida y vuelta');
+                    final cargoMoreTrucks = _findOption('cargo-more-trucks',
+                        fallbackTitle: '¿Más camiones?');
                     final multiple = _serviceOption('delivery-multiple-stops',
                         fallbackTitle: 'Varios destinos');
                     final roundTrip = _serviceOption('delivery-round-trip',
                         fallbackTitle: 'Ida y vuelta');
-                    final insurance = _serviceOption('delivery-insurance',
-                        fallbackTitle: 'Seguro');
                     final moreVehicles = _serviceOption(
                         'delivery-more-vehicles',
                         fallbackTitle: 'Más vehículos');
                     final options = [
+                      if (isCargo) ...[
+                        (
+                          icon: 'assets/img/HomeCliente/carga_ayudante.png',
+                          title: helper?.title ?? 'Ayudante',
+                          subtitle: helper?.description ??
+                              'Para carga y descarga',
+                          price: _priceLabel(helper, 'C\$40 USD'),
+                          code: helper?.code ?? 'cargo-helper',
+                          fallback: 'Ayudante',
+                        ),
+                        (
+                          icon:
+                              'assets/img/HomeCliente/adicional_destinos.png',
+                          title: cargoMultiple?.title ?? 'Varios destinos',
+                          subtitle: cargoMultiple?.description ??
+                              'Múltiples destinos',
+                          price: _priceLabel(cargoMultiple, 'C\$40 USD'),
+                          code: cargoMultiple?.code ?? 'cargo-multiple-stops',
+                          fallback: 'Varios destinos',
+                        ),
+                        (
+                          icon: 'assets/img/HomeCliente/adicional_regreso.png',
+                          title: cargoRoundTrip?.title ?? 'Ida y vuelta',
+                          subtitle: cargoRoundTrip?.description ??
+                              'Regreso al origen',
+                          price: _priceLabel(cargoRoundTrip, 'C\$40 USD'),
+                          code: cargoRoundTrip?.code ?? 'cargo-round-trip',
+                          fallback: 'Ida y vuelta',
+                        ),
+                        (
+                          icon:
+                              'assets/img/HomeCliente/fluent_vehicle-truck-16-filled.png',
+                          title: cargoMoreTrucks?.title ?? '¿Más camiones?',
+                          subtitle: cargoMoreTrucks?.description ??
+                              'Escoge tu producto',
+                          price: _priceLabel(cargoMoreTrucks, 'C\$40 USD'),
+                          code: cargoMoreTrucks?.code ?? 'cargo-more-trucks',
+                          fallback: '¿Más camiones?',
+                        ),
+                      ],
+                      if (!isCargo) ...[
                       (
                         icon: 'assets/img/HomeCliente/adicional_destinos.png',
                         title: multiple?.title ?? 'Varios destinos',
@@ -1421,17 +1502,6 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                             _serviceCode('delivery-round-trip'),
                         fallback: 'Ida y vuelta',
                       ),
-                      if (!isShipping)
-                        (
-                          icon: 'assets/img/HomeCliente/adicional_seguro.png',
-                          title: insurance?.title ?? 'Seguro',
-                          subtitle: insurance?.description ??
-                              'Asegura a los pasajeros',
-                          price: _priceLabel(insurance, 'C\$40 USD'),
-                          code: insurance?.code ??
-                              _serviceCode('delivery-insurance'),
-                          fallback: 'Seguro',
-                        ),
                       (
                         icon: isShipping
                             ? (widget.transport == 'Moto'
@@ -1450,6 +1520,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                             _serviceCode('delivery-more-vehicles'),
                         fallback: 'Más vehículos',
                       ),
+                      ],
                     ];
 
                     return ClipRRect(
@@ -1516,13 +1587,17 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                                       title: option.title,
                                       subtitle: option.subtitle,
                                       price: option.price,
-                                      selected: needsAdditional &&
-                                          additionalOption == option.code,
+                                      selected: _isAdditionalSelected(option.code),
                                       enabled: true,
                                       large: true,
                                       cardRadius: 13,
-                                      onTap: () => _selectAdditional(
-                                          option.code, option.fallback),
+                                      onTap: () async {
+                                        await _selectAdditional(
+                                            option.code, option.fallback);
+                                        if (context.mounted) {
+                                          updateSheet(() {});
+                                        }
+                                      },
                                     );
                                   },
                                 ),
@@ -1532,7 +1607,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                         ),
                       ),
                     );
-                  },
+                    },
+                  ),
                 ),
               ),
             ),
@@ -1548,11 +1624,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
         _findOption('cargo-multiple-stops', fallbackTitle: 'Varios destinos');
     final roundTrip =
         _findOption('cargo-round-trip', fallbackTitle: 'Ida y vuelta');
-    final waiting =
-        _findOption('cargo-waiting', fallbackTitle: 'Espera en destino');
-    final insurance = _findOption('cargo-insurance', fallbackTitle: 'Seguro');
-    final refrigerated =
-        _findOption('cargo-refrigerated', fallbackTitle: 'Refrigerado');
+    final moreTrucks =
+        _findOption('cargo-more-trucks', fallbackTitle: '¿Más camiones?');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1564,12 +1637,27 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: '¿Necesitas algo adicional?',
               ),
             ),
-            const Text(
-              '(Opcional)',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontFamily: 'Figtree',
+            TextButton(
+              onPressed: () => _showAdditionalServicesSheet(cargo: true),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: accentBlue,
+                padding: const EdgeInsets.symmetric(horizontal: 11),
+                minimumSize: const Size(96, 32),
+                shape: const StadiumBorder(),
+                textStyle: const TextStyle(
+                  fontFamily: 'Figtree',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Ver todos'),
+                  SizedBox(width: 3),
+                  Icon(Icons.chevron_right_rounded, size: 16),
+                ],
               ),
             ),
           ],
@@ -1583,8 +1671,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: helper?.title ?? 'Ayudante',
                 subtitle: helper?.description ?? 'Para carga y descarga',
                 price: _priceLabel(helper, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption == (helper?.code ?? 'cargo-helper'),
+                selected: _isAdditionalSelected('cargo-helper'),
                 enabled: true,
                 onTap: () => _selectAdditional('cargo-helper', 'Ayudante'),
               ),
@@ -1596,9 +1683,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: multiple?.title ?? 'Varios destinos',
                 subtitle: multiple?.description ?? 'Múltiples destinos',
                 price: _priceLabel(multiple, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (multiple?.code ?? 'cargo-multiple-stops'),
+                selected: _isAdditionalSelected('cargo-multiple-stops'),
                 enabled: true,
                 onTap: () => _selectAdditional(
                     'cargo-multiple-stops', 'Varios destinos'),
@@ -1615,8 +1700,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 title: roundTrip?.title ?? 'Ida y vuelta',
                 subtitle: roundTrip?.description ?? 'Regreso al origen',
                 price: _priceLabel(roundTrip, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption == (roundTrip?.code ?? 'cargo-round-trip'),
+                selected: _isAdditionalSelected('cargo-round-trip'),
                 enabled: true,
                 onTap: () =>
                     _selectAdditional('cargo-round-trip', 'Ida y vuelta'),
@@ -1625,92 +1709,15 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             const SizedBox(width: 8),
             Expanded(
               child: _AdditionalOptionCard(
-                iconAsset: 'assets/img/HomeCliente/adicional_espera.png',
-                title: waiting?.title ?? 'Espera en destino',
-                subtitle: waiting?.description ?? '6 horas espera',
-                price: _priceLabel(waiting, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption == (waiting?.code ?? 'cargo-waiting'),
-                enabled: true,
-                onTap: () =>
-                    _selectAdditional('cargo-waiting', 'Espera en destino'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _AdditionalOptionCard(
-                iconAsset: 'assets/img/HomeCliente/adicional_seguro.png',
-                title: insurance?.title ?? 'Seguro',
-                subtitle: insurance?.description ?? 'Asegura tu producto',
-                price: _priceLabel(insurance, 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption == (insurance?.code ?? 'cargo-insurance'),
-                enabled: true,
-                onTap: () => _selectAdditional('cargo-insurance', 'Seguro'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _AdditionalOptionCard(
-                iconAsset: 'assets/img/HomeCliente/carga_mas_camiones.png',
-                title:
-                    _findOption('cargo-more-trucks')?.title ?? '¿Más camiones?',
-                subtitle: _findOption('cargo-more-trucks')?.description ??
-                    'Escoge tu producto',
-                price:
-                    _priceLabel(_findOption('cargo-more-trucks'), 'C\$40 USD'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (_findOption('cargo-more-trucks')?.code ??
-                            'cargo-more-trucks'),
+                iconAsset:
+                    'assets/img/HomeCliente/fluent_vehicle-truck-16-filled.png',
+                title: moreTrucks?.title ?? '¿Más camiones?',
+                subtitle: moreTrucks?.description ?? 'Escoge tu producto',
+                price: _priceLabel(moreTrucks, 'C\$40 USD'),
+                selected: _isAdditionalSelected('cargo-more-trucks'),
                 enabled: true,
                 onTap: () =>
                     _selectAdditional('cargo-more-trucks', '¿Más camiones?'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _AdditionalOptionCard(
-                iconAsset: 'assets/img/HomeCliente/refrigerado.png',
-                title: refrigerated?.title ?? 'Refrigerado',
-                subtitle: refrigerated?.description ?? 'Para productos fríos',
-                price: _priceLabel(refrigerated, 'US\$40'),
-                selected: needsAdditional &&
-                    additionalOption ==
-                        (refrigerated?.code ?? 'cargo-refrigerated'),
-                enabled: true,
-                onTap: () =>
-                    _selectAdditional('cargo-refrigerated', 'Refrigerado'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _AdditionalOptionCard(
-                title: 'Próximamente...',
-                subtitle: '',
-                price: '',
-                selected: false,
-                enabled: false,
-                showLeadingIcon: false,
-                showSelectionControl: false,
-                hideMeta: true,
-                centerTitle: true,
-                disabledOpacity: .72,
-                titleStyle: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-                onTap: () {},
               ),
             ),
           ],

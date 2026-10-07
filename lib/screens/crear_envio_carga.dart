@@ -55,9 +55,25 @@ class CrearEnvioCarga extends StatefulWidget {
 class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
   final picker = ImagePicker();
   final photos = <Uint8List>[];
-  String packageType = 'Ropa y artículos personales';
+  String packageType = '';
   int weight = 2;
   bool fragile = false;
+  late final TextEditingController packageTypeController;
+  late final TextEditingController weightController;
+
+  @override
+  void initState() {
+    super.initState();
+    packageTypeController = TextEditingController();
+    weightController = TextEditingController(text: '$weight');
+  }
+
+  @override
+  void dispose() {
+    packageTypeController.dispose();
+    weightController.dispose();
+    super.dispose();
+  }
 
   bool get isTruck => widget.transport == 'Camión';
 
@@ -72,53 +88,6 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
       : widget.transport == 'Moto'
           ? 'assets/img/HomeCliente/figma_moto.png'
           : 'assets/img/HomeCliente/figma_auto.png';
-
-  Future<void> _choosePackageType() async {
-    const options = [
-      'Ropa y artículos personales',
-      'Documentos',
-      'Alimentos',
-      'Electrónicos',
-      'Otro',
-    ];
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: const Color(0xFF102A68),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: Text(
-                'Tipo de paquete',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-              ),
-            ),
-            for (final option in options)
-              ListTile(
-                title: Text(option,
-                    style: const TextStyle(
-                        color: Colors.white, fontFamily: 'Figtree')),
-                trailing: option == packageType
-                    ? const Icon(Icons.check_circle, color: cyan)
-                    : null,
-                onTap: () => Navigator.pop(context, option),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (selected != null && mounted) setState(() => packageType = selected);
-  }
 
   Future<void> _pickPhotos() async {
     final selected =
@@ -144,7 +113,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           estimatedShipping: widget.estimatedShipping,
           weight: weight,
           bundles: 1,
-          packageType: packageType,
+          packageType: packageTypeController.text.trim(),
           initialProductPhotos: List<Uint8List>.of(photos),
           initialFragile: fragile,
           originRefs: widget.originRefs,
@@ -194,26 +163,91 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
                     _CargaField(
                       icon: 'assets/img/HomeCliente/envio_package.png',
                       label: 'Tipo de paquete',
-                      value: packageType,
-                      onTap: _choosePackageType,
+                      value: '',
+                      content: TextField(
+                        controller: packageTypeController,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15.5,
+                            fontFamily: 'Figtree'),
+                        decoration: const InputDecoration(
+                          hintText: 'Escribe qué vas a transportar',
+                          hintStyle: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontFamily: 'Figtree'),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        onChanged: (value) => packageType = value,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     _CargaField(
                       icon: 'assets/img/HomeCliente/envio_weight.png',
                       label: 'Peso aproximado',
-                      value: '$weight kg',
+                      value: '',
+                      content: SizedBox(
+                        width: 105,
+                        child: TextField(
+                          controller: weightController,
+                          textAlign: TextAlign.left,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: false),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15.5,
+                              fontFamily: 'Figtree'),
+                          decoration: const InputDecoration(
+                            hintText: 'Escribe el peso',
+                            hintStyle: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                                fontFamily: 'Figtree'),
+                            suffixText: 'kg',
+                            suffixStyle: TextStyle(
+                                color: Color(0xFFB9D4FF),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'Figtree'),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onChanged: (value) {
+                            final parsed = int.tryParse(value);
+                            if (parsed != null && parsed > 0) {
+                              setState(() =>
+                                  weight = parsed.clamp(1, 9999).toInt());
+                            }
+                          },
+                        ),
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _SmallAction(
                             icon: Icons.remove,
                             onTap: weight > 1
-                                ? () => setState(() => weight--)
+                                ? () {
+                                    final next = weight - 1;
+                                    setState(() {
+                                      weight = next;
+                                      weightController.text = '$next';
+                                    });
+                                  }
                                 : null,
                           ),
                           _SmallAction(
                             icon: Icons.add,
-                            onTap: () => setState(() => weight++),
+                            onTap: () {
+                              final next = (weight + 1).clamp(1, 9999).toInt();
+                              setState(() {
+                                weight = next;
+                                weightController.text = '$next';
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -405,12 +439,14 @@ class _CargaField extends StatelessWidget {
       required this.label,
       required this.value,
       this.onTap,
-      this.trailing});
+      this.trailing,
+      this.content});
   final String icon;
   final String label;
   final String value;
   final VoidCallback? onTap;
   final Widget? trailing;
+  final Widget? content;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -434,13 +470,14 @@ class _CargaField extends StatelessWidget {
                               fontWeight: FontWeight.w800,
                               fontFamily: 'Figtree')),
                       const SizedBox(height: 2),
-                      Text(value,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontFamily: 'Figtree')),
+                      content ??
+                          Text(value,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontFamily: 'Figtree')),
                     ],
                   ),
                 ),

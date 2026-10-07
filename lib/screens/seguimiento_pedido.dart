@@ -12,11 +12,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
 import '../core/notifications.dart';
+import '../core/trip_routing.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'finalizar_viaje.dart';
 import 'inicio.dart';
+import 'envio_asignado.dart';
 
 class SeguimientoPedido extends StatefulWidget {
   const SeguimientoPedido(
@@ -66,6 +68,17 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     super.initState();
     _prevStatus = widget.trip.status;
     tracking = apiClient.getTracking(widget.trip.id);
+    if (isScheduledBeforeStart(widget.trip, DateTime.now())) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => EnvioAsignadoScreen(trip: widget.trip),
+          ),
+        );
+      });
+      return;
+    }
     unawaited(_loadDriverMarkerIcon(widget.trip.transport));
     unawaited(_loadRouteMarkerIcons());
     _loadRoadRoute();
@@ -411,17 +424,23 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     // El API entrega la geometría vial calculada en servidor cuando la clave
     // de Google está configurada en Render. Así app y web comparten la misma
     // ruta y el ETA se actualiza desde la posición viva del conductor.
-    var routingOriginLat = tripPoints.first.latitude;
-    var routingOriginLng = tripPoints.first.longitude;
+    var routePoints = tripPoints;
     try {
       final serverTracking = await tracking;
-      if (trip.serviceMode != 'Taxi Privado') {
-        routingOriginLat =
-            serverTracking.driverLocation?.latitude ?? routingOriginLat;
-        routingOriginLng =
-            serverTracking.driverLocation?.longitude ?? routingOriginLng;
+      final driver = serverTracking.driverLocation;
+      final isTaxi = trip.serviceMode == 'Taxi Privado';
+      if (!isTaxi && driver != null) {
+        final driverPoint = LatLng(driver.latitude, driver.longitude);
+        final routeAfterPickup = !shouldRouteThroughPickup(
+          serverTracking.status,
+        );
+        routePoints = [
+          driverPoint,
+          ...(routeAfterPickup ? tripPoints.skip(1) : tripPoints),
+        ];
       }
-      if (trip.serviceMode != 'Taxi Privado' &&
+      if (!isTaxi &&
+          !shouldRouteThroughPickup(serverTracking.status) &&
           serverTracking.routeProvider == 'google' &&
           serverTracking.route.length >= 2) {
         final points = serverTracking.route
@@ -451,16 +470,16 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       defaultValue: 'AIzaSyCMwxArmM-BEJuxgbjOiON8KdH_IsNH1F4',
     );
     final requests = <Uri>[];
-    final origin = tripPoints.first;
-    final destination = tripPoints.last;
-    final intermediate = tripPoints
-        .sublist(1, tripPoints.length - 1)
+    final origin = routePoints.first;
+    final destination = routePoints.last;
+    final intermediate = routePoints
+        .sublist(1, routePoints.length - 1)
         .map((point) => '${point.latitude},${point.longitude}')
         .join('|');
     if (mapsKey.isNotEmpty) {
       requests
           .add(Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
-        'origin': '$routingOriginLat,$routingOriginLng',
+        'origin': '${origin.latitude},${origin.longitude}',
         'destination': '${destination.latitude},${destination.longitude}',
         'mode': 'driving',
         'alternatives': 'false',
@@ -469,7 +488,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         if (intermediate.isNotEmpty) 'waypoints': intermediate,
       }));
     }
-    final osrmCoordinates = tripPoints
+    final osrmCoordinates = routePoints
         .map((point) => '${point.longitude},${point.latitude}')
         .join(';');
     requests.add(Uri.https(
@@ -765,10 +784,12 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             ),
             DraggableScrollableSheet(
               initialChildSize: isTaxi ? .48 : .59,
-              minChildSize: isTaxi ? .45 : .56,
+              minChildSize: .12,
               maxChildSize: .90,
               snap: true,
-              snapSizes: isTaxi ? const [.48, .90] : const [.59, .90],
+              snapSizes: isTaxi
+                  ? const [.12, .48, .90]
+                  : const [.12, .59, .90],
               builder: (context, scrollController) {
                 return ClipRRect(
                   borderRadius: const BorderRadius.vertical(

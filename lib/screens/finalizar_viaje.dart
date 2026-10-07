@@ -64,8 +64,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
     final isTaxi = trip.serviceMode == 'Taxi Privado';
 
     return Scaffold(
-      body: AppBackground(
-        darken: 0,
+      body: EstadoBackground(
         child: Stack(
           children: [
             // CAPA 1: La mascota gigante en el fondo (detrás de las tarjetas)
