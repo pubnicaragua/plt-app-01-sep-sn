@@ -567,23 +567,6 @@ class _FragileReturnRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 GestureDetector(
-                  onTap: () => onChanged(true),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: value ? accentBlue : Colors.transparent,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: const Text('Sí',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Figtree')),
-                  ),
-                ),
-                GestureDetector(
                   onTap: () => onChanged(false),
                   child: Container(
                     padding:
@@ -593,6 +576,23 @@ class _FragileReturnRow extends StatelessWidget {
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: const Text('No',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree')),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => onChanged(true),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: value ? accentBlue : Colors.transparent,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Text('Sí',
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 10,

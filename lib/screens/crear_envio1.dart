@@ -581,6 +581,9 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             destinationPlace: destinationPlace,
             transport: transport,
             estimatedShipping: _priceFor(transport),
+            distanceKm: _distanceKm,
+            routeDistanceKm: _routeDistanceKm,
+            rate: _rateFor(transport),
             originRefs: widget.startOriginRefs,
             destinationRefs: widget.startDestinationRefs,
             recipientName: widget.startRecipientName,
@@ -1590,7 +1593,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
   final invoiceNumber = TextEditingController(text: 'FAC-1003');
   late final TextEditingController recipient;
   late final TextEditingController phone;
-  bool fragile = true;
+  bool fragile = false;
   String currency = 'C\$';
   String paymentStatus = 'Pendiente';
   String paymentMethod = 'Efectivo';
@@ -2172,19 +2175,56 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                           ],
                         ),
                       ),
-                      Text(
-                        fragile ? 'SÍ' : 'NO',
-                        style: const TextStyle(
-                          color: cyan,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: 'Figtree',
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: glassBorder),
                         ),
-                      ),
-                      Switch.adaptive(
-                        value: fragile,
-                        onChanged: (value) => setState(() => fragile = value),
-                        activeThumbColor: cyan,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () => setState(() => fragile = false),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 9, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: !fragile
+                                      ? accentBlue
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Text('NO',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        fontFamily: 'Figtree')),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => setState(() => fragile = true),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 9, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: fragile
+                                      ? accentBlue
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Text('SÍ',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        fontFamily: 'Figtree')),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -2611,8 +2651,8 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                   fragile: fragile,
                   invoiceNumber: invoiceNumber.text.trim(),
                   invoiceAmount: _invoiceAmountCs,
-                  paymentStatus: paymentStatus,
-                  paymentMethod: paymentMethod,
+                  productPaymentStatus: paymentStatus,
+                  productPaymentMethod: paymentMethod,
                   productPhotos: productPhotos,
                   invoicePhoto: invoicePhoto,
                   originRefs: widget.startOriginRefs,

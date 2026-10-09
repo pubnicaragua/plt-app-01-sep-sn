@@ -21,6 +21,8 @@ class EstablecerDestinos extends StatefulWidget {
     required this.destinationPlace,
     this.initialStops = const [],
     this.collectRecipientDetails = false,
+    this.initialRecipientName = '',
+    this.initialRecipientPhone = '',
   });
 
   final String origin;
@@ -29,6 +31,8 @@ class EstablecerDestinos extends StatefulWidget {
   final PlaceSuggestion? destinationPlace;
   final List<TripStop> initialStops;
   final bool collectRecipientDetails;
+  final String initialRecipientName;
+  final String initialRecipientPhone;
 
   @override
   State<EstablecerDestinos> createState() => _EstablecerDestinosState();
@@ -40,6 +44,8 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
   late String destination;
   PlaceSuggestion? originPlace;
   PlaceSuggestion? destinationPlace;
+  String? destinationRecipientName;
+  String? destinationRecipientPhone;
   GoogleMapController? mapController;
 
   @override
@@ -50,32 +56,91 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
     destination = widget.destination;
     originPlace = widget.originPlace;
     destinationPlace = widget.destinationPlace;
+    destinationRecipientName = widget.initialRecipientName;
+    destinationRecipientPhone = widget.initialRecipientPhone;
   }
 
-  List<_RoutePoint> get points => [
-        _RoutePoint('Origen', origin, originPlace),
-        ...stops.map((stop) => _RoutePoint(
-              '${stop.order}',
-              stop.address,
-              PlaceSuggestion(
-                placeId: stop.id ?? 'stop-${stop.order}',
-                description: stop.address,
-                main: stop.label,
-                secondary: stop.address,
-                latitude: stop.latitude,
-                longitude: stop.longitude,
-              ),
-            )),
-        _RoutePoint('Destino final', destination, destinationPlace),
-      ];
+  List<_RoutePoint> get points {
+    final routePoints = <_RoutePoint>[
+      _RoutePoint('Origen', origin, originPlace),
+    ];
 
-  Future<void> _editEndpoint({required bool isOrigin}) async {
+    if (stops.isEmpty) {
+      routePoints.add(
+        _RoutePoint('1', destination, destinationPlace, isFinal: true),
+      );
+      return routePoints;
+    }
+
+    final fixedDestination = stops.first;
+    routePoints.add(
+      _RoutePoint(
+        '1',
+        fixedDestination.address,
+        PlaceSuggestion(
+          placeId: fixedDestination.id ?? 'stop-${fixedDestination.order}',
+          description: fixedDestination.address,
+          main: fixedDestination.label,
+          secondary: fixedDestination.address,
+          latitude: fixedDestination.latitude,
+          longitude: fixedDestination.longitude,
+        ),
+      ),
+    );
+
+    for (final stop in stops.skip(1)) {
+      routePoints.add(
+        _RoutePoint(
+          '${stop.order}',
+          stop.address,
+          PlaceSuggestion(
+            placeId: stop.id ?? 'stop-${stop.order}',
+            description: stop.address,
+            main: stop.label,
+            secondary: stop.address,
+            latitude: stop.latitude,
+            longitude: stop.longitude,
+          ),
+        ),
+      );
+    }
+
+    routePoints.add(
+      _RoutePoint(
+        '${stops.length + 1}',
+        destination,
+        destinationPlace,
+        isFinal: true,
+      ),
+    );
+    return routePoints;
+  }
+
+  Future<void> _editEndpoint({
+    required bool isOrigin,
+    bool isFixedDestination = false,
+  }) async {
     final updated = await Navigator.of(context).push<PlaceSuggestion>(
       MaterialPageRoute(
         builder: (_) => _EditRoutePointPage(
           isOrigin: isOrigin,
-          initialAddress: isOrigin ? origin : destination,
-          initialPlace: isOrigin ? originPlace : destinationPlace,
+          initialAddress: isOrigin
+              ? origin
+              : isFixedDestination && stops.isNotEmpty
+                  ? stops.first.address
+                  : destination,
+          initialPlace: isOrigin
+              ? originPlace
+              : isFixedDestination && stops.isNotEmpty
+                  ? PlaceSuggestion(
+                      placeId: stops.first.id ?? 'stop-${stops.first.order}',
+                      description: stops.first.address,
+                      main: stops.first.label,
+                      secondary: stops.first.address,
+                      latitude: stops.first.latitude,
+                      longitude: stops.first.longitude,
+                    )
+                  : destinationPlace,
         ),
       ),
     );
@@ -84,6 +149,19 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
       if (isOrigin) {
         origin = updated.description;
         originPlace = updated;
+      } else if (isFixedDestination && stops.isNotEmpty) {
+        final fixed = stops.first;
+        stops[0] = TripStop(
+          id: fixed.id,
+          label: fixed.label,
+          address: updated.description,
+          order: fixed.order,
+          latitude: updated.latitude,
+          longitude: updated.longitude,
+          refs: fixed.refs,
+          recipientName: fixed.recipientName,
+          recipientPhone: fixed.recipientPhone,
+        );
       } else {
         destination = updated.description;
         destinationPlace = updated;
@@ -92,27 +170,35 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
   }
 
   Future<void> _addDestination() async {
-    final destination = await Navigator.of(context).push<_AddedDestination>(
+    final addedDestination =
+        await Navigator.of(context).push<_AddedDestination>(
       MaterialPageRoute(
         builder: (_) => _AddDestinationPage(
           collectRecipientDetails: widget.collectRecipientDetails,
         ),
       ),
     );
-    if (!mounted || destination == null) return;
+    if (!mounted || addedDestination == null) return;
     setState(() {
+      // El destino que ya estaba seleccionado conserva la primera posición.
+      // El nuevo pasa a ser el destino final, para que cada parada se mantenga
+      // en el mismo orden en que fue agregada.
       stops.add(
         TripStop(
           id: 'stop-${DateTime.now().microsecondsSinceEpoch}',
           label: 'Destino adicional',
-          address: destination.place.description,
-          latitude: destination.place.latitude,
-          longitude: destination.place.longitude,
+          address: destination,
+          latitude: destinationPlace?.latitude,
+          longitude: destinationPlace?.longitude,
           order: stops.length + 1,
-          recipientName: destination.recipientName,
-          recipientPhone: destination.recipientPhone,
+          recipientName: destinationRecipientName,
+          recipientPhone: destinationRecipientPhone,
         ),
       );
+      destination = addedDestination.place.description;
+      destinationPlace = addedDestination.place;
+      destinationRecipientName = addedDestination.recipientName;
+      destinationRecipientPhone = addedDestination.recipientPhone;
     });
     _fitMap();
   }
@@ -315,22 +401,45 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
                                   index++)
                                 Column(
                                   key: ValueKey(
-                                      'route-point-${points[index].place?.placeId ?? points[index].label}'),
+                                      'route-point-$index-${points[index].place?.placeId ?? points[index].label}'),
                                   children: [
                                     _RouteRow(
                                       point: points[index],
-                                      removable: index > 0 &&
-                                          index < points.length - 1,
-                                      showMap: index == points.length - 1,
+                                      removable: stops.isNotEmpty && index >= 2,
+                                      showMap: stops.isNotEmpty
+                                          ? index == 1
+                                          : index == points.length - 1,
                                       onMap: _openMap,
                                       showEdit: index == 0 ||
-                                          index == points.length - 1,
-                                      onEdit: () =>
-                                          _editEndpoint(isOrigin: index == 0),
-                                      onRemove: index > 0 &&
-                                              index < points.length - 1
+                                          (stops.isNotEmpty && index == 1) ||
+                                          (stops.isEmpty &&
+                                              index == points.length - 1),
+                                      onEdit: () => _editEndpoint(
+                                        isOrigin: index == 0,
+                                        isFixedDestination: stops.isNotEmpty &&
+                                            index == 1,
+                                      ),
+                                      onRemove: stops.isNotEmpty && index >= 2
                                           ? () => setState(() {
-                                                stops.removeAt(index - 1);
+                                                if (index == points.length - 1) {
+                                                  final previous = stops.removeLast();
+                                                  destination = previous.address;
+                                                  destinationPlace = PlaceSuggestion(
+                                                    placeId: previous.id ??
+                                                        'stop-${previous.order}',
+                                                    description: previous.address,
+                                                    main: previous.label,
+                                                    secondary: previous.address,
+                                                    latitude: previous.latitude,
+                                                    longitude: previous.longitude,
+                                                  );
+                                                  destinationRecipientName =
+                                                      previous.recipientName;
+                                                  destinationRecipientPhone =
+                                                      previous.recipientPhone;
+                                                } else {
+                                                  stops.removeAt(index - 1);
+                                                }
                                                 for (var i = 0;
                                                     i < stops.length;
                                                     i++) {
@@ -392,11 +501,12 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
 }
 
 class _RoutePoint {
-  const _RoutePoint(this.label, this.name, this.place);
+  const _RoutePoint(this.label, this.name, this.place, {this.isFinal = false});
 
   final String label;
   final String name;
   final PlaceSuggestion? place;
+  final bool isFinal;
 }
 
 class RouteDestinationsResult {
@@ -504,7 +614,7 @@ class _RouteRow extends StatelessWidget {
               width: 27,
               height: 27,
             )
-          else if (point.label == 'Destino final')
+          else if (point.isFinal)
             Image.asset(
               'assets/img/HomeCliente/route_destination_flag.png',
               width: 27,
@@ -909,6 +1019,16 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
   }
 
   Future<List<LatLng>> _loadRoadRoute() async {
+    if (coordinates.length < 2) return const [];
+
+    // Solicita una sola ruta con todos los puntos para que el proveedor
+    // mantenga una geometría continua y no se dibujen tramos duplicados
+    // cuando dos destinos comparten parte del mismo camino.
+    final combinedRoute = await _loadCombinedRoadRoute();
+    if (combinedRoute.length >= 2) return combinedRoute;
+
+    // Respaldo para cuando el proveedor no acepte varios puntos en una
+    // misma solicitud.
     final route = <LatLng>[];
     for (var index = 0; index < coordinates.length - 1; index++) {
       final leg =
@@ -917,6 +1037,83 @@ class _DestinationsMapViewState extends State<_DestinationsMapView> {
       route.addAll(route.isEmpty ? leg : leg.skip(1));
     }
     return route;
+  }
+
+  Future<List<LatLng>> _loadCombinedRoadRoute() async {
+    final requests = <Uri>[];
+    const mapsKey = String.fromEnvironment(
+      'GOOGLE_MAPS_API_KEY',
+      defaultValue: 'AIzaSyCMwxArmM-BEJuxgbjOiON8KdH_IsNH1F4',
+    );
+    final first = coordinates.first;
+    final last = coordinates.last;
+    final waypoints = coordinates
+        .sublist(1, coordinates.length - 1)
+        .map((point) => '${point.latitude},${point.longitude}')
+        .join('|');
+
+    if (!kIsWeb && mapsKey.isNotEmpty) {
+      requests.add(Uri.https(
+        'maps.googleapis.com',
+        '/maps/api/directions/json',
+        {
+          'origin': '${first.latitude},${first.longitude}',
+          'destination': '${last.latitude},${last.longitude}',
+          if (waypoints.isNotEmpty) 'waypoints': 'optimize:false|$waypoints',
+          'mode': 'driving',
+          'alternatives': 'false',
+          'key': mapsKey,
+        },
+      ));
+    }
+
+    requests.add(Uri.https(
+      'router.project-osrm.org',
+      '/route/v1/driving/${coordinates.map((point) => '${point.longitude},${point.latitude}').join(';')}',
+      {'overview': 'full', 'geometries': 'geojson', 'steps': 'false'},
+    ));
+
+    for (final uri in requests) {
+      try {
+        final response = await http.get(uri);
+        if (response.statusCode < 200 || response.statusCode >= 300) continue;
+        final payload = jsonDecode(response.body);
+
+        if (uri.host == 'maps.googleapis.com') {
+          if (payload is! Map || payload['status'] != 'OK') continue;
+          final routes = payload['routes'];
+          final route =
+              routes is List && routes.isNotEmpty ? routes.first : null;
+          final overview = route is Map ? route['overview_polyline'] : null;
+          final encoded =
+              overview is Map ? overview['points']?.toString() : null;
+          if (encoded != null && encoded.isNotEmpty) {
+            final result = _decodePolyline(encoded);
+            if (result.length >= 2) return result;
+          }
+        } else {
+          if (payload is! Map || payload['code'] != 'Ok') continue;
+          final routes = payload['routes'];
+          final route =
+              routes is List && routes.isNotEmpty ? routes.first : null;
+          final geometry = route is Map ? route['geometry'] : null;
+          final values = geometry is Map ? geometry['coordinates'] : null;
+          if (values is! List) continue;
+          final result = values
+              .whereType<List>()
+              .where((pair) => pair.length >= 2)
+              .map((pair) => LatLng(
+                    (pair[1] as num).toDouble(),
+                    (pair[0] as num).toDouble(),
+                  ))
+              .toList();
+          if (result.length >= 2) return result;
+        }
+      } catch (_) {
+        // Intenta el proveedor siguiente y, después, el respaldo por tramos.
+      }
+    }
+    return const [];
   }
 
   Future<List<LatLng>> _loadRoadLeg(LatLng from, LatLng to) async {

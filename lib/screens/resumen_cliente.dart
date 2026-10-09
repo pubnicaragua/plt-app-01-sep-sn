@@ -11,6 +11,7 @@ String weeklyChartValueLabel(int total, String unit) {
         RegExp(r'\B(?=(\d{3})+(?!\d))'),
         (match) => ',',
       );
+  if (unit == 'C\$') return 'C\$$formatted';
   return '$unit: $formatted';
 }
 
@@ -26,6 +27,29 @@ DateTime? summaryDateForTrip(Trip trip, DateTime now) {
   final raw = scheduled ? trip.scheduledDate : trip.date;
   final parsed = DateTime.tryParse(raw ?? '');
   return parsed == null ? null : DateUtils.dateOnly(parsed.toLocal());
+}
+
+int summaryTripCount(Iterable<Trip> trips) => trips.length;
+
+double summaryInvoiceTotal(Iterable<Trip> trips) => trips.fold<double>(
+      0,
+      (sum, trip) => sum + (trip.invoiceAmountCs ?? 0),
+    );
+
+double summaryInvoiceTotalInRange(
+  Iterable<Trip> trips,
+  DateTimeRange range,
+  DateTime now,
+) {
+  return trips.where((trip) {
+    final date = summaryDateForTrip(trip, now);
+    return date != null &&
+        !date.isBefore(range.start) &&
+        date.isBefore(range.end);
+  }).fold<double>(
+    0,
+    (sum, trip) => sum + (trip.invoiceAmountCs ?? 0),
+  );
 }
 
 class ResumenCliente extends StatefulWidget {
@@ -72,18 +96,13 @@ class _ResumenClienteState extends State<ResumenCliente> {
                     .where((trip) => !{'cancelado', 'anulado'}
                         .contains(trip.status.toLowerCase()))
                     .toList();
-                final completed = items.where(_counts).toList();
                 final selectedTrips = tab == 0
                     ? activity.where((trip) => !_isTrip(trip)).toList()
                     : tab == 1
                         ? activity.where(_isTrip).toList()
                         : activity;
-                final selectedCompleted = tab == 0
-                    ? completed.where((trip) => !_isTrip(trip)).toList()
-                    : tab == 1
-                        ? completed.where(_isTrip).toList()
-                        : completed;
-                final today = DateUtils.dateOnly(DateTime.now());
+                final summaryNow = DateTime.now();
+                final today = DateUtils.dateOnly(summaryNow);
                 final tomorrow = today.add(const Duration(days: 1));
                 final weekStart =
                     today.subtract(Duration(days: today.weekday - 1));
@@ -102,6 +121,16 @@ class _ResumenClienteState extends State<ResumenCliente> {
                     DateTimeRange(start: weekStart, end: weekEnd));
                 final monthCount = _countIn(selectedTrips,
                     DateTimeRange(start: monthStart, end: monthEnd));
+                final todayRange = DateTimeRange(start: today, end: tomorrow);
+                final weekRange = DateTimeRange(start: weekStart, end: weekEnd);
+                final monthRange =
+                    DateTimeRange(start: monthStart, end: monthEnd);
+                final todayInvoiceAmount = summaryInvoiceTotalInRange(
+                    selectedTrips, todayRange, summaryNow);
+                final weekInvoiceAmount = summaryInvoiceTotalInRange(
+                    selectedTrips, weekRange, summaryNow);
+                final monthInvoiceAmount = summaryInvoiceTotalInRange(
+                    selectedTrips, monthRange, summaryNow);
                 final previousDay = today.subtract(const Duration(days: 1));
                 final yesterdayCount = _countIn(selectedTrips,
                     DateTimeRange(start: previousDay, end: today));
@@ -113,17 +142,26 @@ class _ResumenClienteState extends State<ResumenCliente> {
                     selectedTrips,
                     DateTimeRange(
                         start: previousMonthStart, end: previousMonthEnd));
-                final amountTrips =
-                    tab == 2 ? selectedCompleted : selectedTrips;
-                final totalAmount = amountTrips.fold<double>(
-                  0,
-                  (sum, trip) =>
-                      sum +
-                      (tab == 2
-                          ? (trip.invoiceAmountCs ?? 0)
-                          : (trip.estimatedCostCs ?? 0)),
-                );
+                final yesterdayInvoiceAmount = summaryInvoiceTotalInRange(
+                    selectedTrips,
+                    DateTimeRange(start: previousDay, end: today),
+                    summaryNow);
+                final previousWeekInvoiceAmount = summaryInvoiceTotalInRange(
+                    selectedTrips,
+                    DateTimeRange(
+                        start: previousWeekStart, end: previousWeekEnd),
+                    summaryNow);
+                final previousMonthInvoiceAmount = summaryInvoiceTotalInRange(
+                    selectedTrips,
+                    DateTimeRange(
+                        start: previousMonthStart, end: previousMonthEnd),
+                    summaryNow);
+                final totalTripCount = summaryTripCount(selectedTrips);
+                final totalAmount = summaryInvoiceTotal(selectedTrips);
                 final weeklyCounts = _weeklyCounts(selectedTrips);
+                final weeklyValues = tab == 2
+                    ? _weeklyInvoiceAmounts(selectedTrips, summaryNow)
+                    : weeklyCounts;
                 final unit = tab == 0
                     ? 'envío'
                     : tab == 1
@@ -243,7 +281,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                             ? '…'
                                             : tab == 2
                                                 ? _money(totalAmount)
-                                                : _thousand(totalAmount),
+                                                : _thousand(totalTripCount),
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 40,
@@ -377,9 +415,18 @@ class _ResumenClienteState extends State<ResumenCliente> {
                         Expanded(
                           child: _PeriodCard(
                             label: 'Hoy',
-                            price: _thousand(todayCount),
-                            sub: todayCount == 1 ? unit : '${unit}s',
-                            delta: _delta(todayCount, yesterdayCount),
+                            price: tab == 2
+                                ? _money(todayInvoiceAmount)
+                                : _thousand(todayCount),
+                            sub: tab == 2
+                                ? 'facturado'
+                                : todayCount == 1
+                                    ? unit
+                                    : '${unit}s',
+                            delta: tab == 2
+                                ? _deltaAmount(
+                                    todayInvoiceAmount, yesterdayInvoiceAmount)
+                                : _delta(todayCount, yesterdayCount),
                             active: false,
                           ),
                         ),
@@ -387,9 +434,18 @@ class _ResumenClienteState extends State<ResumenCliente> {
                         Expanded(
                           child: _PeriodCard(
                             label: 'Esta semana',
-                            price: _thousand(weekCount),
-                            sub: weekCount == 1 ? unit : '${unit}s',
-                            delta: _delta(weekCount, previousWeekCount),
+                            price: tab == 2
+                                ? _money(weekInvoiceAmount)
+                                : _thousand(weekCount),
+                            sub: tab == 2
+                                ? 'facturado'
+                                : weekCount == 1
+                                    ? unit
+                                    : '${unit}s',
+                            delta: tab == 2
+                                ? _deltaAmount(weekInvoiceAmount,
+                                    previousWeekInvoiceAmount)
+                                : _delta(weekCount, previousWeekCount),
                             active: false,
                           ),
                         ),
@@ -398,9 +454,18 @@ class _ResumenClienteState extends State<ResumenCliente> {
                     const SizedBox(height: 9),
                     _PeriodCard(
                       label: 'Este mes',
-                      price: _thousand(monthCount),
-                      sub: monthCount == 1 ? unit : '${unit}s',
-                      delta: _delta(monthCount, previousMonthCount),
+                      price: tab == 2
+                          ? _money(monthInvoiceAmount)
+                          : _thousand(monthCount),
+                      sub: tab == 2
+                          ? 'facturado'
+                          : monthCount == 1
+                              ? unit
+                              : '${unit}s',
+                      delta: tab == 2
+                          ? _deltaAmount(
+                              monthInvoiceAmount, previousMonthInvoiceAmount)
+                          : _delta(monthCount, previousMonthCount),
                       active: false,
                     ),
                     Padding(
@@ -431,7 +496,11 @@ class _ResumenClienteState extends State<ResumenCliente> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  _bestDay(weeklyCounts, unit),
+                                  _bestDay(
+                                    weeklyValues,
+                                    tab == 2 ? 'C\$' : unit,
+                                    money: tab == 2,
+                                  ),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
@@ -465,52 +534,53 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                       width: 32,
                                       height: 32,
                                       fit: BoxFit.contain,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Rendimiento semanal',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 15.5,
-                                          fontWeight: FontWeight.w800,
-                                          fontFamily: 'Figtree',
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Rendimiento semanal',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15.5,
+                                            fontWeight: FontWeight.w800,
+                                            fontFamily: 'Figtree',
+                                          ),
                                         ),
-                                      ),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        tab == 0
-                                            ? 'Comparativa de envíos realizados'
-                                            : tab == 1
-                                                ? 'Comparativa de viajes realizados'
-                                                : 'Comparativa de facturas movilizadas',
-                                        style: TextStyle(
-                                          color: Color(0xFFB9D4FF),
-                                          fontSize: 9,
-                                          fontFamily: 'Figtree',
+                                        SizedBox(height: 2),
+                                        Text(
+                                          tab == 0
+                                              ? 'Comparativa de envíos realizados'
+                                              : tab == 1
+                                                  ? 'Comparativa de viajes realizados'
+                                                  : 'Comparativa de facturas movilizadas',
+                                          style: TextStyle(
+                                            color: Color(0xFFB9D4FF),
+                                            fontSize: 9,
+                                            fontFamily: 'Figtree',
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                      ],
+                                    ),
+                                  ],
                                 ),
                                 StatusPill(
                                   text:
-                                      '${_delta(weekCount, previousWeekCount)} vs sem. ant.',
+                                      '${tab == 2 ? _deltaAmount(weekInvoiceAmount, previousWeekInvoiceAmount) : _delta(weekCount, previousWeekCount)} vs sem. ant.',
                                   color: cyan,
                                 ),
                               ],
                             ),
                             const SizedBox(height: 14),
                             _WeeklyChart(
-                              counts: weeklyCounts,
+                              counts: weeklyValues,
                               unit: tab == 0
                                   ? 'Envíos'
                                   : tab == 1
                                       ? 'Viajes'
-                                      : 'Facturas',
+                                      : 'C\$',
                             ),
                             const SizedBox(height: 12),
                             Row(
@@ -572,13 +642,6 @@ class _ResumenClienteState extends State<ResumenCliente> {
         trip.id.trim().toLowerCase().startsWith(RegExp(r'#?vj'));
   }
 
-  bool _counts(Trip trip) => {
-        'completado',
-        'entregado',
-        'entregada',
-        'finalizado'
-      }.contains(trip.status.toLowerCase());
-
   DateTime? _tripDate(Trip trip) => summaryDateForTrip(trip, DateTime.now());
 
   bool _sameDay(DateTime left, DateTime right) =>
@@ -601,6 +664,12 @@ class _ResumenClienteState extends State<ResumenCliente> {
     return '${percent >= 0 ? '+' : ''}$percent%';
   }
 
+  String _deltaAmount(double current, double previous) {
+    if (previous == 0) return current == 0 ? '0%' : 'Nuevo';
+    final percent = ((current - previous) / previous * 100).round();
+    return '${percent >= 0 ? '+' : ''}$percent%';
+  }
+
   List<int> _weeklyCounts(List<Trip> trips) {
     final today = DateUtils.dateOnly(DateTime.now());
     final monday = today.subtract(Duration(days: today.weekday - 1));
@@ -613,7 +682,21 @@ class _ResumenClienteState extends State<ResumenCliente> {
     });
   }
 
-  String _bestDay(List<int> counts, String unit) {
+  List<int> _weeklyInvoiceAmounts(List<Trip> trips, DateTime now) {
+    final today = DateUtils.dateOnly(now);
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    return List.generate(7, (index) {
+      final day = monday.add(Duration(days: index));
+      final amount = summaryInvoiceTotalInRange(
+        trips,
+        DateTimeRange(start: day, end: day.add(const Duration(days: 1))),
+        now,
+      );
+      return amount.round();
+    });
+  }
+
+  String _bestDay(List<int> counts, String unit, {bool money = false}) {
     if (counts.every((value) => value == 0)) return 'Aún no hay actividad';
     const names = [
       'lunes',
@@ -626,6 +709,9 @@ class _ResumenClienteState extends State<ResumenCliente> {
     ];
     final index = counts.indexOf(counts.reduce((a, b) => a > b ? a : b));
     final total = counts[index];
+    if (money) {
+      return 'Tu mejor día fue el ${names[index]}\nFacturaste ${_money(total.toDouble())}';
+    }
     return 'Tu mejor día fue el ${names[index]}\nRealizaste ${_thousand(total)} ${total == 1 ? unit : '${unit}s'}';
   }
 }

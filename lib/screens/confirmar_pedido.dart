@@ -5,7 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
+import '../core/invoice_breakdown.dart';
+import '../core/insurance_flow.dart';
+import '../core/shipment_payment_logic.dart';
 import '../core/theme.dart';
+import '../core/trip_routing.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/wizard.dart';
@@ -28,8 +32,10 @@ class Confirmarpedido extends StatefulWidget {
     this.fragile = false,
     this.invoiceNumber = '',
     this.invoiceAmount = 0,
-    this.paymentStatus = 'Pendiente',
-    this.paymentMethod = 'Efectivo',
+    this.productPaymentStatus = 'Pendiente',
+    this.productPaymentMethod = 'Efectivo',
+    this.shipmentPaymentStatus = shipmentCashStatus,
+    this.shipmentPaymentMethod = 'Efectivo',
     this.productPhotos = const [],
     this.invoicePhoto,
     this.invoiceFileName = 'factura.jpg',
@@ -48,6 +54,7 @@ class Confirmarpedido extends StatefulWidget {
     this.returnTrip = false,
     this.stops = const [],
     this.options = const [],
+    this.insuranceReviewed = false,
   });
 
   final String origin;
@@ -64,8 +71,10 @@ class Confirmarpedido extends StatefulWidget {
   final String invoiceNumber;
   // The step 2 screen normalizes this value to córdobas for the total.
   final double invoiceAmount;
-  final String paymentStatus;
-  final String paymentMethod;
+  final String productPaymentStatus;
+  final String productPaymentMethod;
+  final String shipmentPaymentStatus;
+  final String shipmentPaymentMethod;
   final List<Uint8List> productPhotos;
   final Uint8List? invoicePhoto;
   final String invoiceFileName;
@@ -84,6 +93,7 @@ class Confirmarpedido extends StatefulWidget {
   final bool returnTrip;
   final List<TripStop> stops;
   final List<TripOptionSelection> options;
+  final bool insuranceReviewed;
 
   @override
   State<Confirmarpedido> createState() => _ConfirmarpedidoState();
@@ -94,8 +104,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   late final TextEditingController invoiceNumber;
   late final TextEditingController invoicePrice;
   String currency = 'C\$';
-  late String paymentStatus;
-  late String paymentMethod;
+  late String productPaymentStatus;
+  late String productPaymentMethod;
+  late String shipmentPaymentStatus;
+  late String shipmentPaymentMethod;
   Uint8List? invoicePhoto;
   String invoiceFileName = 'factura.jpg';
   AppSettings? settings;
@@ -141,8 +153,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           ? widget.invoiceAmount.toStringAsFixed(2)
           : '',
     );
-    paymentStatus = widget.paymentStatus;
-    paymentMethod = widget.paymentMethod;
+    productPaymentStatus = widget.productPaymentStatus;
+    productPaymentMethod = widget.productPaymentMethod;
+    shipmentPaymentStatus = widget.shipmentPaymentStatus;
+    shipmentPaymentMethod = widget.shipmentPaymentMethod;
     invoicePhoto = widget.invoicePhoto;
     invoiceFileName = widget.invoiceFileName;
     apiClient.getSettings().then((value) {
@@ -262,7 +276,11 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   }
 
   bool get _invoiceAlreadyPaid =>
-      paymentStatus.trim().toLowerCase() == 'pagado';
+      productPaymentStatus.trim().toLowerCase() == 'pagado';
+
+  bool get _isTripService {
+    return isTripServiceMode(widget.serviceMode);
+  }
 
   double get _invoiceToCollect => _invoiceAlreadyPaid ? 0 : _invoiceAmountCs;
 
@@ -277,6 +295,38 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   String _money(double value) =>
       formatFareCs(value, settings?.fareRoundingCs ?? 5);
 
+  void _setShipmentPaymentStatus(String value) {
+    final methods = shipmentPaymentMethodsFor(value);
+    setState(() {
+      shipmentPaymentStatus = value;
+      if (!methods.contains(shipmentPaymentMethod)) {
+        shipmentPaymentMethod = methods.first;
+      }
+    });
+  }
+
+  InvoiceBreakdown get _invoiceBreakdown {
+    final shipping = _shippingFor(selectedTransport);
+    final base = _baseFor(selectedTransport);
+    final service = logisticsServiceFeeCs;
+    final additional =
+        (shipping - base - service).clamp(0, double.infinity).toDouble();
+    return buildInvoiceBreakdown(
+      serviceMode: widget.serviceMode,
+      transport: selectedTransport,
+      shippingCs: shipping,
+      baseCs: base,
+      serviceCs: service,
+      additionalCs: additional,
+      weight: widget.weight,
+      weightUnit: widget.weightUnit,
+      invoiceAmountCs: _invoiceAmountCs,
+      invoiceAlreadyPaid: _invoiceAlreadyPaid,
+      options: widget.options,
+      dollarRate: settings?.dollarRate ?? 36.5,
+    );
+  }
+
   double get _insurancePriceCs {
     final preferredCode = widget.transport == 'Camión'
         ? 'cargo-insurance'
@@ -289,12 +339,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   }
 
   Future<void> _next() async {
-    if (widget.serviceMode == 'Taxi Privado') {
+    if (_isTripService ||
+        widget.insuranceReviewed ||
+        hasShipmentInsurance(widget.options)) {
       await _submit();
       return;
     }
-    final shipping = _shippingFor(selectedTransport);
-    final baseTotal = shipping + _invoiceToCollect;
+    final baseTotal = _invoiceBreakdown.totalCs;
     final result = await Navigator.of(context).push<InsuranceSelectionResult>(
       MaterialPageRoute(
         builder: (_) => SeguroEnvioScreen(
@@ -327,13 +378,15 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           transport: selectedTransport,
           description: widget.description,
           fragile: widget.fragile,
-          invoiceNumber: invoiceNumber.text.trim(),
-          invoiceAmount: _invoiceAmountCs,
-          paymentStatus: paymentStatus,
-          paymentMethod: paymentMethod,
-          productPhotos: widget.productPhotos,
-          invoicePhoto: invoicePhoto,
-          invoiceFileName: invoiceFileName,
+          invoiceNumber: _isTripService ? '' : invoiceNumber.text.trim(),
+          invoiceAmount: _isTripService ? 0 : _invoiceAmountCs,
+          productPaymentStatus: _isTripService ? '' : productPaymentStatus,
+          productPaymentMethod: _isTripService ? '' : productPaymentMethod,
+          paymentStatus: shipmentPaymentStatus,
+          paymentMethod: shipmentPaymentMethod,
+          productPhotos: _isTripService ? const [] : widget.productPhotos,
+          invoicePhoto: _isTripService ? null : invoicePhoto,
+          invoiceFileName: _isTripService ? '' : invoiceFileName,
           originRefs: widget.originRefs,
           destinationRefs: widget.destinationRefs,
           recipientName: widget.recipientName,
@@ -359,12 +412,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
 
   @override
   Widget build(BuildContext context) {
-    final shipping = _shippingFor(selectedTransport);
-    final base = _baseFor(selectedTransport);
-    final service = logisticsServiceFeeCs;
-    final additional =
-        (shipping - base - service).clamp(0, double.infinity).toDouble();
-    final total = shipping + _invoiceToCollect;
+    final breakdown = _invoiceBreakdown;
     return WizardScaffold(
       title: 'Detalles',
       subtitle: 'Detalles de facturación',
@@ -384,87 +432,98 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Método de pago',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-                const SizedBox(height: 7),
-                _billingSegment(
-                  options: const ['Efectivo', 'Transferencia'],
-                  value: paymentMethod,
-                  onChanged: (value) => setState(() => paymentMethod = value),
-                ),
                 const SizedBox(height: 10),
-                _billingInput(
-                  controller: invoiceNumber,
-                  hint: 'Número de factura',
-                  icon: Icons.tag_rounded,
-                  onChanged: (_) {},
-                ),
-                const SizedBox(height: 9),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _billingInput(
-                        controller: invoicePrice,
-                        hint: 'Precio de factura',
-                        icon: Icons.sell_outlined,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _billingCurrencySegment(),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                AppGlassSurface(
-                  borderRadius: 14,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(15, 14, 15, 13),
-                    child: _billingTotalCard(
-                      shipping: shipping,
-                      base: base,
-                      additional: additional,
-                      service: service,
-                      total: total,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _invoiceUploadCard(),
-                const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Estado del pago',
+                      'Estado de pago',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
                         fontFamily: 'Figtree',
                       ),
                     ),
                     SizedBox(
                       width: 132,
                       child: _billingSegment(
-                        options: const ['Pagado', 'Pendiente'],
-                        value: paymentStatus,
-                        onChanged: (value) =>
-                            setState(() => paymentStatus = value),
+                        options: const [shipmentCashStatus, shipmentCreditStatus],
+                        value: shipmentPaymentStatus,
+                        onChanged: _setShipmentPaymentStatus,
                       ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Método de pago',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                    SizedBox(
+                      width: 205,
+                      child: _billingSegment(
+                        options: shipmentPaymentMethodsFor(
+                          shipmentPaymentStatus,
+                        ),
+                        value: shipmentPaymentMethod,
+                        onChanged: (value) =>
+                            setState(() => shipmentPaymentMethod = value),
+                      ),
+                    ),
+                  ],
+                ),
+                if (!_isTripService) ...[
+                  const SizedBox(height: 10),
+                  _billingInput(
+                    controller: invoiceNumber,
+                    hint: 'Número de factura',
+                    icon: Icons.tag_rounded,
+                    onChanged: (_) {},
+                    readOnly: true,
+                  ),
+                  const SizedBox(height: 9),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _billingInput(
+                          controller: invoicePrice,
+                          hint: 'Precio de factura',
+                          icon: Icons.sell_outlined,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                          readOnly: true,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _billingCurrencySegment(enabled: false),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 10),
+                AppGlassSurface(
+                  borderRadius: 14,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(15, 14, 15, 13),
+                    child: _billingTotalCard(breakdown),
+                  ),
+                ),
+                if (!_isTripService) ...[
+                  const SizedBox(height: 10),
+                  _invoiceUploadCard(),
+                ],
+                const SizedBox(height: 14),
                 if (errorMessage != null) ...[
                   const SizedBox(height: 13),
                   Text(errorMessage!,
@@ -495,6 +554,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     required List<String> options,
     required String value,
     required ValueChanged<String> onChanged,
+    bool enabled = true,
   }) {
     return Container(
       height: 32,
@@ -509,7 +569,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           final selected = value.trim().toLowerCase() == option.toLowerCase();
           return Expanded(
             child: GestureDetector(
-              onTap: () => onChanged(option),
+              onTap: enabled ? () => onChanged(option) : null,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
                 alignment: Alignment.center,
@@ -517,13 +577,18 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                   color: selected ? figmaBlue : Colors.transparent,
                   borderRadius: BorderRadius.circular(15),
                 ),
-                child: Text(
-                  option,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    fontFamily: 'Figtree',
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    option,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      fontFamily: 'Figtree',
+                    ),
                   ),
                 ),
               ),
@@ -534,12 +599,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     );
   }
 
-  Widget _billingCurrencySegment() {
+  Widget _billingCurrencySegment({bool enabled = true}) {
     return SizedBox(
       width: 82,
       child: _billingSegment(
         options: const ['C\$', 'USD'],
         value: currency,
+        enabled: enabled,
         onChanged: (value) => setState(() => currency = value),
       ),
     );
@@ -551,6 +617,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     required IconData icon,
     required ValueChanged<String> onChanged,
     TextInputType? keyboardType,
+    bool readOnly = false,
   }) {
     return AppGlassSurface(
       borderRadius: 22,
@@ -560,6 +627,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           controller: controller,
           onChanged: onChanged,
           keyboardType: keyboardType,
+          readOnly: readOnly,
           textAlignVertical: TextAlignVertical.center,
           style: const TextStyle(
             color: Colors.white,
@@ -583,13 +651,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     );
   }
 
-  Widget _billingTotalCard({
-    required double shipping,
-    required double base,
-    required double additional,
-    required double service,
-    required double total,
-  }) {
+  Widget _billingTotalCard(InvoiceBreakdown breakdown) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -605,14 +667,12 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
         const SizedBox(height: 8),
         Divider(height: 1, color: Colors.white.withValues(alpha: .38)),
         const SizedBox(height: 6),
-        _billingPriceLine('Factura', _invoiceAmountCs,
-            suffix: _invoiceAlreadyPaid ? 'Pagado' : null),
-        _billingPriceLine('Tarifa base de envío', base),
-        _billingPriceLine('Servicio y gestión logística', service),
-        _billingPriceLine(
-          'Carga adicional (${widget.weight} ${widget.weightUnit})',
-          additional,
-        ),
+        for (final line in breakdown.lines)
+          _billingPriceLine(
+            line.label,
+            line.amountCs,
+            suffix: line.suffix,
+          ),
         const SizedBox(height: 2),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -634,7 +694,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                 ),
               ),
               Text(
-                _money(shipping),
+                _money(breakdown.shippingSubtotalCs),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
@@ -675,7 +735,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
               ],
             ),
             Text(
-              _money(total),
+              _money(breakdown.totalCs),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,

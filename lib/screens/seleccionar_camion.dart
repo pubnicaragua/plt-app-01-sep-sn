@@ -14,6 +14,9 @@ class SeleccionarCamionScreen extends StatefulWidget {
     required this.destinationPlace,
     required this.transport,
     this.estimatedShipping,
+    this.distanceKm,
+    this.routeDistanceKm,
+    this.rate,
     this.originRefs = '',
     this.destinationRefs = '',
     this.recipientName = '',
@@ -29,6 +32,9 @@ class SeleccionarCamionScreen extends StatefulWidget {
   final PlaceSuggestion? destinationPlace;
   final String transport;
   final double? estimatedShipping;
+  final double? distanceKm;
+  final double? routeDistanceKm;
+  final VehicleRate? rate;
   final String originRefs;
   final String destinationRefs;
   final String recipientName;
@@ -165,6 +171,14 @@ class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       fontFamily: 'Figtree')),
+              const SizedBox(height: 12),
+              _TruckRateSummary(
+                vehicle: truck.label,
+                distanceKm: widget.distanceKm,
+                routeDistanceKm: widget.routeDistanceKm,
+                price: widget.estimatedShipping,
+                rate: widget.rate,
+              ),
             ],
           ),
         ),
@@ -195,6 +209,7 @@ class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
                     const SizedBox(height: 10),
                     _SelectedTruckCard(
                       truck: currentTruck,
+                      estimatedShipping: widget.estimatedShipping,
                       onDetails: () => _showTruckDetails(currentTruck),
                     ),
                     const SizedBox(height: 10),
@@ -284,6 +299,84 @@ class _TruckOption {
   final String capacity;
   final String volume;
   final String description;
+}
+
+class _TruckRateSummary extends StatelessWidget {
+  const _TruckRateSummary({
+    required this.vehicle,
+    required this.distanceKm,
+    required this.routeDistanceKm,
+    required this.price,
+    required this.rate,
+  });
+
+  final String vehicle;
+  final double? distanceKm;
+  final double? routeDistanceKm;
+  final double? price;
+  final VehicleRate? rate;
+
+  @override
+  Widget build(BuildContext context) {
+    final routeKm = routeDistanceKm ?? distanceKm;
+    final extraKm = routeKm != null && rate != null
+        ? (routeKm - rate!.includedKm).clamp(0, double.infinity)
+        : null;
+
+    return AppGlassSurface(
+      borderRadius: 13,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.payments_outlined, color: cyan, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Tarifa estimada · $vehicle',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ),
+                Text(
+                  price == null ? 'Pendiente' : formatFareCs(price!),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                routeKm != null && rate != null
+                    ? '${routeKm.toStringAsFixed(1)} km · base ${formatFareCs(rate!.baseFeeCs)} + ${extraKm!.toStringAsFixed(1)} km adicionales × C\$ ${rate!.farePerKmCs.toStringAsFixed(1)} + ${formatFareCs(logisticsServiceFeeCs)} servicio'
+                    : 'Se calculará según la ruta, el tipo de carga y la disponibilidad.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xD9FFFFFF),
+                  fontSize: 8.8,
+                  height: 1.2,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _TruckFeature {
@@ -376,9 +469,14 @@ class _TruckSectionTitle extends StatelessWidget {
 }
 
 class _SelectedTruckCard extends StatelessWidget {
-  const _SelectedTruckCard({required this.truck, required this.onDetails});
+  const _SelectedTruckCard({
+    required this.truck,
+    required this.estimatedShipping,
+    required this.onDetails,
+  });
 
   final _TruckOption truck;
+  final double? estimatedShipping;
   final VoidCallback onDetails;
 
   @override
@@ -484,13 +582,16 @@ class _SelectedTruckCard extends StatelessWidget {
                                           size: 20,
                                         )),
                                 const SizedBox(width: 6),
-                                const Expanded(
+                                Expanded(
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text('Precio por cotización',
+                                      Text(
+                                          estimatedShipping == null
+                                              ? 'Precio por cotización'
+                                              : 'Tarifa estimada',
                                           style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 9,
@@ -498,7 +599,9 @@ class _SelectedTruckCard extends StatelessWidget {
                                               fontFamily: 'Figtree')),
                                       SizedBox(height: 1),
                                       Text(
-                                          'El precio se confirmará según tu ruta, tipo de carga y disponibilidad.',
+                                          estimatedShipping == null
+                                              ? 'El precio se confirmará según tu ruta, tipo de carga y disponibilidad.'
+                                              : formatFareCs(estimatedShipping!),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(

@@ -8,6 +8,9 @@ import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'crear_envio2.dart';
 
+bool shouldShowProductPaymentMethod(String status) =>
+    status.trim().toLowerCase() == 'pendiente';
+
 class CrearEnvioCarga extends StatefulWidget {
   const CrearEnvioCarga({
     super.key,
@@ -60,18 +63,27 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
   bool fragile = false;
   late final TextEditingController packageTypeController;
   late final TextEditingController weightController;
+  late final TextEditingController invoicePriceController;
+  late final TextEditingController invoiceNumberController;
+  String currency = 'C\$';
+  String productPaymentStatus = 'Pendiente';
+  String productPaymentMethod = 'Efectivo';
 
   @override
   void initState() {
     super.initState();
     packageTypeController = TextEditingController();
     weightController = TextEditingController(text: '$weight');
+    invoicePriceController = TextEditingController();
+    invoiceNumberController = TextEditingController();
   }
 
   @override
   void dispose() {
     packageTypeController.dispose();
     weightController.dispose();
+    invoicePriceController.dispose();
+    invoiceNumberController.dispose();
     super.dispose();
   }
 
@@ -116,6 +128,11 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           packageType: packageTypeController.text.trim(),
           initialProductPhotos: List<Uint8List>.of(photos),
           initialFragile: fragile,
+          initialInvoicePrice: invoicePriceController.text.trim(),
+          initialInvoiceCurrency: currency,
+          initialInvoiceNumber: invoiceNumberController.text.trim(),
+          initialProductPaymentStatus: productPaymentStatus,
+          initialProductPaymentMethod: productPaymentMethod,
           originRefs: widget.originRefs,
           destinationRefs: widget.destinationRefs,
           recipientName: widget.recipientName,
@@ -218,8 +235,8 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
                           onChanged: (value) {
                             final parsed = int.tryParse(value);
                             if (parsed != null && parsed > 0) {
-                              setState(() =>
-                                  weight = parsed.clamp(1, 9999).toInt());
+                              setState(
+                                  () => weight = parsed.clamp(1, 9999).toInt());
                             }
                           },
                         ),
@@ -252,6 +269,8 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 14),
+                    _invoiceBlock(),
                     const SizedBox(height: 16),
                     const _CargaSectionTitle(
                       icon: 'assets/img/HomeCliente/envio_photo.png',
@@ -286,6 +305,102 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _invoiceBlock() {
+    final showPaymentMethod =
+        shouldShowProductPaymentMethod(productPaymentStatus);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Estado del producto',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Figtree',
+              ),
+            ),
+            SizedBox(
+              width: 132,
+              child: _InvoiceSegment(
+                options: const ['Pagado', 'Pendiente'],
+                value: productPaymentStatus,
+                onChanged: (value) => setState(() {
+                  productPaymentStatus = value;
+                  if (value == 'Pagado') productPaymentMethod = '';
+                  if (value == 'Pendiente' &&
+                      productPaymentMethod.isEmpty) {
+                    productPaymentMethod = 'Efectivo';
+                  }
+                }),
+              ),
+            ),
+          ],
+        ),
+        if (showPaymentMethod) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Método de pago',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              SizedBox(
+                width: 150,
+                child: _InvoiceSegment(
+                  options: const ['Efectivo', 'Transferencia'],
+                  value: productPaymentMethod,
+                  onChanged: (value) =>
+                      setState(() => productPaymentMethod = value),
+                ),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 10),
+        _InvoiceInputField(
+          controller: invoiceNumberController,
+          hint: 'Número de factura',
+          icon: Icons.tag_rounded,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _InvoiceInputField(
+                controller: invoicePriceController,
+                hint: 'Precio de factura',
+                icon: Icons.sell_outlined,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 82,
+              child: _InvoiceSegment(
+                options: const ['C\$', 'USD'],
+                value: currency,
+                onChanged: (value) => setState(() => currency = value),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -492,6 +607,100 @@ class _CargaField extends StatelessWidget {
       );
 }
 
+class _InvoiceInputField extends StatelessWidget {
+  const _InvoiceInputField({
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.keyboardType,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final TextInputType? keyboardType;
+
+  @override
+  Widget build(BuildContext context) => AppGlassSurface(
+        borderRadius: 18,
+        child: SizedBox(
+          height: 44,
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            textAlignVertical: TextAlignVertical.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Figtree',
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(
+                color: Color(0xFFB9D4FF),
+                fontSize: 10.5,
+                fontFamily: 'Figtree',
+              ),
+              prefixIcon: Icon(icon, color: Colors.white, size: 18),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.only(right: 12),
+            ),
+          ),
+        ),
+      );
+}
+
+class _InvoiceSegment extends StatelessWidget {
+  const _InvoiceSegment({
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<String> options;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 32,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .14),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: .16)),
+        ),
+        child: Row(
+          children: options.map((option) {
+            final selected = value.trim().toLowerCase() == option.toLowerCase();
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => onChanged(option),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected ? figmaBlue : Colors.transparent,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Text(
+                    option,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      );
+}
+
 class _SmallAction extends StatelessWidget {
   const _SmallAction({required this.icon, required this.onTap});
   final IconData icon;
@@ -598,14 +807,14 @@ class _FragileRow extends StatelessWidget {
             child: Row(
               children: [
                 _FragileChoice(
-                  label: 'Sí',
-                  selected: value,
-                  onTap: () => onChanged(true),
-                ),
-                _FragileChoice(
                   label: 'No',
                   selected: !value,
                   onTap: () => onChanged(false),
+                ),
+                _FragileChoice(
+                  label: 'Sí',
+                  selected: value,
+                  onTap: () => onChanged(true),
                 ),
               ],
             ),
@@ -634,12 +843,15 @@ class _FragileChoice extends StatelessWidget {
             color: selected ? accentBlue : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Text(label,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree')),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Figtree',
+            ),
+          ),
         ),
       );
 }

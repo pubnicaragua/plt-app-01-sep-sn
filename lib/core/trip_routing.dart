@@ -10,6 +10,9 @@ bool isTripServiceMode(String? serviceMode) {
       normalized == 'viajes';
 }
 
+bool shouldShowBillingBeforeCreation(String? serviceMode) =>
+    isTripServiceMode(serviceMode);
+
 bool shouldRouteThroughPickup(String? status) {
   switch (_normalized(status)) {
     case 'recogio':

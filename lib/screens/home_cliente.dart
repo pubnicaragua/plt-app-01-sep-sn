@@ -30,17 +30,10 @@ class _HomeClienteState extends State<HomeCliente> {
   int tab = 0;
   int _tripRefreshVersion = 0;
 
-  void _openShipments() {
-    setState(() {
-      tab = 1;
-      _tripRefreshVersion++;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final views = <Widget>[
-      _FigmaHomeTab(onOpenShipments: _openShipments),
+      const _FigmaHomeTab(),
       MisEnvios(
         key: ValueKey('mis-envios-$_tripRefreshVersion'),
         embedded: true,
@@ -111,53 +104,13 @@ class BrandMark extends StatelessWidget {
 }
 
 class _FigmaHomeTab extends StatefulWidget {
-  const _FigmaHomeTab({this.onOpenShipments});
-
-  final VoidCallback? onOpenShipments;
+  const _FigmaHomeTab();
 
   @override
   State<_FigmaHomeTab> createState() => _FigmaHomeTabState();
 }
 
 class _FigmaHomeTabState extends State<_FigmaHomeTab> {
-  String? selectedVehicle;
-  List<Trip> activeTrips = const <Trip>[];
-  Timer? activeTripsTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadActiveTrips();
-    activeTripsTimer = Timer.periodic(
-      const Duration(seconds: 20),
-      (_) => _loadActiveTrips(),
-    );
-  }
-
-  @override
-  void dispose() {
-    activeTripsTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _loadActiveTrips() async {
-    try {
-      final user = apiClient.currentUser;
-      final companyName = user?.companyName?.trim();
-      final client =
-          user != null && (user.role == 'corporate' || user.role == 'company')
-              ? (companyName?.isNotEmpty == true
-                  ? companyName
-                  : user.displayName.trim())
-              : null;
-      final trips = await apiClient.getTrips(client: client);
-      if (!mounted) return;
-      setState(() {
-        activeTrips = trips.where((trip) => trip.isActive).toList();
-      });
-    } catch (_) {}
-  }
-
   void _openCreateFlow(String vehicle) {
     final transport = vehicle == 'Auto'
         ? 'Vehículo'
@@ -197,7 +150,7 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),
-      padding: EdgeInsets.fromLTRB(horizontal, 18, horizontal, 22),
+      padding: EdgeInsets.fromLTRB(horizontal, 18, horizontal, 90),
       children: [
         Row(
           children: [
@@ -252,60 +205,6 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
           ],
         ),
         const SizedBox(height: 14),
-        if (activeTrips.isNotEmpty) ...[
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Envíos activos:',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-              ),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: widget.onOpenShipments,
-                  borderRadius: BorderRadius.circular(18),
-                  hoverColor: Colors.white.withValues(alpha: .12),
-                  splashColor: Colors.white.withValues(alpha: .22),
-                  highlightColor: Colors.white.withValues(alpha: .10),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: accentBlue,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: const Text(
-                      'Ver todos envíos activos',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Figtree',
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          for (final trip in activeTrips.take(3))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: SizedBox(
-                width: double.infinity,
-                child: _ActiveShipmentCard(trip: trip),
-              ),
-            ),
-          const SizedBox(height: 5),
-        ],
         const Text(
           'Envíos',
           style: TextStyle(
@@ -323,11 +222,8 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
                 label: 'Moto',
                 subtitle: 'Envíos pequeños',
                 asset: 'assets/img/HomeCliente/figma_moto.png',
-                selected: selectedVehicle == 'Moto',
-                onTap: () {
-                  setState(() => selectedVehicle = 'Moto');
-                  _openCreateFlow('Moto');
-                },
+                selected: false,
+                onTap: () => _openCreateFlow('Moto'),
               ),
             ),
             const SizedBox(width: 10),
@@ -336,11 +232,8 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
                 label: 'Auto',
                 subtitle: 'Espacios medianos',
                 asset: 'assets/img/HomeCliente/figma_auto.png',
-                selected: selectedVehicle == 'Auto',
-                onTap: () {
-                  setState(() => selectedVehicle = 'Auto');
-                  _openCreateFlow('Auto');
-                },
+                selected: false,
+                onTap: () => _openCreateFlow('Auto'),
               ),
             ),
           ],
@@ -350,12 +243,9 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
           label: 'Carga',
           subtitle: 'Mayor espacio para todo tipo de envíos',
           asset: 'assets/img/HomeCliente/figma_carga.png',
-          selected: selectedVehicle == 'Carga',
+          selected: false,
           large: true,
-          onTap: () {
-            setState(() => selectedVehicle = 'Carga');
-            _openCreateFlow('Carga');
-          },
+          onTap: () => _openCreateFlow('Carga'),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -533,24 +423,22 @@ class _VehicleShowcaseCard extends StatelessWidget {
           child: CustomPaint(
             foregroundPainter: _GlassEdgePainter(selected: selected),
             child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                height: large ? 160 : 166,
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                decoration: BoxDecoration(
-                color: selected
-                    ? const Color(0x4D1E5FD4)
-                    : Colors.transparent,
-                  borderRadius: BorderRadius.circular(19),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x40000000),
-                      offset: Offset(1, 5),
-                      blurRadius: 4.7,
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
+              duration: const Duration(milliseconds: 180),
+              height: large ? 160 : 166,
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              decoration: BoxDecoration(
+                color: selected ? const Color(0x4D1E5FD4) : Colors.transparent,
+                borderRadius: BorderRadius.circular(19),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x40000000),
+                    offset: Offset(1, 5),
+                    blurRadius: 4.7,
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
                   Positioned.fill(
                     child: Image.asset(
                       asset,
@@ -600,8 +488,8 @@ class _VehicleShowcaseCard extends StatelessWidget {
                           color: Colors.white, size: 20),
                     ),
                   ),
-                  ],
-                ),
+                ],
+              ),
             ),
           ),
         ),
@@ -626,8 +514,16 @@ class _GlassEdgePainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: selected
-            ? [cyan.withValues(alpha: .95), Colors.white.withValues(alpha: .42), cyan.withValues(alpha: .75)]
-            : [Colors.white.withValues(alpha: .48), Colors.white.withValues(alpha: .10), const Color(0x667EA5D8)],
+            ? [
+                cyan.withValues(alpha: .95),
+                Colors.white.withValues(alpha: .42),
+                cyan.withValues(alpha: .75)
+              ]
+            : [
+                Colors.white.withValues(alpha: .48),
+                Colors.white.withValues(alpha: .10),
+                const Color(0x667EA5D8)
+              ],
       ).createShader(rect);
     canvas.drawRRect(RRect.fromRectAndRadius(rect.deflate(.6), radius), paint);
   }
@@ -1029,56 +925,57 @@ class _HomeTabState extends State<_HomeTab> {
                   child: SizedBox(
                     width: 46,
                     height: 46,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Image.asset(
-                        'assets/img/HomeCliente/notificaciones_bell.png',
-                        width: 24,
-                        height: 24,
-                        fit: BoxFit.contain,
-                        semanticLabel: 'Notificaciones',
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.notifications_none_rounded,
-                          color: Colors.white,
-                          size: 22,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/img/HomeCliente/notificaciones_bell.png',
+                          width: 24,
+                          height: 24,
+                          fit: BoxFit.contain,
+                          semanticLabel: 'Notificaciones',
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.notifications_none_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
                         ),
-                      ),
-                      if (_incidentUnread > 0)
-                        Positioned(
-                          top: 3,
-                          right: 2,
-                          child: Container(
-                            constraints: const BoxConstraints(minWidth: 16),
-                            height: 16,
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF5A5A),
-                              borderRadius: BorderRadius.circular(9),
-                            ),
-                            child: Text(
-                              _incidentUnread > 9 ? '9+' : '$_incidentUnread',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
+                        if (_incidentUnread > 0)
+                          Positioned(
+                            top: 3,
+                            right: 2,
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 16),
+                              height: 16,
+                              alignment: Alignment.center,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF5A5A),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Text(
+                                _incidentUnread > 9 ? '9+' : '$_incidentUnread',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
+                          )
+                        else
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                                width: 5,
+                                height: 5,
+                                decoration: const BoxDecoration(
+                                    color: cyan, shape: BoxShape.circle)),
                           ),
-                        )
-                      else
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Container(
-                              width: 5,
-                              height: 5,
-                              decoration: const BoxDecoration(
-                                  color: cyan, shape: BoxShape.circle)),
-                        ),
-                    ],
-                  ),
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -32,6 +32,11 @@ void main() {
     expect(isTripServiceMode('Taxi Privado'), isTrue);
   });
 
+  test('Viajes deben pasar por facturación antes de crear el viaje', () {
+    expect(shouldShowBillingBeforeCreation('Taxi Privado'), isTrue);
+    expect(shouldShowBillingBeforeCreation('Envíos'), isFalse);
+  });
+
   test('antes de recoger, la ruta incluye el punto de recogida', () {
     expect(shouldRouteThroughPickup('Asignado'), isTrue);
     expect(shouldRouteThroughPickup('En camino'), isTrue);

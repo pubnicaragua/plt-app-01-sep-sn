@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:incoex_logistics_app/models/api_models.dart';
@@ -8,6 +9,7 @@ Trip _trip({
   String date = '',
   bool isScheduled = false,
   String? scheduledDate,
+  double? invoiceAmountCs,
 }) {
   return Trip(
     id: 'test',
@@ -20,6 +22,7 @@ Trip _trip({
     status: status,
     isScheduled: isScheduled,
     scheduledDate: scheduledDate,
+    invoiceAmountCs: invoiceAmountCs,
   );
 }
 
@@ -52,5 +55,56 @@ void main() {
     );
 
     expect(date, DateTime(2026, 10, 2));
+  });
+
+  test('el total general cuenta registros y no montos', () {
+    expect(
+      summaryTripCount([
+        _trip(status: 'Completado'),
+        _trip(status: 'En camino'),
+      ]),
+      2,
+    );
+  });
+
+  test('el total de facturas incluye envíos aún activos', () {
+    expect(
+      summaryInvoiceTotal([
+        _trip(status: 'Pendiente', invoiceAmountCs: 150),
+      ]),
+      150,
+    );
+  });
+
+  test('los periodos de facturas suman montos por fecha', () {
+    final trip = _trip(
+      status: 'Completado',
+      date: '2026-10-06',
+      invoiceAmountCs: 150,
+    );
+    final today = DateTime(2026, 10, 6, 15, 30);
+
+    expect(
+      summaryInvoiceTotalInRange(
+        [trip],
+        DateTimeRange(
+          start: DateTime(2026, 10, 6),
+          end: DateTime(2026, 10, 7),
+        ),
+        today,
+      ),
+      150,
+    );
+    expect(
+      summaryInvoiceTotalInRange(
+        [trip],
+        DateTimeRange(
+          start: DateTime(2026, 10, 7),
+          end: DateTime(2026, 10, 8),
+        ),
+        today,
+      ),
+      0,
+    );
   });
 }

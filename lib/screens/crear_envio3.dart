@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../core/api_client.dart';
 import '../core/shipment_flow.dart';
+import '../core/shipment_payment_logic.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
@@ -25,6 +26,8 @@ class CrearEnvio3 extends StatefulWidget {
     this.fragile = false,
     this.invoiceNumber = '',
     this.invoiceAmount = 0,
+    this.productPaymentStatus = 'Pendiente',
+    this.productPaymentMethod = '',
     this.paymentStatus = 'Pendiente',
     this.paymentMethod = 'Efectivo',
     this.productPhotos = const [],
@@ -59,6 +62,8 @@ class CrearEnvio3 extends StatefulWidget {
   final bool fragile;
   final String invoiceNumber;
   final double invoiceAmount;
+  final String productPaymentStatus;
+  final String productPaymentMethod;
   final String paymentStatus;
   final String paymentMethod;
   final List<Uint8List> productPhotos;
@@ -157,6 +162,10 @@ class _CrearEnvio3State extends State<CrearEnvio3>
             'Valor de factura C\$${widget.invoiceAmount.toStringAsFixed(2)}',
           if (widget.invoiceNumber.trim().isNotEmpty)
             'Factura ${widget.invoiceNumber.trim()}',
+          if (widget.productPaymentStatus.trim().isNotEmpty)
+            'Estado factura producto: ${widget.productPaymentStatus.trim()}',
+          if (widget.productPaymentMethod.trim().isNotEmpty)
+            'Método factura producto: ${widget.productPaymentMethod.trim()}',
           if (evidence.isNotEmpty) 'Evidencias: ${evidence.join(', ')}',
         ].join(' · '),
         originLat: originPlace?.latitude,
@@ -188,11 +197,11 @@ class _CrearEnvio3State extends State<CrearEnvio3>
         stops: widget.stops,
         options: widget.options,
       );
-      if (widget.paymentStatus == 'Pagado' || widget.paymentMethod.isNotEmpty) {
+      if (widget.paymentMethod.isNotEmpty) {
         await apiClient.updateTripPayment(
           id: created.id,
           method: widget.paymentMethod,
-          amount: widget.paymentStatus == 'Pagado'
+          amount: shipmentPaymentIsImmediate(widget.paymentStatus)
               ? (created.estimatedCostCs ?? 0)
               : 0,
         );
