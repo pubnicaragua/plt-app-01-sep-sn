@@ -20,6 +20,52 @@ import 'mas_ayudantes.dart';
 import 'mas_vehiculos.dart';
 import 'seguro_envio.dart';
 
+ServiceCatalogItem? fallbackAdditionalServiceOption(
+  String code, {
+  String? title,
+}) {
+  final definitions = <String, (String, String, String, String)> {
+    'delivery-more-vehicles': (
+      title ?? 'Más vehículos',
+      'A una misma ruta',
+      'delivery',
+      'Vehículo',
+    ),
+    'taxi-more-vehicles': (
+      title ?? 'Más vehículos',
+      'A una misma ruta',
+      'taxi',
+      'Vehículo',
+    ),
+    'delivery-round-trip': ('Ida y vuelta', 'Regreso al origen', 'delivery', 'Vehículo'),
+    'taxi-round-trip': ('Ida y vuelta', 'Regreso al origen', 'taxi', 'Vehículo'),
+    'cargo-round-trip': ('Ida y vuelta', 'Regreso al origen', 'cargo', 'Camión'),
+    'delivery-multiple-stops': ('Varios destinos', 'Múltiples destinos', 'delivery', 'Vehículo'),
+    'taxi-multiple-stops': ('Varios destinos', 'Múltiples destinos', 'taxi', 'Vehículo'),
+    'cargo-multiple-stops': ('Varios destinos', 'Múltiples destinos', 'cargo', 'Camión'),
+    'delivery-waiting': ('Espera en destino', '6 horas espera', 'delivery', 'Vehículo'),
+    'cargo-helper': ('Ayudante', 'Para carga y descarga', 'cargo', 'Camión'),
+    'cargo-refrigerated': ('Refrigerado', 'Para productos fríos', 'cargo', 'Camión'),
+    'cargo-more-trucks': ('¿Más camiones?', 'Escoge tu producto', 'cargo', 'Camión'),
+  };
+  final definition = definitions[code];
+  if (definition == null) return null;
+  return ServiceCatalogItem(
+    id: 'local-$code',
+    code: code,
+    kind: 'option',
+    service: definition.$3,
+    transport: definition.$4,
+    title: definition.$1,
+    description: definition.$2,
+    priceCs: 40,
+    currency: 'USD',
+    pricingMode: 'flat',
+    enabled: true,
+    sortOrder: 40,
+  );
+}
+
 class CrearEnvio2 extends StatefulWidget {
   const CrearEnvio2({
     super.key,
@@ -91,6 +137,12 @@ class CrearEnvio2 extends StatefulWidget {
 }
 
 class _CrearEnvio2State extends State<CrearEnvio2> {
+  // Datos del último recojo confirmado para reutilizarlos en el siguiente envío.
+  // Se mantienen en memoria durante la sesión y los campos siguen siendo editables.
+  static String _savedPickupName = '';
+  static String _savedPickupPhone = '';
+  static String _savedPickupReferences = '';
+
   late String _routeOrigin;
   late String _routeDestination;
   PlaceSuggestion? _routeOriginPlace;
@@ -150,9 +202,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     currency = widget.initialInvoiceCurrency == 'USD' ? 'USD' : 'C\$';
     productPaymentStatus = widget.initialProductPaymentStatus;
     productPaymentMethod = widget.initialProductPaymentMethod;
-    pickupName = TextEditingController();
-    pickupPhone = TextEditingController();
-    pickupReferences = TextEditingController(text: widget.originRefs);
+    pickupName = TextEditingController(text: _savedPickupName);
+    pickupPhone = TextEditingController(text: _savedPickupPhone);
+    pickupReferences = TextEditingController(
+      text: widget.originRefs.trim().isNotEmpty
+          ? widget.originRefs
+          : _savedPickupReferences,
+    );
     pickupNotes = TextEditingController();
     recipient = TextEditingController(text: widget.recipientName);
     phone = TextEditingController(text: widget.recipientPhone);
@@ -242,11 +298,14 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     final productAmount = productPaymentStatus.trim().toLowerCase() == 'pagado'
         ? 0
         : invoiceAmountCs;
+    final shippingAmount = widget.estimatedShipping ?? 0;
     final optionsTotal = _selectedTripOptions.fold<double>(
       0,
       (total, option) => total + _optionAmountCs(option),
     );
-    return (widget.estimatedShipping ?? 0) + productAmount + optionsTotal;
+    return shippingAmount.clamp(0, double.infinity).toDouble() +
+        productAmount +
+        optionsTotal;
   }
 
   void _setUnit(String nextUnit) {
@@ -340,6 +399,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
       );
       return;
     }
+    if (isShipping) {
+      _rememberPickupDetails();
+    }
     final shippingDetails = isShipping
         ? [
             'Recojo: ${pickupName.text.trim()} · Teléfono: ${pickupPhone.text.trim()}',
@@ -396,7 +458,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             stops: List<TripStop>.of(additionalStops),
             options: _selectedTripOptions,
             insuranceReviewed: true,
-            originRefs: widget.originRefs,
+            originRefs:
+                isShipping ? pickupReferences.text.trim() : widget.originRefs,
             destinationRefs: references.text.trim(),
             recipientName: recipient.text.trim(),
             recipientPhone: phone.text.trim(),
@@ -476,6 +539,12 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     );
   }
 
+  void _rememberPickupDetails() {
+    _savedPickupName = pickupName.text.trim();
+    _savedPickupPhone = pickupPhone.text.trim();
+    _savedPickupReferences = pickupReferences.text.trim();
+  }
+
   ServiceCatalogItem? _findOption(String code, {String? fallbackTitle}) {
     final items = settings?.serviceCatalog ?? const <ServiceCatalogItem>[];
     for (final item in items) {
@@ -536,55 +605,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   ServiceCatalogItem? _localAdditionalOption(String code) {
-    if (code == 'cargo-refrigerated') {
-      return const ServiceCatalogItem(
-        id: 'local-cargo-refrigerated',
-        code: 'cargo-refrigerated',
-        kind: 'option',
-        service: 'cargo',
-        transport: 'Camión',
-        title: 'Refrigerado',
-        description: 'Para productos fríos',
-        priceCs: 40,
-        currency: 'USD',
-        pricingMode: 'flat',
-        enabled: true,
-        sortOrder: 70,
-      );
-    }
-    if (code == 'cargo-more-trucks') {
-      return const ServiceCatalogItem(
-        id: 'local-cargo-more-trucks',
-        code: 'cargo-more-trucks',
-        kind: 'option',
-        service: 'cargo',
-        transport: 'Camión',
-        title: '¿Más camiones?',
-        description: 'Escoge tu producto',
-        priceCs: 40,
-        currency: 'USD',
-        pricingMode: 'flat',
-        enabled: true,
-        sortOrder: 60,
-      );
-    }
-    if (code == 'taxi-more-vehicles') {
-      return const ServiceCatalogItem(
-        id: 'local-taxi-more-vehicles',
-        code: 'taxi-more-vehicles',
-        kind: 'option',
-        service: 'taxi',
-        transport: 'Vehículo',
-        title: 'Más vehículos',
-        description: 'A una misma ruta',
-        priceCs: 40,
-        currency: 'USD',
-        pricingMode: 'flat',
-        enabled: true,
-        sortOrder: 40,
-      );
-    }
-    return null;
+    final fallbackTitle = code == 'delivery-more-vehicles' &&
+            widget.transport == 'Moto'
+        ? '¿Más motos?'
+        : code == 'delivery-more-vehicles' && widget.transport != 'Moto'
+            ? '¿Más autos?'
+            : null;
+    return fallbackAdditionalServiceOption(code, title: fallbackTitle);
   }
 
   ServiceCatalogItem? get _selectedOption {
@@ -661,6 +688,12 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           ].join(' · '),
           priceCs: item.priceCs,
           currency: item.currency,
+          quantity: item.code.endsWith('more-vehicles') ||
+                  item.code.endsWith('more-trucks')
+              ? additionalVehicleCount
+              : item.code == 'cargo-helper'
+                  ? additionalHelperCount
+                  : 1,
         ),
     ];
   }

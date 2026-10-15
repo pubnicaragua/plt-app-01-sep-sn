@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/invoice_selection.dart';
 import '../core/theme.dart';
 import '../core/trip_routing.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
+import 'finalizar_viaje.dart';
 
 String weeklyChartValueLabel(int total, String unit) {
   final formatted = total.toString().replaceAllMapped(
@@ -52,6 +54,93 @@ double summaryInvoiceTotalInRange(
   );
 }
 
+bool isInvoiceHistoryStatus(Trip trip) {
+  final status = trip.status.trim().toLowerCase();
+  return status == 'completado' ||
+      status == 'finalizado' ||
+      status == 'entregado' ||
+      status == 'entregada';
+}
+
+bool tripHasInvoice(Trip trip) {
+  final description = trip.description ?? '';
+  return (trip.invoiceAmountCs ?? 0) > 0 ||
+      (trip.estimatedCostCs ?? 0) > 0 ||
+      trip.invoiceNumber?.trim().isNotEmpty == true ||
+      trip.serviceInvoiceNumber?.trim().isNotEmpty == true ||
+      trip.serviceInvoiceUrl?.trim().isNotEmpty == true ||
+      trip.servicePaymentStatus?.trim().isNotEmpty == true ||
+      RegExp(r'factura|pago', caseSensitive: false).hasMatch(description);
+}
+
+String invoicePaymentStatusForTrip(Trip trip) {
+  final description = trip.description ?? '';
+  final match = RegExp(
+    r'(?:Estado factura producto|Estado pago envío|Estado de pago)\s*:\s*([^·]+)',
+    caseSensitive: false,
+  ).firstMatch(description);
+  final serviceStatus = trip.servicePaymentStatus?.trim();
+  final invoiceStatus = trip.invoiceStatus?.trim();
+  final raw = (serviceStatus?.isNotEmpty == true
+          ? serviceStatus
+          : invoiceStatus?.isNotEmpty == true
+              ? invoiceStatus
+              : match?.group(1) ?? '')!
+      .trim()
+      .toLowerCase();
+  return raw.contains('pagad') || raw.contains('paid') || raw == 'contado'
+      ? 'Pagada'
+      : 'Pendiente';
+}
+
+bool invoicePaymentMatchesFilter(Trip trip, String filter) {
+  if (filter == 'Todas') return true;
+  final status = invoicePaymentStatusForTrip(trip);
+  return (filter == 'Pendientes' && status == 'Pendiente') ||
+      (filter == 'Pagadas' && status == 'Pagada');
+}
+
+DateTime? invoiceHistoryDateForTrip(Trip trip, {DateTime? fallback}) {
+  final raw = trip.completedAt?.trim().isNotEmpty == true
+      ? trip.completedAt
+      : (trip.scheduledDate?.trim().isNotEmpty == true
+          ? trip.scheduledDate
+          : trip.date);
+  final parsed = DateTime.tryParse(raw ?? '');
+  if (parsed != null) return DateUtils.dateOnly(parsed.toLocal());
+  return isInvoiceHistoryStatus(trip) && fallback != null
+      ? DateUtils.dateOnly(fallback)
+      : null;
+}
+
+String invoiceHistoryVehicleLabel(Trip trip, {required bool isTrip}) {
+  final text =
+      '${trip.vehicleVariant ?? ''} ${trip.truckType ?? ''} ${trip.transport ?? ''}'
+          .toLowerCase();
+  if (text.contains('moto')) return 'MOTO';
+  if (text.contains('suv')) return 'SUV';
+  if (text.contains('micro')) return 'MICROBUS';
+  if (text.contains('sedan') || text.contains('sedán')) return 'SEDÁN';
+  if (text.contains('auto') ||
+      text.contains('carro') ||
+      text.contains('vehiculo') ||
+      text.contains('vehículo')) {
+    return 'AUTO';
+  }
+  if (text.contains('grande')) return 'Camión grande';
+  if (text.contains('mediano')) return 'Camión mediano';
+  return isTrip ? 'AUTO' : 'Camión pequeño';
+}
+
+String invoiceServiceStatusForTrip(Trip trip) {
+  final status = trip.status.trim().toLowerCase();
+  if (status == 'entregado' || status == 'entregada') return 'Entregado';
+  return 'Finalizado';
+}
+
+double invoiceHistoryAmountForTrip(Trip trip) =>
+    trip.invoiceAmountCs ?? trip.estimatedCostCs ?? 0;
+
 class ResumenCliente extends StatefulWidget {
   const ResumenCliente({super.key, this.embedded = false});
 
@@ -63,11 +152,9 @@ class ResumenCliente extends StatefulWidget {
 
 class _ResumenClienteState extends State<ResumenCliente> {
   late Future<List<Trip>> trips;
-  int tab = 0; // 0 = Envíos, 1 = Viajes, 2 = Facturas movilizadas
+  int tab = 0; // 0 = Envíos, 1 = Viajes, 2 = Historial de facturas
 
-  @override
-  void initState() {
-    super.initState();
+  Future<List<Trip>> _fetchTrips() {
     final user = apiClient.currentUser;
     final clientName = user?.companyName?.trim();
     final client =
@@ -76,7 +163,13 @@ class _ResumenClienteState extends State<ResumenCliente> {
                 ? clientName
                 : user.displayName.trim())
             : null;
-    trips = apiClient.getTrips(client: client);
+    return apiClient.getTrips(client: client);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    trips = _fetchTrips();
   }
 
   @override
@@ -96,6 +189,19 @@ class _ResumenClienteState extends State<ResumenCliente> {
                     .where((trip) => !{'cancelado', 'anulado'}
                         .contains(trip.status.toLowerCase()))
                     .toList();
+                if (tab == 2) {
+                  return _InvoiceHistoryPanel(
+                    trips: items,
+                    loading: loading,
+                    error: snapshot.error,
+                    onTabChanged: (value) => setState(() {
+                      tab = value;
+                      // Al entrar al historial se vuelve a consultar la API
+                      // para incluir facturas generadas recientemente.
+                      trips = _fetchTrips();
+                    }),
+                  );
+                }
                 final selectedTrips = tab == 0
                     ? activity.where((trip) => !_isTrip(trip)).toList()
                     : tab == 1
@@ -212,7 +318,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                           for (final (index, label) in [
                             (0, 'Envíos'),
                             (1, 'Viajes'),
-                            (2, 'Facturas movilizadas'),
+                            (2, 'Historial de facturas'),
                           ])
                             Expanded(
                               child: GestureDetector(
@@ -716,6 +822,660 @@ class _ResumenClienteState extends State<ResumenCliente> {
   }
 }
 
+class _InvoiceHistoryPanel extends StatefulWidget {
+  const _InvoiceHistoryPanel({
+    required this.trips,
+    required this.loading,
+    required this.error,
+    required this.onTabChanged,
+  });
+
+  final List<Trip> trips;
+  final bool loading;
+  final Object? error;
+  final ValueChanged<int> onTabChanged;
+
+  @override
+  State<_InvoiceHistoryPanel> createState() => _InvoiceHistoryPanelState();
+}
+
+class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
+  String statusFilter = 'Todas';
+  String typeFilter = 'Todos';
+  DateTimeRange? dateRange;
+  bool bulkSelectionMode = false;
+  Set<String> selectedPendingInvoiceIds = <String>{};
+
+  List<Trip> get _pendingInvoices => widget.trips
+      .where((trip) =>
+          isInvoiceHistoryStatus(trip) &&
+          invoicePaymentStatusForTrip(trip) == 'Pendiente')
+      .toList();
+
+  void _toggleBulkSelection() {
+    final pendingIds = _pendingInvoices.map((trip) => trip.id);
+    setState(() {
+      bulkSelectionMode = !bulkSelectionMode;
+      if (bulkSelectionMode) {
+        statusFilter = 'Pendientes';
+        typeFilter = 'Todos';
+        dateRange = null;
+      }
+      selectedPendingInvoiceIds = bulkSelectionMode
+          ? selectAllPendingInvoiceIds(pendingIds)
+          : <String>{};
+    });
+  }
+
+  void _toggleInvoice(String id) {
+    setState(() {
+      selectedPendingInvoiceIds = togglePendingInvoiceSelection(
+        selectedPendingInvoiceIds,
+        id,
+      );
+    });
+  }
+
+  bool _isTrip(Trip trip) {
+    final mode = trip.serviceMode?.trim();
+    if (mode?.isNotEmpty == true) return isTripServiceMode(mode);
+    final legacy = '${trip.id} ${trip.description ?? ''}'.toLowerCase();
+    return legacy.contains('taxi') ||
+        trip.id.trim().toLowerCase().startsWith(RegExp(r'#?vj'));
+  }
+
+  DateTime? _dateOf(Trip trip) {
+    return invoiceHistoryDateForTrip(trip, fallback: DateTime.now());
+  }
+
+  List<Trip> get _visibleTrips {
+    final source = widget.trips.where((trip) {
+      // Todo servicio terminado tiene una factura de servicio, aunque la API
+      // todavía no haya devuelto su importe o código en la misma respuesta.
+      if (!isInvoiceHistoryStatus(trip)) return false;
+      if (typeFilter == 'Viajes' && !_isTrip(trip)) return false;
+      if (typeFilter == 'Envíos' && _isTrip(trip)) return false;
+      if (!invoicePaymentMatchesFilter(trip, statusFilter)) return false;
+      final date = _dateOf(trip);
+      if (date == null || dateRange == null) return dateRange == null;
+      final start = DateUtils.dateOnly(dateRange!.start);
+      final end =
+          DateUtils.dateOnly(dateRange!.end).add(const Duration(days: 1));
+      return !date.isBefore(start) && date.isBefore(end);
+    }).toList();
+    source.sort((a, b) =>
+        (_dateOf(b) ?? DateTime(0)).compareTo(_dateOf(a) ?? DateTime(0)));
+    return source;
+  }
+
+  Map<DateTime, List<Trip>> _grouped(List<Trip> trips) {
+    final groups = <DateTime, List<Trip>>{};
+    for (final trip in trips) {
+      final date = _dateOf(trip);
+      if (date == null) continue;
+      groups.putIfAbsent(date, () => <Trip>[]).add(trip);
+    }
+    return groups;
+  }
+
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+      initialDateRange: dateRange,
+      builder: (context, child) => Theme(
+        data: appDatePickerTheme(Theme.of(context)),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) setState(() => dateRange = picked);
+  }
+
+  Future<void> _pickType() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF08255E),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final value in ['Todos', 'Envíos', 'Viajes'])
+              ListTile(
+                title: Text(value,
+                    style: const TextStyle(
+                        color: Colors.white, fontFamily: 'Figtree')),
+                trailing: value == typeFilter
+                    ? const Icon(Icons.check, color: cyan)
+                    : null,
+                onTap: () => Navigator.pop(context, value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && mounted) setState(() => typeFilter = picked);
+  }
+
+  String _dateTitle(DateTime date) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final yesterday = today.subtract(const Duration(days: 1));
+    final months = const [
+      'enero',
+      'febrero',
+      'marzo',
+      'abril',
+      'mayo',
+      'junio',
+      'julio',
+      'agosto',
+      'septiembre',
+      'octubre',
+      'noviembre',
+      'diciembre',
+    ];
+    final prefix = date == today
+        ? 'Hoy'
+        : date == yesterday
+            ? 'Ayer'
+            : date == today.subtract(const Duration(days: 2))
+                ? 'Anteayer'
+                : '${date.day.toString().padLeft(2, '0')} de ${months[date.month - 1]}';
+    return '$prefix · ${date.day} de ${months[date.month - 1]}';
+  }
+
+  Widget _segment(String label, int value, int selected) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => widget.onTabChanged(value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected == value ? accentBlue : Colors.transparent,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree')),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterSegment(String label) {
+    final selected = statusFilter == label;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => statusFilter = label),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? accentBlue : Colors.transparent,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree')),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterButton(
+      {required String label,
+      required IconData icon,
+      required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: const Color(0x552B4E94),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: glassBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 13),
+            const SizedBox(width: 5),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Figtree')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = _visibleTrips;
+    final groups = _grouped(visible);
+    final pendingCount = widget.trips
+        .where((trip) =>
+            isInvoiceHistoryStatus(trip) &&
+            invoicePaymentStatusForTrip(trip) == 'Pendiente')
+        .length;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(13, 10, 13, 96),
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(0, 8, 0, 11),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Resumen',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree')),
+              SizedBox(height: 2),
+              Text('Todo lo que necesitas saber',
+                  style: TextStyle(
+                      color: Color(0xE0FFFFFF),
+                      fontSize: 10,
+                      fontFamily: 'Figtree')),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: glassBorder),
+          ),
+          child: Row(children: [
+            _segment('Viajes', 1, 2),
+            _segment('Envíos', 0, 2),
+            _segment('Historial de facturas', 2, 2),
+          ]),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: glassBorder),
+          ),
+          child: Row(children: [
+            _filterSegment('Pendientes'),
+            _filterSegment('Todas'),
+            _filterSegment('Pagadas'),
+          ]),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _filterButton(
+              label: dateRange == null ? 'Todas las fechas' : 'Rango de fechas',
+              icon: Icons.calendar_today_outlined,
+              onTap: _pickDateRange,
+            ),
+            _filterButton(
+              label: typeFilter == 'Todos' ? 'Filtros' : typeFilter,
+              icon: Icons.filter_alt_outlined,
+              onTap: _pickType,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (pendingCount > 0)
+          Column(
+            children: [
+              GestureDetector(
+                onTap: _toggleBulkSelection,
+                child: Container(
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accentBlue,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Text(
+                    bulkSelectionMode
+                        ? 'Cancelar selección'
+                        : 'Pagar todas las facturas pendientes',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree'),
+                  ),
+                ),
+              ),
+              if (bulkSelectionMode || selectedPendingInvoiceIds.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${selectedPendingInvoiceIds.length} de $pendingCount seleccionadas',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 9,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      height: 30,
+                      child: ElevatedButton(
+                        onPressed: selectedPendingInvoiceIds.isEmpty
+                            ? null
+                            : () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentBlue,
+                          disabledBackgroundColor: Colors.white24,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          'Pagar',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        if (widget.loading)
+          const Padding(
+            padding: EdgeInsets.all(28),
+            child:
+                Center(child: CircularProgressIndicator(color: Colors.white)),
+          )
+        else if (widget.error != null)
+          GlassCard(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Text('No pudimos cargar el historial de facturas.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontFamily: 'Figtree')),
+            ),
+          )
+        else if (groups.isEmpty)
+          GlassCard(
+            child: const Padding(
+              padding: EdgeInsets.all(18),
+              child: Text('No hay facturas para estos filtros.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontFamily: 'Figtree')),
+            ),
+          )
+        else
+          for (final entry in groups.entries) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(3, 11, 3, 7),
+              child: Text(_dateTitle(entry.key),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree')),
+            ),
+            for (final trip in entry.value)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: _InvoiceHistoryCard(
+                  trip: trip,
+                  isTrip: _isTrip(trip),
+                  selectionMode: bulkSelectionMode,
+                  selected: selectedPendingInvoiceIds.contains(trip.id),
+                  selectable: invoicePaymentStatusForTrip(trip) == 'Pendiente',
+                  onToggle: () => _toggleInvoice(trip.id),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => FacturaServicioScreen(
+                        trip: trip,
+                        forceTravelLayout: _isTrip(trip),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+      ],
+    );
+  }
+}
+
+class _InvoiceHistoryCard extends StatelessWidget {
+  const _InvoiceHistoryCard({
+    required this.trip,
+    required this.isTrip,
+    this.selectionMode = false,
+    this.selected = false,
+    this.selectable = false,
+    this.onToggle,
+    required this.onTap,
+  });
+
+  final Trip trip;
+  final bool isTrip;
+  final bool selectionMode;
+  final bool selected;
+  final bool selectable;
+  final VoidCallback? onToggle;
+  final VoidCallback onTap;
+
+  String _vehicle() {
+    return invoiceHistoryVehicleLabel(trip, isTrip: isTrip);
+  }
+
+  String _asset() {
+    switch (_vehicle()) {
+      case 'MOTO':
+        return 'assets/img/HomeCliente/figma_moto.png';
+      case 'SUV':
+        return 'assets/img/HomeCliente/taxi_suv.png';
+      case 'MICROBUS':
+        return 'assets/img/HomeCliente/taxi_microbus.png';
+      case 'SEDÁN':
+        return 'assets/img/HomeCliente/taxi_sedan.png';
+      case 'Camión grande':
+        return 'assets/img/HomeCliente/carga_grande.png';
+      case 'Camión mediano':
+        return 'assets/img/HomeCliente/carga_mediano.png';
+      case 'AUTO':
+        return 'assets/img/HomeCliente/figma_auto.png';
+      default:
+        return isTrip
+            ? 'assets/img/HomeCliente/figma_auto.png'
+            : 'assets/img/HomeCliente/carga_extra_pequeno.png';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final invoiceStatus = invoicePaymentStatusForTrip(trip);
+    final serviceStatus = invoiceServiceStatusForTrip(trip);
+    final amount = invoiceHistoryAmountForTrip(trip);
+    final statusColor = invoiceStatus == 'Pagada'
+        ? const Color(0xFF19D27D)
+        : const Color(0xFFFFC928);
+    return AppGlassSurface(
+      borderRadius: 14,
+      fillColor: const Color(0x55112F78),
+      child: InkWell(
+        onTap: selectionMode && selectable ? onToggle : onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 9, 8, 9),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                if (selectable) ...[
+                  GestureDetector(
+                    onTap: onToggle,
+                    child: Icon(
+                      selected
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      color: selected ? accentBlue : Colors.white70,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                _InvoiceTag(
+                    label: isTrip ? 'Viaje' : 'Envío', color: accentBlue),
+                const SizedBox(width: 4),
+                _InvoiceTag(label: invoiceStatus, color: statusColor),
+                const SizedBox(width: 4),
+                _InvoiceTag(
+                    label: serviceStatus, color: const Color(0xFF19D27D)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child:
+                        _InvoiceTag(label: _vehicle(), color: Colors.white24),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 11),
+              Row(children: [
+                SizedBox(
+                  width: 54,
+                  height: 38,
+                  child: Image.asset(_asset(),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.local_shipping_outlined,
+                          color: Colors.white)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Image.asset(
+                            'assets/img/HomeCliente/akar-icons_location.png',
+                            width: 16,
+                            height: 16,
+                            fit: BoxFit.contain),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(trip.origin,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Figtree')),
+                        ),
+                      ]),
+                      const SizedBox(height: 5),
+                      Text(
+                          '${trip.pickupTime?.trim().isNotEmpty == true ? trip.pickupTime : 'Pendiente'}  •  #${trip.id.replaceFirst('#', '')}',
+                          style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 9,
+                              fontFamily: 'Figtree')),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Colors.white, size: 25),
+              ]),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      trip.destination.trim().isEmpty
+                          ? 'Destino pendiente'
+                          : trip.destination,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 8.5,
+                          fontFamily: 'Figtree'),
+                    ),
+                  ),
+                  Text(formatInvoiceHistoryAmount(amount),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String formatInvoiceHistoryAmount(double amount) =>
+    'C\$ ${amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2)}';
+
+class _InvoiceTag extends StatelessWidget {
+  const _InvoiceTag({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                color: color.computeLuminance() > 0.55
+                    ? Colors.black
+                    : Colors.white,
+                fontSize: 7.5,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Figtree')),
+      );
+}
+
 class _PeriodCard extends StatelessWidget {
   const _PeriodCard({
     required this.label,
@@ -871,7 +1631,11 @@ class _WeeklyChartState extends State<_WeeklyChart> {
                       child: selectedIndex == i
                           ? OverflowBox(
                               maxWidth: 96,
-                              alignment: Alignment.topCenter,
+                              alignment: i == 0
+                                  ? Alignment.topLeft
+                                  : i == 6
+                                      ? Alignment.topRight
+                                      : Alignment.topCenter,
                               child: SizedBox(
                                 width: 88,
                                 child: _ChartTooltip(

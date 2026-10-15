@@ -212,6 +212,9 @@ class ApiClient {
     bool returnTrip = false,
     List<TripStop> stops = const [],
     List<TripOptionSelection> options = const [],
+    double? quotedBaseCs,
+    double? quotedAdditionalCs,
+    double? quotedServiceTotalCs,
   }) async {
     final json = (await _send(
       'POST',
@@ -257,6 +260,9 @@ class ApiClient {
               'recipientPhone': stop.recipientPhone,
             }).toList(),
         'options': options.map((option) => option.toJson()).toList(),
+        'quotedBaseCs': quotedBaseCs,
+        'quotedAdditionalCs': quotedAdditionalCs,
+        'quotedServiceTotalCs': quotedServiceTotalCs,
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);

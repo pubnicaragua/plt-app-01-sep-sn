@@ -360,7 +360,7 @@ class _TruckRateSummary extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 routeKm != null && rate != null
-                    ? '${routeKm.toStringAsFixed(1)} km · base ${formatFareCs(rate!.baseFeeCs)} + ${extraKm!.toStringAsFixed(1)} km adicionales × C\$ ${rate!.farePerKmCs.toStringAsFixed(1)} + ${formatFareCs(logisticsServiceFeeCs)} servicio'
+                    ? '${routeKm.toStringAsFixed(1)} km · base ${formatFareCs(rate!.baseFeeCs)} + ${extraKm!.toStringAsFixed(1)} km adicionales × C\$ ${rate!.farePerKmCs.toStringAsFixed(1)}'
                     : 'Se calculará según la ruta, el tipo de carga y la disponibilidad.',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,

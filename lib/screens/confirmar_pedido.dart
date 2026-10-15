@@ -252,6 +252,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   VehicleRate? _rateFor(String vehicle) => settings?.rateFor(vehicle);
 
   double _shippingFor(String vehicle) {
+    if (vehicle == widget.transport && widget.estimatedShipping != null) {
+      // Las cotizaciones ya no incluyen el cargo de gestión logística.
+      return widget.estimatedShipping!.clamp(0, double.infinity).toDouble();
+    }
     final rate = _rateFor(vehicle);
     final distance = _distance;
     if (rate != null && distance != null) {
@@ -264,15 +268,13 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
       return roundFareCs(
           (rate.baseFeeCs +
-                  chargeableKm * rate.farePerKmCs +
-                  logisticsServiceFeeCs) *
+                  chargeableKm * rate.farePerKmCs) *
               (1 + surcharge / 100),
           settings?.fareRoundingCs ?? 5);
     }
-    if (vehicle == widget.transport && widget.estimatedShipping != null) {
-      return widget.estimatedShipping!;
-    }
-    return _vehicle(vehicle).$6;
+    return (_vehicle(vehicle).$6 - logisticsServiceFeeCs)
+        .clamp(0, double.infinity)
+        .toDouble();
   }
 
   bool get _invoiceAlreadyPaid =>
@@ -306,23 +308,26 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   }
 
   InvoiceBreakdown get _invoiceBreakdown {
+    return _invoiceBreakdownFor(widget.options);
+  }
+
+  InvoiceBreakdown _invoiceBreakdownFor(List<TripOptionSelection> options) {
     final shipping = _shippingFor(selectedTransport);
     final base = _baseFor(selectedTransport);
-    final service = logisticsServiceFeeCs;
     final additional =
-        (shipping - base - service).clamp(0, double.infinity).toDouble();
+        (shipping - base).clamp(0, double.infinity).toDouble();
     return buildInvoiceBreakdown(
       serviceMode: widget.serviceMode,
       transport: selectedTransport,
       shippingCs: shipping,
       baseCs: base,
-      serviceCs: service,
+      serviceCs: 0,
       additionalCs: additional,
       weight: widget.weight,
       weightUnit: widget.weightUnit,
       invoiceAmountCs: _invoiceAmountCs,
       invoiceAlreadyPaid: _invoiceAlreadyPaid,
-      options: widget.options,
+      options: options,
       dollarRate: settings?.dollarRate ?? 36.5,
     );
   }
@@ -365,6 +370,11 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       errorMessage = null;
     });
     if (!mounted) return;
+    final submittedOptions = [
+      ...widget.options,
+      if (insurance != null) insurance,
+    ];
+    final submittedBreakdown = _invoiceBreakdownFor(submittedOptions);
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => CrearEnvio3(
@@ -401,10 +411,14 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           passengerCount: widget.passengerCount,
           returnTrip: widget.returnTrip,
           stops: widget.stops,
-          options: [
-            ...widget.options,
-            if (insurance != null) insurance,
-          ],
+          options: submittedOptions,
+          quotedBaseCs: submittedBreakdown.lines
+              .firstWhere((line) => line.label == submittedBreakdown.baseLabel)
+              .amountCs,
+          quotedAdditionalCs: submittedBreakdown.lines
+              .where((line) => line.label == 'Distancia adicional')
+              .fold<double>(0, (sum, line) => sum + line.amountCs),
+          quotedServiceTotalCs: submittedBreakdown.shippingSubtotalCs,
         ),
       ),
     );
@@ -1039,7 +1053,6 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
         const Divider(color: Color(0x55FFFFFF), height: 1),
         const SizedBox(height: 8),
         _priceLine('Tarifa base de envío', base),
-        _priceLine('Servicio y gestión logística', service),
         _priceLine('Carga adicional (${widget.weight} ${widget.weightUnit})',
             additional),
         Container(

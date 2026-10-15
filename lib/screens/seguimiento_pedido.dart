@@ -46,20 +46,56 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   String? _markerTransport;
   Map<String, BitmapDescriptor> _routeMarkerIcons = const {};
   bool _completionOpened = false;
+  bool _finishingForTest = false;
   Timer? _demoTaxiCompletion;
 
-  // PRUEBA TEMPORAL: quitar este temporizador cuando el conductor tenga
-  // movimiento real y el backend cambie el viaje a "Completado".
   void _scheduleDemoTaxiCompletion() {
-    _demoTaxiCompletion = Timer(const Duration(seconds: 10), () {
+    _demoTaxiCompletion = Timer(const Duration(seconds: 10), () async {
       if (!mounted || _completionOpened) return;
       _completionOpened = true;
-      poll?.cancel();
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => FinalizarViaje(trip: _latestTrip ?? widget.trip),
-        ),
-      );
+      final current = _latestTrip ?? widget.trip;
+      try {
+        const progression = [
+          'Asignado',
+          'En camino',
+          'En entrega',
+          'Completado',
+        ];
+        final normalizedStatus = current.status.trim().toLowerCase();
+        final startIndex = switch (normalizedStatus) {
+          'asignado' => 1,
+          'en camino' => 2,
+          'en entrega' => 3,
+          'completado' => progression.length,
+          _ => 0,
+        };
+        var updated = current;
+        for (var index = startIndex; index < progression.length; index++) {
+          updated = await apiClient.updateTripStatus(
+            updated.id,
+            progression[index],
+          );
+        }
+        if (!mounted) return;
+        poll?.cancel();
+        _latestTrip = updated;
+        _prevStatus = updated.status;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => FinalizarViaje(trip: updated)),
+        );
+      } catch (error) {
+        if (!mounted) return;
+        _completionOpened = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is ApiException
+                  ? error.message
+                  : 'No se pudo finalizar el viaje.',
+            ),
+          ),
+        );
+      }
     });
   }
 
@@ -83,7 +119,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     unawaited(_loadRouteMarkerIcons());
     _loadRoadRoute();
     poll = Timer.periodic(const Duration(seconds: 5), (_) => _refresh());
-    if (widget.trip.serviceMode == 'Taxi Privado') {
+    if (isTripServiceMode(widget.trip.serviceMode)) {
       _scheduleDemoTaxiCompletion();
     }
   }
@@ -114,7 +150,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       final data = await apiClient.getTrip(widget.trip.id);
       if (!mounted) return;
       if (data.status == 'Completado' &&
-          widget.trip.serviceMode == 'Taxi Privado' &&
+          isTripServiceMode(widget.trip.serviceMode) &&
           !_completionOpened) {
         _completionOpened = true;
         poll?.cancel();
@@ -183,6 +219,57 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _finishForHistoryTest() async {
+    if (_finishingForTest) return;
+    final current = _latestTrip ?? widget.trip;
+    // Estos son los únicos estados finales/intermedios aceptados por la API.
+    const progression = ['En camino', 'En entrega', 'Completado'];
+    final normalizedStatus = current.status.trim().toLowerCase();
+    final startIndex = switch (normalizedStatus) {
+      'en camino' => 1,
+      'en entrega' => 2,
+      'completado' => progression.length,
+      _ => 0,
+    };
+    setState(() => _finishingForTest = true);
+    try {
+      var updated = current;
+      for (var index = startIndex; index < progression.length; index++) {
+        updated = await apiClient.updateTripStatus(
+          updated.id,
+          progression[index],
+        );
+      }
+      if (!mounted) return;
+      poll?.cancel();
+      _demoTaxiCompletion?.cancel();
+      _latestTrip = updated;
+      _prevStatus = updated.status;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => FinalizarViaje(
+            trip: updated,
+            // Esta prueba debe mostrar exactamente la misma pantalla Figma
+            // que el botón de vista previa; solo cambia el estado antes.
+            forceTravelLayout: true,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _finishingForTest = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is ApiException
+                ? error.message
+                : 'No se pudo completar la prueba de finalización.',
+          ),
+        ),
+      );
     }
   }
 
@@ -1107,33 +1194,69 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 ),
               ),
 
-            // --- CAMBIO PARA PRUEBAS: 'true' hace que el botón siempre sea visible ---
-            if (true) const SizedBox(height: 12),
-            if (true)
-              SizedBox(
-                height: 48,
-                child: Material(
-                  color: accentBlue,
-                  borderRadius: BorderRadius.circular(26),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(26),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => FinalizarViaje(trip: trip)),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 46,
+              child: Material(
+                color: accentBlue,
+                borderRadius: BorderRadius.circular(24),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => FinalizarViaje(
+                        trip: trip,
+                        forceTravelLayout: true,
+                      ),
                     ),
-                    child: const Center(
-                      child: Text(
-                        'Ver detalle de entrega',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Figtree'),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Ver viaje terminado',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
                       ),
                     ),
                   ),
                 ),
               ),
+            ),
+
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 44,
+              child: Material(
+                color: Colors.white.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(24),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: _finishingForTest ? null : _finishForHistoryTest,
+                  child: Center(
+                    child: _finishingForTest
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Probar finalización e historial',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
 
             if (currentStatus == 'Completado') const SizedBox(height: 12),
             if (currentStatus == 'Completado')
@@ -1344,11 +1467,15 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   double _progressFor(String status) {
     switch (status) {
       case 'Asignado':
-        return .18;
+        return 0;
       case 'En camino':
-        return .45;
+        return 0;
+      case 'Recogió':
       case 'En entrega':
-        return .78;
+        return .33;
+      case 'En viaje':
+        return .66;
+      case 'Finalizado':
       case 'Completado':
         return 1;
       default:
@@ -1663,58 +1790,65 @@ class _StepsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        SizedBox(
-          height: 30,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned(
-                left: 15,
-                right: 15,
-                child: Row(
-                  children: [
-                    for (var i = 0; i < steps.length - 1; i++)
-                      Expanded(
-                        child: Container(
-                          height: 2,
-                          margin: const EdgeInsets.symmetric(horizontal: 5),
-                          color: i + 1 < _done
-                              ? figmaBlue
-                              : Colors.white.withValues(alpha: .14),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Row(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // El recorrido de la línea empieza y termina exactamente en el
+            // centro del primer y último punto, sin sobresalir de ellos.
+            final trackInset = constraints.maxWidth / (steps.length * 2);
+            return SizedBox(
+              height: 30,
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  for (var i = 0; i < steps.length; i++)
-                    Expanded(
-                      child: Center(
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: i < _done
-                                ? figmaBlue
-                                : Colors.white.withValues(alpha: .10),
-                            border: Border.all(
-                              color: i < _done ? figmaBlue : Colors.white24,
+                  Positioned(
+                    left: trackInset,
+                    right: trackInset,
+                    top: 14,
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < steps.length - 1; i++)
+                          Expanded(
+                            child: Container(
+                              height: 2,
+                              color: i + 1 < _done
+                                  ? figmaBlue
+                                  : Colors.white.withValues(alpha: .14),
                             ),
                           ),
-                          child: const Icon(
-                            Icons.circle,
-                            color: Colors.white,
-                            size: 7,
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      for (var i = 0; i < steps.length; i++)
+                        Expanded(
+                          child: Center(
+                            child: Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: i < _done
+                                    ? figmaBlue
+                                    : Colors.white.withValues(alpha: .10),
+                                border: Border.all(
+                                  color: i < _done ? figmaBlue : Colors.white24,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.circle,
+                                color: Colors.white,
+                                size: 7,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                    ],
+                  ),
                 ],
               ),
-            ],
-          ),
+            );
+          },
         ),
         const SizedBox(height: 6),
         Row(

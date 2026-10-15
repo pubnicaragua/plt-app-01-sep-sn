@@ -263,7 +263,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     final chargeableKm =
         (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
     return roundFareCs(
-      rate.baseFeeCs + chargeableKm * rate.farePerKmCs + logisticsServiceFeeCs,
+      rate.baseFeeCs + chargeableKm * rate.farePerKmCs,
       settings?.fareRoundingCs ?? 5,
     );
   }
@@ -1524,7 +1524,7 @@ class _SelectedRateSummary extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '${routeKm.toStringAsFixed(1)} km · base C\$ ${rate.baseFeeCs.toStringAsFixed(0)} + ${extraKm.toStringAsFixed(1)} km adicionales × C\$ ${rate.farePerKmCs.toStringAsFixed(1)} + C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} servicio',
+                '${routeKm.toStringAsFixed(1)} km · base C\$ ${rate.baseFeeCs.toStringAsFixed(0)} + ${extraKm.toStringAsFixed(1)} km adicionales × C\$ ${rate.farePerKmCs.toStringAsFixed(1)}',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -1769,9 +1769,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
     final chargeableKm =
         (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
     return roundFareCs(
-        rate.baseFeeCs +
-            chargeableKm * rate.farePerKmCs +
-            logisticsServiceFeeCs,
+        rate.baseFeeCs + chargeableKm * rate.farePerKmCs,
         settings?.fareRoundingCs ?? 5);
   }
 

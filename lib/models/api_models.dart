@@ -111,6 +111,14 @@ class Trip {
       this.distanceKm,
       this.estimatedCostCs,
       this.invoiceAmountCs,
+    this.invoiceStatus,
+    this.invoiceNumber,
+    this.invoicePaymentMethod,
+    this.servicePaymentStatus,
+    this.servicePaymentMethod,
+    this.serviceInvoiceNumber,
+    this.serviceInvoiceUrl,
+    this.completedAt,
       this.serviceType,
     this.transport,
     this.contactName,
@@ -134,6 +142,9 @@ class Trip {
     this.stops = const [],
     this.options = const [],
     this.optionsTotalCs = 0,
+    this.quotedBaseCs,
+    this.quotedAdditionalCs,
+    this.quotedServiceTotalCs,
   });
 
   final String id;
@@ -151,6 +162,14 @@ class Trip {
   final double? distanceKm;
   final double? estimatedCostCs;
   final double? invoiceAmountCs;
+  final String? invoiceStatus;
+  final String? invoiceNumber;
+  final String? invoicePaymentMethod;
+  final String? servicePaymentStatus;
+  final String? servicePaymentMethod;
+  final String? serviceInvoiceNumber;
+  final String? serviceInvoiceUrl;
+  final String? completedAt;
   final String? serviceType;
   final String? transport;
   final String? contactName;
@@ -174,13 +193,24 @@ class Trip {
   final List<TripStop> stops;
   final List<TripOptionSelection> options;
   final double optionsTotalCs;
+  final double? quotedBaseCs;
+  final double? quotedAdditionalCs;
+  final double? quotedServiceTotalCs;
 
   bool get isPending => status == 'Pendiente';
   bool get isAssigned => status == 'Asignado';
   bool get isOnWay => status == 'En camino';
   bool get isDelivering => status == 'En entrega';
-  bool get isCompleted => status == 'Completado';
-  bool get isActive => !{'Completado', 'Cancelado', 'Anulado'}.contains(status);
+  bool get isCompleted =>
+      {'Completado', 'Finalizado', 'Entregado', 'Entregada'}.contains(status);
+  bool get isActive => !{
+        'Completado',
+        'Finalizado',
+        'Entregado',
+        'Entregada',
+        'Cancelado',
+        'Anulado',
+      }.contains(status);
 
   String get statusLabel {
     switch (status) {
@@ -192,6 +222,11 @@ class Trip {
         return 'En entrega';
       case 'Completado':
         return 'Completado';
+      case 'Finalizado':
+        return 'Finalizado';
+      case 'Entregado':
+      case 'Entregada':
+        return 'Entregado';
       case 'Cancelado':
         return 'Cancelado';
       default:
@@ -220,6 +255,38 @@ class Trip {
       invoiceAmountCs: invoiceAmount != null && invoiceAmount > 0
           ? invoiceAmount
           : _invoiceAmountFromDescription(description),
+      invoiceStatus: (json['invoiceStatus'] ??
+              json['productPaymentStatus'] ??
+              json['invoicePaymentStatus'] ??
+              json['paymentStatus'])
+          ?.toString(),
+      invoiceNumber: (json['invoiceNumber'] ?? json['invoice'])?.toString() ??
+          _invoiceNumberFromDescription(description),
+      invoicePaymentMethod: (json['invoicePaymentMethod'] ??
+              json['productPaymentMethod'] ??
+              json['paymentMethod'])
+          ?.toString(),
+      servicePaymentStatus: (json['servicePaymentStatus'] ??
+              json['shipmentPaymentStatus'] ??
+              json['paymentStatus'])
+          ?.toString(),
+      servicePaymentMethod: (json['servicePaymentMethod'] ??
+              json['shipmentPaymentMethod'] ??
+              json['paymentMethod'])
+          ?.toString(),
+      serviceInvoiceNumber: (json['serviceInvoiceNumber'] ??
+              json['serviceInvoiceCode'] ??
+              json['serviceInvoiceId'])
+          ?.toString(),
+      serviceInvoiceUrl: (json['serviceInvoiceUrl'] ??
+              json['invoiceUrl'] ??
+              json['invoicePdfUrl'])
+          ?.toString(),
+      completedAt: (json['completedAt'] ??
+              json['deliveredAt'] ??
+              json['finishedAt'] ??
+              json['updatedAt'])
+          ?.toString(),
       serviceType: json['serviceType']?.toString(),
       transport: json['transport']?.toString(),
       contactName: json['contactName']?.toString(),
@@ -252,6 +319,9 @@ class Trip {
           .map((item) => TripOptionSelection.fromJson(item.cast<String, dynamic>()))
           .toList(),
       optionsTotalCs: (json['optionsTotalCs'] as num?)?.toDouble() ?? 0,
+      quotedBaseCs: (json['quotedBaseCs'] as num?)?.toDouble(),
+      quotedAdditionalCs: (json['quotedAdditionalCs'] as num?)?.toDouble(),
+      quotedServiceTotalCs: (json['quotedServiceTotalCs'] as num?)?.toDouble(),
     );
   }
 }
@@ -481,6 +551,15 @@ double? _invoiceAmountFromDescription(String? description) {
   ).firstMatch(text);
   if (match == null) return null;
   return double.tryParse(match.group(1)!.replaceAll(',', '.'));
+}
+
+String? _invoiceNumberFromDescription(String? description) {
+  final text = description ?? '';
+  final match = RegExp(
+    r'Factura\s+([A-Z0-9][\w-]*)',
+    caseSensitive: false,
+  ).firstMatch(text);
+  return match?.group(1);
 }
 
 class PlaceSuggestion {

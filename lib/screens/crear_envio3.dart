@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../core/api_client.dart';
 import '../core/shipment_flow.dart';
 import '../core/shipment_payment_logic.dart';
+import '../core/shipment_retry.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
@@ -48,6 +49,9 @@ class CrearEnvio3 extends StatefulWidget {
     this.returnTrip = false,
     this.stops = const [],
     this.options = const [],
+    this.quotedBaseCs,
+    this.quotedAdditionalCs,
+    this.quotedServiceTotalCs,
   });
 
   final String origin;
@@ -84,6 +88,9 @@ class CrearEnvio3 extends StatefulWidget {
   final bool returnTrip;
   final List<TripStop> stops;
   final List<TripOptionSelection> options;
+  final double? quotedBaseCs;
+  final double? quotedAdditionalCs;
+  final double? quotedServiceTotalCs;
 
   @override
   State<CrearEnvio3> createState() => _CrearEnvio3State();
@@ -93,6 +100,8 @@ class _CrearEnvio3State extends State<CrearEnvio3>
     with SingleTickerProviderStateMixin {
   bool failed = false;
   String? failureMessage;
+  String? _createdTripId;
+  bool _requestInFlight = false;
   late final AnimationController characterAnimation;
 
   @override
@@ -112,6 +121,7 @@ class _CrearEnvio3State extends State<CrearEnvio3>
   }
 
   void _begin() {
+    if (_requestInFlight) return;
     setState(() {
       failed = false;
       failureMessage = null;
@@ -142,61 +152,73 @@ class _CrearEnvio3State extends State<CrearEnvio3>
   }
 
   Future<void> _create() async {
+    if (_requestInFlight) return;
+    _requestInFlight = true;
     try {
-      final evidence = await _uploadShipmentEvidence();
-      final originPlace = widget.originPlace;
-      final destinationPlace = widget.destinationPlace;
-      final currentUser = apiClient.currentUser;
-      final companyName = currentUser?.companyName?.trim();
-      final created = await apiClient.createTrip(
-        client: companyName?.isNotEmpty == true
-            ? companyName!
-            : currentUser?.displayName ?? 'Empresa INCOEX',
-        origin: widget.origin,
-        destination: widget.destination,
-        packages: widget.bundles,
-        description: [
-          if (widget.description.trim().isNotEmpty) widget.description.trim(),
-          'Peso ${widget.weight}${widget.weightUnit}, ${widget.bundles} bulto(s)',
-          if (widget.invoiceAmount > 0)
-            'Valor de factura C\$${widget.invoiceAmount.toStringAsFixed(2)}',
-          if (widget.invoiceNumber.trim().isNotEmpty)
-            'Factura ${widget.invoiceNumber.trim()}',
-          if (widget.productPaymentStatus.trim().isNotEmpty)
-            'Estado factura producto: ${widget.productPaymentStatus.trim()}',
-          if (widget.productPaymentMethod.trim().isNotEmpty)
-            'Método factura producto: ${widget.productPaymentMethod.trim()}',
-          if (evidence.isNotEmpty) 'Evidencias: ${evidence.join(', ')}',
-        ].join(' · '),
-        originLat: originPlace?.latitude,
-        originLng: originPlace?.longitude,
-        destinationLat: destinationPlace?.latitude,
-        destinationLng: destinationPlace?.longitude,
-        distanceKm: distanceKm(
-          originPlace,
-          destinationPlace,
-        ),
-        transport: widget.transport,
-        fragile: widget.fragile,
-        autoAssign: true,
-        originRefs: widget.originRefs.isEmpty ? null : widget.originRefs,
-        destinationRefs: widget.destinationRefs.isEmpty ? null : widget.destinationRefs,
-        recipientName: widget.recipientName.isEmpty ? null : widget.recipientName,
-        recipientPhone: widget.recipientPhone.isEmpty ? null : widget.recipientPhone,
-        serviceType: widget.serviceType,
-        scheduledDate: widget.scheduledDate,
-        scheduledTime: widget.scheduledTime,
-        isScheduled: widget.isScheduled || widget.serviceType == 'Programado',
-        weight: widget.weight.toDouble(),
-        weightUnit: widget.weightUnit == 'lb' ? 'lb' : 'kg',
-        serviceMode: widget.serviceMode,
-        vehicleVariant: widget.vehicleVariant,
-        truckType: widget.truckType,
-        passengerCount: widget.passengerCount,
-        returnTrip: widget.returnTrip,
-        stops: widget.stops,
-        options: widget.options,
-      );
+      late final Trip created;
+      if (shouldCreateShipmentTrip(_createdTripId)) {
+        final evidence = await _uploadShipmentEvidence();
+        final originPlace = widget.originPlace;
+        final destinationPlace = widget.destinationPlace;
+        final currentUser = apiClient.currentUser;
+        final companyName = currentUser?.companyName?.trim();
+        created = await apiClient.createTrip(
+          client: companyName?.isNotEmpty == true
+              ? companyName!
+              : currentUser?.displayName ?? 'Empresa INCOEX',
+          origin: widget.origin,
+          destination: widget.destination,
+          packages: widget.bundles,
+          description: [
+            if (widget.description.trim().isNotEmpty) widget.description.trim(),
+            'Peso ${widget.weight}${widget.weightUnit}, ${widget.bundles} bulto(s)',
+            if (widget.invoiceAmount > 0)
+              'Valor de factura C\$${widget.invoiceAmount.toStringAsFixed(2)}',
+            if (widget.invoiceNumber.trim().isNotEmpty)
+              'Factura ${widget.invoiceNumber.trim()}',
+            if (widget.productPaymentStatus.trim().isNotEmpty)
+              'Estado factura producto: ${widget.productPaymentStatus.trim()}',
+            if (widget.productPaymentMethod.trim().isNotEmpty)
+              'Método factura producto: ${widget.productPaymentMethod.trim()}',
+            if (widget.paymentStatus.trim().isNotEmpty)
+              'Estado pago envío: ${widget.paymentStatus.trim()}',
+            if (widget.paymentMethod.trim().isNotEmpty)
+              'Método pago envío: ${widget.paymentMethod.trim()}',
+            if (evidence.isNotEmpty) 'Evidencias: ${evidence.join(', ')}',
+          ].join(' · '),
+          originLat: originPlace?.latitude,
+          originLng: originPlace?.longitude,
+          destinationLat: destinationPlace?.latitude,
+          destinationLng: destinationPlace?.longitude,
+          distanceKm: distanceKm(originPlace, destinationPlace),
+          transport: widget.transport,
+          fragile: widget.fragile,
+          autoAssign: true,
+          originRefs: widget.originRefs.isEmpty ? null : widget.originRefs,
+          destinationRefs: widget.destinationRefs.isEmpty ? null : widget.destinationRefs,
+          recipientName: widget.recipientName.isEmpty ? null : widget.recipientName,
+          recipientPhone: widget.recipientPhone.isEmpty ? null : widget.recipientPhone,
+          serviceType: widget.serviceType,
+          scheduledDate: widget.scheduledDate,
+          scheduledTime: widget.scheduledTime,
+          isScheduled: widget.isScheduled || widget.serviceType == 'Programado',
+          weight: widget.weight.toDouble(),
+          weightUnit: widget.weightUnit == 'lb' ? 'lb' : 'kg',
+          serviceMode: widget.serviceMode,
+          vehicleVariant: widget.vehicleVariant,
+          truckType: widget.truckType,
+          passengerCount: widget.passengerCount,
+          returnTrip: widget.returnTrip,
+          stops: widget.stops,
+          options: widget.options,
+        quotedBaseCs: widget.quotedBaseCs,
+        quotedAdditionalCs: widget.quotedAdditionalCs,
+        quotedServiceTotalCs: widget.quotedServiceTotalCs,
+        );
+        _createdTripId = created.id;
+      } else {
+        created = await apiClient.getTrip(_createdTripId!);
+      }
       if (widget.paymentMethod.isNotEmpty) {
         await apiClient.updateTripPayment(
           id: created.id,
@@ -240,6 +262,8 @@ class _CrearEnvio3State extends State<CrearEnvio3>
         failureMessage =
             'No se pudo conectar con la API de Render. Revisa la URL del APK y tu conexión.';
       });
+    } finally {
+      _requestInFlight = false;
     }
   }
 

@@ -7,6 +7,7 @@ import 'package:incoex_logistics_app/screens/resumen_cliente.dart';
 Trip _trip({
   required String status,
   String date = '',
+  String? completedAt,
   bool isScheduled = false,
   String? scheduledDate,
   double? invoiceAmountCs,
@@ -20,6 +21,7 @@ Trip _trip({
     date: date,
     packages: 1,
     status: status,
+    completedAt: completedAt,
     isScheduled: isScheduled,
     scheduledDate: scheduledDate,
     invoiceAmountCs: invoiceAmountCs,
@@ -55,6 +57,58 @@ void main() {
     );
 
     expect(date, DateTime(2026, 10, 2));
+  });
+
+  test('el historial de facturas usa completedAt cuando date está vacío', () {
+    final trip = _trip(
+      status: 'Completado',
+      completedAt: '2026-10-08T14:30:00Z',
+    );
+
+    expect(invoiceHistoryDateForTrip(trip), DateTime(2026, 10, 8));
+  });
+
+  test('los filtros de pago aceptan sus etiquetas en plural', () {
+    final trip = _trip(status: 'Completado');
+
+    expect(invoicePaymentMatchesFilter(trip, 'Pendientes'), isTrue);
+    expect(invoicePaymentMatchesFilter(trip, 'Pagadas'), isFalse);
+    expect(invoicePaymentMatchesFilter(trip, 'Todas'), isTrue);
+  });
+
+  test('el historial usa el estado de pago del servicio igual que la factura', () {
+    expect(
+      invoicePaymentStatusForTrip(
+        Trip(
+          id: 'test',
+          client: 'Cliente',
+          driver: 'Conductor',
+          origin: 'Origen',
+          destination: 'Destino',
+          date: '',
+          packages: 1,
+          status: 'Completado',
+          servicePaymentStatus: 'Pagado',
+        ),
+      ),
+      'Pagada',
+    );
+  });
+
+  test('el historial reconoce auto y no lo muestra como camión pequeño', () {
+    final trip = Trip(
+      id: 'test',
+      client: 'Cliente',
+      driver: 'Conductor',
+      origin: 'Origen',
+      destination: 'Destino',
+      date: '2026-10-13',
+      packages: 1,
+      status: 'Completado',
+      transport: 'Auto',
+    );
+
+    expect(invoiceHistoryVehicleLabel(trip, isTrip: false), 'AUTO');
   });
 
   test('el total general cuenta registros y no montos', () {

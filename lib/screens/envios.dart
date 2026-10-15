@@ -8,6 +8,7 @@ import '../widgets/glass.dart';
 import 'resumen_cliente.dart';
 import 'envio_asignado.dart';
 import 'seguimiento_pedido.dart';
+import 'finalizar_viaje.dart';
 
 String _vehicleData(Trip trip) =>
     '${trip.vehicleVariant ?? ''} ${trip.truckType ?? ''} '
@@ -143,8 +144,11 @@ class _MisEnviosState extends State<MisEnvios> {
     if (historyStatus == 'Todos') return true;
     final status = trip.status.toLowerCase();
     return switch (historyStatus) {
-      'Finalizados' => status == 'completado' || status == 'finalizado',
-      'Entregados' => status == 'entregado' || status == 'entregada',
+      'Finalizados' =>
+        _isTrip(trip) && (status == 'completado' || status == 'finalizado'),
+      'Entregados' =>
+        !_isTrip(trip) &&
+            (status == 'entregado' || status == 'entregada' || status == 'completado'),
       'Cancelados' => status == 'cancelado' || status == 'anulado',
       _ => true,
     };
@@ -220,9 +224,7 @@ class _MisEnviosState extends State<MisEnvios> {
       lastDate: DateTime.now().add(const Duration(days: 730)),
       initialDateRange: customRange,
       builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(primary: accentBlue),
-        ),
+        data: appDatePickerTheme(Theme.of(context)),
         child: child!,
       ),
     );
@@ -236,6 +238,18 @@ class _MisEnviosState extends State<MisEnvios> {
 
   void _openTrip(Trip trip) {
     if (!trip.isActive) {
+      if (trip.status.toLowerCase() != 'cancelado' &&
+          trip.status.toLowerCase() != 'anulado') {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => FinalizarViaje(
+              trip: trip,
+              forceTravelLayout: _isTrip(trip),
+            ),
+          ),
+        );
+        return;
+      }
       showModalBottomSheet<void>(
         context: context,
         backgroundColor: const Color(0xFF08255E),
@@ -405,7 +419,9 @@ class _MisEnviosState extends State<MisEnvios> {
                       vehicle: _vehicle,
                       isTrip: _isTrip,
                       dateOf: _dateOf,
-                      onTap: _openTrip)
+                      onTap: _openTrip,
+                      showServiceStatusTag: false,
+                      darkServiceStatusText: false)
                 else
                   ...visible.map((trip) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
@@ -413,6 +429,9 @@ class _MisEnviosState extends State<MisEnvios> {
                           trip: trip,
                           vehicle: _vehicle(trip),
                           isTrip: _isTrip(trip),
+                          showServiceStatusTag:
+                              _isTrip(trip) || tab == 'Historial',
+                          darkServiceStatusText: tab == 'Historial',
                           onTap: () => _openTrip(trip)))),
               const SizedBox(height: 6),
               GlassButton(
@@ -465,9 +484,7 @@ class _MisEnviosState extends State<MisEnvios> {
       lastDate: DateTime.now().add(const Duration(days: 730)),
       initialDate: activeDate ?? DateTime.now(),
       builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(primary: accentBlue),
-        ),
+        data: appDatePickerTheme(Theme.of(context)),
         child: child!,
       ),
     );
@@ -554,6 +571,8 @@ class _ScheduledGroups extends StatelessWidget {
     required this.isTrip,
     required this.dateOf,
     required this.onTap,
+    required this.showServiceStatusTag,
+    required this.darkServiceStatusText,
   });
 
   final List<Trip> trips;
@@ -561,6 +580,8 @@ class _ScheduledGroups extends StatelessWidget {
   final bool Function(Trip) isTrip;
   final DateTime? Function(Trip) dateOf;
   final void Function(Trip) onTap;
+  final bool showServiceStatusTag;
+  final bool darkServiceStatusText;
 
   String _label(DateTime? date) {
     if (date == null) return 'Fecha pendiente';
@@ -642,6 +663,8 @@ class _ScheduledGroups extends StatelessWidget {
                 trip: trip,
                 vehicle: vehicle(trip),
                 isTrip: isTrip(trip),
+                showServiceStatusTag: showServiceStatusTag,
+                darkServiceStatusText: darkServiceStatusText,
                 onTap: () => onTap(trip),
               ),
             ),
@@ -855,10 +878,14 @@ class _FigmaTripCard extends StatelessWidget {
       {required this.trip,
       required this.vehicle,
       required this.isTrip,
+      required this.showServiceStatusTag,
+      required this.darkServiceStatusText,
       required this.onTap});
   final Trip trip;
   final String vehicle;
   final bool isTrip;
+  final bool showServiceStatusTag;
+  final bool darkServiceStatusText;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
@@ -870,6 +897,7 @@ class _FigmaTripCard extends StatelessWidget {
             ? const Color(0xFFE84D68)
             : const Color(0xFF19D27D);
     final kind = isTrip ? 'Viaje' : 'Envío';
+    final serviceStatus = _serviceStatus(trip, isTrip);
     return AppGlassSurface(
         borderRadius: 18,
         fillColor: const Color(0x55112F78),
@@ -902,7 +930,16 @@ class _FigmaTripCard extends StatelessWidget {
                               label: 'Programado',
                               color: const Color(0xFF9657E8))
                         ],
-                        const SizedBox(width: 5),
+                        if (showServiceStatusTag) ...[
+                          const SizedBox(width: 5),
+                          _Tag(
+                              label: serviceStatus,
+                              color: serviceStatus == 'Cancelado'
+                                  ? const Color(0xFFE84D68)
+                                  : const Color(0xFF19D27D),
+                              darkText: darkServiceStatusText),
+                          const SizedBox(width: 5),
+                        ],
                         _Tag(
                             label: vehicle,
                             color: Colors.white.withValues(alpha: .14),
@@ -980,7 +1017,7 @@ class _FigmaTripCard extends StatelessWidget {
                           Icon(Icons.radio_button_checked,
                               color: statusColor, size: 11),
                           const SizedBox(width: 5),
-                          Text(trip.statusLabel,
+                          Text(serviceStatus,
                               style: TextStyle(
                                   color: statusColor,
                                   fontSize: 10,
@@ -1003,6 +1040,18 @@ class _FigmaTripCard extends StatelessWidget {
                         _TripProgress(trip: trip),
                       ]
                     ]))));
+  }
+
+  String _serviceStatus(Trip trip, bool isTrip) {
+    final status = trip.status.trim().toLowerCase();
+    if (status == 'cancelado' || status == 'anulado') return 'Cancelado';
+    if (status == 'completado' ||
+        status == 'finalizado' ||
+        status == 'entregado' ||
+        status == 'entregada') {
+      return isTrip ? 'Finalizado' : 'Entregado';
+    }
+    return trip.statusLabel;
   }
 }
 
@@ -1083,18 +1132,24 @@ class _TripProgress extends StatelessWidget {
 }
 
 class _Tag extends StatelessWidget {
-  const _Tag({required this.label, required this.color, this.glass = false});
+  const _Tag({
+    required this.label,
+    required this.color,
+    this.glass = false,
+    this.darkText = false,
+  });
   final String label;
   final Color color;
   final bool glass;
+  final bool darkText;
 
   @override
   Widget build(BuildContext context) {
     final content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Text(label,
-          style: const TextStyle(
-              color: Colors.white,
+          style: TextStyle(
+              color: darkText ? Colors.black : Colors.white,
               fontSize: 8,
               fontWeight: FontWeight.w800,
               fontFamily: 'Figtree')),
@@ -1111,8 +1166,8 @@ class _Tag extends StatelessWidget {
       decoration:
           BoxDecoration(color: color, borderRadius: BorderRadius.circular(9)),
       child: Text(label,
-          style: const TextStyle(
-              color: Colors.white,
+          style: TextStyle(
+              color: darkText ? Colors.black : Colors.white,
               fontSize: 8,
               fontWeight: FontWeight.w800,
               fontFamily: 'Figtree')),

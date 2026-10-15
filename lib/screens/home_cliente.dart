@@ -788,9 +788,7 @@ class _HomeTabState extends State<_HomeTab> {
     final chargeableKm =
         (km - rate.includedKm).clamp(0, double.infinity).toDouble();
     return roundFareCs(
-        rate.baseFeeCs +
-            chargeableKm * rate.farePerKmCs +
-            logisticsServiceFeeCs,
+        rate.baseFeeCs + chargeableKm * rate.farePerKmCs,
         settings?.fareRoundingCs ?? 5);
   }
 
@@ -1295,8 +1293,7 @@ class _FareCard extends StatelessWidget {
         : '${distanceValue.toStringAsFixed(1)} km · base '
             'C\$ ${rateValue.baseFeeCs.toStringAsFixed(0)} + '
             '${(distanceValue - rateValue.includedKm).clamp(0, double.infinity).toStringAsFixed(1)} adicionales × C\$ '
-            '${rateValue.farePerKmCs.toStringAsFixed(2)} + '
-            'C\$ ${logisticsServiceFeeCs.toStringAsFixed(0)} gestión';
+            '${rateValue.farePerKmCs.toStringAsFixed(2)}';
     final priceLabel =
         priceValue == null ? 'C\$ —' : formatFareCs(priceValue, fareRoundingCs);
     return ClipRRect(

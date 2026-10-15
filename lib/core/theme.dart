@@ -14,6 +14,45 @@ const Color glowBlue = Color(0xFF0047FF);
 const Color accentBlue = Color(0xFF0A57FF);
 const double logisticsServiceFeeCs = 15.0;
 
+ThemeData appDatePickerTheme(ThemeData base) {
+  const pickerSurface = Color(0xFF102A67);
+  return base.copyWith(
+    colorScheme: const ColorScheme.dark(
+      primary: accentBlue,
+      onPrimary: Colors.white,
+      surface: pickerSurface,
+      onSurface: Colors.white,
+      secondary: accentBlue,
+      onSecondary: Colors.white,
+    ),
+    textTheme: base.textTheme.apply(
+      bodyColor: Colors.white,
+      displayColor: Colors.white,
+    ),
+    datePickerTheme: const DatePickerThemeData(
+      backgroundColor: pickerSurface,
+      surfaceTintColor: Colors.transparent,
+      headerBackgroundColor: accentBlue,
+      headerForegroundColor: Colors.white,
+      rangePickerBackgroundColor: pickerSurface,
+      rangePickerHeaderBackgroundColor: accentBlue,
+      rangePickerHeaderForegroundColor: Colors.white,
+      weekdayStyle: TextStyle(color: Colors.white),
+      dayStyle: TextStyle(color: Colors.white),
+      yearStyle: TextStyle(color: Colors.white),
+      headerHeadlineStyle: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+      ),
+      headerHelpStyle: TextStyle(color: Colors.white70),
+      dayForegroundColor: MaterialStatePropertyAll(Colors.white),
+      todayForegroundColor: MaterialStatePropertyAll(Colors.white),
+      todayBackgroundColor: MaterialStatePropertyAll(Colors.transparent),
+      rangeSelectionBackgroundColor: Color(0x660A57FF),
+    ),
+  );
+}
+
 /// Redondea al múltiplo comercial configurado más cercano.
 /// Con múltiplo 5, la unidad 7 conserva la regla especial 857 -> 860.
 double roundFareCs(double value, [double multiple = 5]) {

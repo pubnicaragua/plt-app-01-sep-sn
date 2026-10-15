@@ -61,17 +61,11 @@ InvoiceBreakdown buildInvoiceBreakdown({
   }
   lines.add(InvoiceBreakdownLine(label: baseLabel, amountCs: baseCs));
   lines.add(InvoiceBreakdownLine(
-    label: 'Servicio y gestión logística',
-    amountCs: serviceCs,
+    label: isCargo
+        ? 'Carga adicional ($weight $weightUnit)'
+        : 'Distancia adicional',
+    amountCs: additionalCs,
   ));
-  if (!isTrip) {
-    lines.add(InvoiceBreakdownLine(
-      label: isCargo
-          ? 'Carga adicional ($weight $weightUnit)'
-          : 'Distancia adicional',
-      amountCs: additionalCs,
-    ));
-  }
 
   var optionsTotalCs = 0.0;
   for (final option in options) {
