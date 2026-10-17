@@ -3,9 +3,9 @@ const shipmentCreditStatus = 'Crédito';
 
 List<String> shipmentPaymentMethodsFor(String status) {
   if (status.trim().toLowerCase() == shipmentCashStatus.toLowerCase()) {
-    return const ['Efectivo', 'Transferencia', 'Tarjeta'];
+    return const ['Tarjeta'];
   }
-  return const ['Transferencia', 'Tarjeta'];
+  return const ['Efectivo', 'Transferencia'];
 }
 
 bool shipmentPaymentIsImmediate(String status) =>

@@ -11,6 +11,9 @@ import 'crear_envio2.dart';
 bool shouldShowProductPaymentMethod(String status) =>
     status.trim().toLowerCase() == 'pendiente';
 
+String productPaymentStatusForSelection(bool paid) =>
+    paid ? 'Pagado' : 'Pendiente';
+
 class CrearEnvioCarga extends StatefulWidget {
   const CrearEnvioCarga({
     super.key,
@@ -68,6 +71,8 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
   String currency = 'C\$';
   String productPaymentStatus = 'Pendiente';
   String productPaymentMethod = 'Efectivo';
+  bool isForSale = true;
+  String productPayer = 'Remitente / Comercio';
 
   @override
   void initState() {
@@ -113,7 +118,19 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
     if (mounted) setState(() => photos.addAll(bytes));
   }
 
+  bool get _hasProductValue {
+    final normalized = invoicePriceController.text.trim().replaceAll(',', '.');
+    final value = double.tryParse(normalized);
+    return value != null && value > 0;
+  }
+
   void _continue() {
+    if (!_hasProductValue) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa el valor del producto para continuar.')),
+      );
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => CrearEnvio2(
@@ -133,6 +150,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           initialInvoiceNumber: invoiceNumberController.text.trim(),
           initialProductPaymentStatus: productPaymentStatus,
           initialProductPaymentMethod: productPaymentMethod,
+          initialIsProductSale: isForSale,
           originRefs: widget.originRefs,
           destinationRefs: widget.destinationRefs,
           recipientName: widget.recipientName,
@@ -200,77 +218,8 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
                         onChanged: (value) => packageType = value,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    _CargaField(
-                      icon: 'assets/img/HomeCliente/envio_weight.png',
-                      label: 'Peso aproximado',
-                      value: '',
-                      content: SizedBox(
-                        width: 105,
-                        child: TextField(
-                          controller: weightController,
-                          textAlign: TextAlign.left,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: false),
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15.5,
-                              fontFamily: 'Figtree'),
-                          decoration: const InputDecoration(
-                            hintText: 'Escribe el peso',
-                            hintStyle: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                                fontFamily: 'Figtree'),
-                            suffixText: 'kg',
-                            suffixStyle: TextStyle(
-                                color: Color(0xFFB9D4FF),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'Figtree'),
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          onChanged: (value) {
-                            final parsed = int.tryParse(value);
-                            if (parsed != null && parsed > 0) {
-                              setState(
-                                  () => weight = parsed.clamp(1, 9999).toInt());
-                            }
-                          },
-                        ),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _SmallAction(
-                            icon: Icons.remove,
-                            onTap: weight > 1
-                                ? () {
-                                    final next = weight - 1;
-                                    setState(() {
-                                      weight = next;
-                                      weightController.text = '$next';
-                                    });
-                                  }
-                                : null,
-                          ),
-                          _SmallAction(
-                            icon: Icons.add,
-                            onTap: () {
-                              final next = (weight + 1).clamp(1, 9999).toInt();
-                              setState(() {
-                                weight = next;
-                                weightController.text = '$next';
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _invoiceBlock(),
+                    const SizedBox(height: 16),
+                    _productDetailsBlock(),
                     const SizedBox(height: 16),
                     const _CargaSectionTitle(
                       icon: 'assets/img/HomeCliente/envio_photo.png',
@@ -401,6 +350,166 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _productDetailsBlock() {
+    final isPaid = productPaymentStatus == 'Pagado';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _CargaChoiceCard(
+          icon: Icons.shopping_cart_outlined,
+          title: '¿Este envío corresponde a una venta?',
+          subtitle: 'Indica si este envío tiene un producto asociado a una venta',
+          options: const ['Sí', 'No'],
+          value: isForSale ? 'Sí' : 'No',
+          onChanged: (value) => setState(() => isForSale = value == 'Sí'),
+        ),
+        const SizedBox(height: 9),
+        if (isForSale) ...[
+          _CargaChoiceCard(
+            icon: Icons.payments_outlined,
+            title: '¿El producto ya está pagado?',
+            subtitle: 'Indica el estado de pago del producto',
+            options: const ['Sí', 'No'],
+            value: isPaid ? 'Sí' : 'No',
+            onChanged: (value) => setState(() {
+              productPaymentStatus =
+                  productPaymentStatusForSelection(value == 'Sí');
+              productPaymentMethod = value == 'Sí' ? '' : 'Efectivo';
+            }),
+          ),
+          const SizedBox(height: 9),
+          _CargaChoiceCard(
+            icon: Icons.local_shipping_outlined,
+            title: '¿Quién paga el producto?',
+            subtitle: 'Selecciona quién cubrirá la tarifa del transporte',
+            options: const ['Remitente / Comercio', 'Destinatario'],
+            value: productPayer,
+            onChanged: (value) => setState(() => productPayer = value),
+          ),
+          const SizedBox(height: 9),
+        ],
+        _ProductValueCard(
+          controller: invoicePriceController,
+          title: isForSale
+              ? 'Valor del producto'
+              : 'Valor aproximado del producto',
+          currency: currency,
+          onCurrencyChanged: (value) => setState(() => currency = value),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductValueCard extends StatelessWidget {
+  const _ProductValueCard({
+    required this.controller,
+    required this.title,
+    required this.currency,
+    required this.onCurrencyChanged,
+  });
+
+  final TextEditingController controller;
+  final String title;
+  final String currency;
+  final ValueChanged<String> onCurrencyChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGlassSurface(
+      borderRadius: 14,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.inventory_2_outlined,
+                          color: Colors.white, size: 14),
+                      const SizedBox(width: 5),
+                      Text(title,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree')),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  const Text('Ingresa el valor total del producto a enviar.',
+                      style: TextStyle(
+                          color: Color(0xFFB9D4FF),
+                          fontSize: 7.5,
+                          fontFamily: 'Figtree')),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 29,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: glassBorder),
+                          ),
+                          child: TextField(
+                            controller: controller,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            textAlignVertical: const TextAlignVertical(y: 0.35),
+                            textAlign: TextAlign.left,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Figtree'),
+                            decoration: InputDecoration(
+                              hintText: '0.00',
+                              hintStyle: const TextStyle(
+                                  color: Color(0xFFB9D4FF),
+                                  fontSize: 10,
+                                  fontFamily: 'Figtree'),
+                              prefixText: currency == 'USD' ? 'US\$ ' : 'C\$ ',
+                              prefixStyle: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Figtree'),
+                              isDense: true,
+                              border: InputBorder.none,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 0),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 82,
+                        child: _InvoiceSegment(
+                          options: const ['C\$', 'USD'],
+                          value: currency,
+                          onChanged: onCurrencyChanged,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -647,6 +756,120 @@ class _InvoiceInputField extends StatelessWidget {
               contentPadding: const EdgeInsets.only(right: 12),
             ),
           ),
+        ),
+      );
+}
+
+class _CargaChoiceCard extends StatelessWidget {
+  const _CargaChoiceCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final List<String> options;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) => AppGlassSurface(
+        borderRadius: 14,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, color: Colors.white, size: 17),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Figtree')),
+                        const SizedBox(height: 2),
+                        Text(subtitle,
+                            style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 8,
+                                fontFamily: 'Figtree')),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 7),
+              _CargaChoiceSegment(
+                options: options,
+                value: value,
+                onChanged: onChanged,
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _CargaChoiceSegment extends StatelessWidget {
+  const _CargaChoiceSegment({
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<String> options;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 28,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .1),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Row(
+          children: options
+              .map(
+                (option) => Expanded(
+                  child: GestureDetector(
+                    onTap: () => onChanged(option),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: value == option ? figmaBlue : Colors.transparent,
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: Text(option,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 8.5,
+                              fontWeight: value == option
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                              fontFamily: 'Figtree')),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
         ),
       );
 }

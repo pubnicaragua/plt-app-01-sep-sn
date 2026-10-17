@@ -37,9 +37,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Paso 3 de 3'), findsOneWidget);
-    expect(find.text('Transporte recomendado'), findsOneWidget);
-    expect(find.text('TOTAL A COBRAR AL DESTINATARIO'), findsOneWidget);
-    expect(find.text('Confirmar envío'), findsOneWidget);
+    expect(find.text('Detalles de facturación'), findsOneWidget);
+    expect(find.text('¿Quién paga el envío?'), findsOneWidget);
+    expect(find.text('Método de pago'), findsOneWidget);
+    expect(find.text('Resumen del pedido'), findsOneWidget);
+    expect(find.text('Paga destinatario'), findsOneWidget);
+    expect(find.text('Paga remitente'), findsOneWidget);
+    expect(find.text('—'), findsNothing);
+    expect(find.text('Total a gestionar:'), findsOneWidget);
+    expect(find.text('Siguiente'), findsOneWidget);
   });
 }

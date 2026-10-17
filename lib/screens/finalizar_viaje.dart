@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
+import '../core/shipment_payment_logic.dart';
 import '../core/trip_routing.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
@@ -54,6 +55,23 @@ String invoiceProductPaymentStatusForTrip(Trip trip) {
   final storedStatus = match?.group(1)?.trim();
   if (storedStatus?.isNotEmpty == true) return storedStatus!;
   return trip.invoiceStatus?.trim() ?? '';
+}
+
+bool invoiceProductIsSaleForTrip(Trip trip) {
+  final value = _invoiceServiceDescriptionValue(
+    trip,
+    RegExp(r'Tipo valor producto:\s*([^·]+)', caseSensitive: false),
+  );
+  return value.isEmpty || !value.toLowerCase().contains('aproximado');
+}
+
+String invoiceServicePayerForTrip(Trip trip) {
+  final value = _invoiceServiceDescriptionValue(
+    trip,
+    RegExp(r'Quién paga envío:\s*([^·]+)', caseSensitive: false),
+  );
+  if (value.toLowerCase().contains('destinat')) return 'Destinatario';
+  return 'Remitente / Comercio';
 }
 
 class FinalizarViaje extends StatefulWidget {
@@ -703,7 +721,10 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
     return status.contains('pagad') || status == 'paid';
   }
 
-  double get _clientTotal => _total + (_productIsPaid ? 0 : _productAmount);
+  bool get _productIsSale => invoiceProductIsSaleForTrip(trip);
+
+  double get _clientTotal =>
+      _total + (!_productIsSale || _productIsPaid ? 0 : _productAmount);
 
   String get _invoiceNumber {
     final value = trip.serviceInvoiceNumber?.trim();
@@ -789,14 +810,14 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
       'Fecha: $_dateLabel',
       'Método de pago: $_paymentMethod',
       'Estado del pago: $_paymentStatus',
+      'Quién paga el envío: ${invoiceServicePayerForTrip(trip)}',
       '',
       if (_productAmount > 0)
-        'Factura del producto${_productIsPaid ? ' (Pagada)' : ''}: ${formatFareCs(_productAmount)}',
+        '${_productIsSale ? 'Factura del producto' : 'Valor aproximado del producto'}: ${formatFareCs(_productIsPaid ? 0 : _productAmount)}${_productIsSale ? ' · ${_productIsPaid ? 'Pagado' : 'Paga destinatario'}' : ''}',
       '$_baseLabel: ${formatFareCs(_baseAmount)}',
-      if (_additionalAmount > 0)
-        'Distancia adicional: ${formatFareCs(_additionalAmount)}',
       ...trip.options.map((option) =>
           '${option.title}: ${formatFareCs(_optionAmount(option))}'),
+      'Subtotal del envío: ${formatFareCs(_total)} · ${invoiceServicePayerForTrip(trip) == 'Destinatario' ? 'Paga destinatario' : 'Paga remitente'}',
       'Total a pagar por el cliente: ${formatFareCs(_clientTotal)}',
     ].join('\n');
     final path = await FilePicker.platform.saveFile(
@@ -815,7 +836,8 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
         child: Padding(padding: const EdgeInsets.all(14), child: child),
       );
 
-  Widget _amountLine(String label, double amount, {bool emphasized = false}) {
+  Widget _amountLine(String label, double amount,
+      {bool emphasized = false, Widget? trailing}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -832,6 +854,16 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
               ),
             ),
           ),
+          if (trailing != null) ...[
+            SizedBox(
+              width: 116,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: trailing,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
           Text(
             formatFareCs(amount),
             style: TextStyle(
@@ -881,7 +913,8 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
     final statusIsPaid = {'pagado', 'contado'}.contains(
       _paymentStatus.toLowerCase(),
     );
-    final base = _baseAmount;
+    final shippingAmount =
+        (_total - _optionsTotal).clamp(0, double.infinity).toDouble();
     return Scaffold(
       body: AppBackground(
         child: SafeArea(
@@ -1007,11 +1040,10 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
                           const SizedBox(height: 14),
                           _PaymentRow(
                             label: 'Método de pago',
-                            trailing: _segmentedValue(_paymentMethod, const [
-                              'Efectivo',
-                              'Transferencia',
-                              'Tarjeta',
-                            ]),
+                            trailing: _segmentedValue(
+                              _paymentMethod,
+                              shipmentPaymentMethodsFor(_paymentStatus),
+                            ),
                           ),
                           _PaymentRow(
                             label: 'Moneda',
@@ -1020,15 +1052,25 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
                           const Divider(color: Colors.white38, height: 22),
                           if (_productAmount > 0)
                             _amountLine(
-                              _productIsPaid ? 'Factura (Pagada)' : 'Factura',
-                              _productAmount,
+                              _productIsSale
+                                  ? 'Factura'
+                                  : 'Valor aproximado del producto',
+                              _productIsPaid ? 0 : _productAmount,
+                              trailing: _productIsSale
+                                  ? _StatusPill(
+                                      label: _productIsPaid
+                                          ? 'Pagado'
+                                          : 'Paga destinatario',
+                                      color: _productIsPaid
+                                          ? const Color(0xFF1CDB83)
+                                          : accentBlue,
+                                      textColor: _productIsPaid
+                                          ? Colors.black
+                                          : Colors.white,
+                                    )
+                                  : null,
                             ),
-                          _amountLine(_baseLabel, base),
-                          if (_additionalAmount > 0)
-                            _amountLine(
-                              'Distancia adicional',
-                              _additionalAmount,
-                            ),
+                          _amountLine('Tarifa de envío', shippingAmount),
                           ...trip.options.map(
                             (option) => _amountLine(
                               option.quantity == 1
@@ -1038,8 +1080,23 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
                             ),
                           ),
                           const Divider(color: Colors.white38, height: 18),
-                          _amountLine('Total a pagar por el cliente', _clientTotal,
-                              emphasized: true),
+                          _amountLine(
+                            'Subtotal del envío',
+                            _total,
+                            trailing: _StatusPill(
+                              label: invoiceServicePayerForTrip(trip) ==
+                                      'Destinatario'
+                                  ? 'Paga destinatario'
+                                  : 'Paga remitente',
+                              color: accentBlue,
+                            ),
+                          ),
+                          const Divider(color: Colors.white38, height: 18),
+                          _amountLine(
+                            'Total a pagar por el cliente',
+                            _clientTotal,
+                            emphasized: true,
+                          ),
                         ],
                       ),
                     ),
@@ -1096,8 +1153,7 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
                             color: statusIsPaid
                                 ? const Color(0xFF1CDB83)
                                 : const Color(0xFFFFC928),
-                            textColor:
-                                statusIsPaid ? Colors.white : Colors.black,
+                            textColor: Colors.black,
                           ),
                         ],
                       ),

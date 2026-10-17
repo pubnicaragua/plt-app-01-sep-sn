@@ -59,6 +59,20 @@ void main() {
     expect(date, DateTime(2026, 10, 2));
   });
 
+  test('un viaje entregado usa la fecha real aunque fuera programado', () {
+    final date = summaryDateForTrip(
+      _trip(
+        status: 'Entregado',
+        isScheduled: true,
+        scheduledDate: '2026-10-02',
+        completedAt: '2026-10-06T14:30:00',
+      ),
+      now,
+    );
+
+    expect(date, DateTime(2026, 10, 6));
+  });
+
   test('el historial de facturas usa completedAt cuando date está vacío', () {
     final trip = _trip(
       status: 'Completado',

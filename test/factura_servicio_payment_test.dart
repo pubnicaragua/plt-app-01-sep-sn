@@ -19,10 +19,11 @@ void main() {
       servicePaymentStatus: 'Pagado',
       servicePaymentMethod: 'Efectivo',
       description:
-          'Estado factura producto: Pagado · Método factura producto: Transferencia · Estado pago envío: Crédito · Método pago envío: Tarjeta',
+          'Estado factura producto: Pagado · Método factura producto: Transferencia · Estado pago envío: Crédito · Método pago envío: Tarjeta · Quién paga envío: Destinatario',
     );
 
     expect(invoiceServicePaymentStatusForTrip(trip), 'Crédito');
     expect(invoiceServicePaymentMethodForTrip(trip), 'Tarjeta');
+    expect(invoiceServicePayerForTrip(trip), 'Destinatario');
   });
 }

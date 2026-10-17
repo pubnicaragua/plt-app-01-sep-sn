@@ -4,12 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:incoex_logistics_app/screens/crear_envio_carga.dart';
 
 void main() {
-  test('el método de pago solo se muestra cuando el producto está pendiente', () {
-    expect(shouldShowProductPaymentMethod('Pendiente'), isTrue);
-    expect(shouldShowProductPaymentMethod('Pagado'), isFalse);
+  test('convierte la selección de pago del producto al estado del flujo', () {
+    expect(productPaymentStatusForSelection(true), 'Pagado');
+    expect(productPaymentStatusForSelection(false), 'Pendiente');
   });
 
-  testWidgets('oculta el selector al marcar el producto como pagado',
+  testWidgets('muestra los datos de venta del nuevo diseño',
       (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
@@ -24,10 +24,25 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Método de pago'), findsOneWidget);
-    await tester.tap(find.text('Pagado'));
+    expect(find.text('¿Este envío corresponde a una venta?'), findsOneWidget);
+    expect(find.text('¿El producto ya está pagado?'), findsOneWidget);
+    expect(find.text('¿Quién paga el producto?'), findsOneWidget);
+    expect(find.text('Valor del producto'), findsOneWidget);
+    expect(find.text('Método de pago'), findsNothing);
+
+    await tester.tap(find.text('No').first);
     await tester.pump();
 
-    expect(find.text('Método de pago'), findsNothing);
+    expect(find.text('¿El producto ya está pagado?'), findsNothing);
+    expect(find.text('¿Quién paga el producto?'), findsNothing);
+    expect(find.text('Valor aproximado del producto'), findsOneWidget);
+
+    await tester.tap(find.text('Siguiente'));
+    await tester.pump();
+
+    expect(
+      find.text('Ingresa el valor del producto para continuar.'),
+      findsOneWidget,
+    );
   });
 }

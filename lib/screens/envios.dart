@@ -132,6 +132,11 @@ class _MisEnviosState extends State<MisEnvios> {
   bool _isScheduled(Trip trip) =>
       trip.isScheduled || trip.serviceType == 'Programado';
 
+  bool _isCancelled(Trip trip) {
+    final status = trip.status.trim().toLowerCase();
+    return status == 'cancelado' || status == 'anulado';
+  }
+
   bool _isTrip(Trip trip) {
     final mode = trip.serviceMode?.trim();
     if (mode?.isNotEmpty == true) return isTripServiceMode(mode);
@@ -202,8 +207,8 @@ class _MisEnviosState extends State<MisEnvios> {
   List<Trip> _visible(List<Trip> source) {
     return source.where((trip) {
       final inTab = switch (tab) {
-        'Activos' => trip.isActive && !_isScheduled(trip),
-        'Programados' => trip.isActive && _isScheduled(trip),
+        'Activos' => !_isCancelled(trip) && !_isScheduled(trip),
+        'Programados' => !_isCancelled(trip) && _isScheduled(trip),
         'Historial' => !trip.isActive,
         _ => true,
       };
@@ -301,10 +306,10 @@ class _MisEnviosState extends State<MisEnvios> {
           final visible = _visible(items);
           final tabCounts = <String, int>{
             'Activos': items
-                .where((trip) => trip.isActive && !_isScheduled(trip))
+                .where((trip) => !_isCancelled(trip) && !_isScheduled(trip))
                 .length,
             'Programados': items
-                .where((trip) => trip.isActive && _isScheduled(trip))
+                .where((trip) => !_isCancelled(trip) && _isScheduled(trip))
                 .length,
             'Historial': items.where((trip) => !trip.isActive).length,
           };

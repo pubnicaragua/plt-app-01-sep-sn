@@ -31,6 +31,8 @@ class CrearEnvio3 extends StatefulWidget {
     this.productPaymentMethod = '',
     this.paymentStatus = 'Pendiente',
     this.paymentMethod = 'Efectivo',
+    this.shipmentPayer = 'Remitente / Comercio',
+    this.productIsSale = true,
     this.productPhotos = const [],
     this.invoicePhoto,
     this.invoiceFileName = 'factura.jpg',
@@ -70,6 +72,8 @@ class CrearEnvio3 extends StatefulWidget {
   final String productPaymentMethod;
   final String paymentStatus;
   final String paymentMethod;
+  final String shipmentPayer;
+  final bool productIsSale;
   final List<Uint8List> productPhotos;
   final Uint8List? invoicePhoto;
   final String invoiceFileName;
@@ -184,6 +188,9 @@ class _CrearEnvio3State extends State<CrearEnvio3>
               'Estado pago envío: ${widget.paymentStatus.trim()}',
             if (widget.paymentMethod.trim().isNotEmpty)
               'Método pago envío: ${widget.paymentMethod.trim()}',
+            if (widget.shipmentPayer.trim().isNotEmpty)
+              'Quién paga envío: ${widget.shipmentPayer.trim()}',
+            'Tipo valor producto: ${widget.productIsSale ? 'Venta' : 'Aproximado'}',
             if (evidence.isNotEmpty) 'Evidencias: ${evidence.join(', ')}',
           ].join(' · '),
           originLat: originPlace?.latitude,

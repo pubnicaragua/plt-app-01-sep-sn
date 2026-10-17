@@ -19,12 +19,22 @@ String weeklyChartValueLabel(int total, String unit) {
 
 DateTime? summaryDateForTrip(Trip trip, DateTime now) {
   final status = trip.status.trim().toLowerCase();
-  final active =
-      !{'completado', 'cancelado', 'anulado', 'finalizado'}.contains(status);
+  final terminal = {
+    'completado',
+    'finalizado',
+    'entregado',
+    'entregada',
+  }.contains(status);
+  final active = !terminal && !{'cancelado', 'anulado'}.contains(status);
   final scheduled = trip.isScheduled ||
       trip.serviceType?.trim().toLowerCase() == 'programado';
 
   if (active && !scheduled) return DateUtils.dateOnly(now);
+
+  if (terminal) {
+    final completed = DateTime.tryParse(trip.completedAt ?? '');
+    if (completed != null) return DateUtils.dateOnly(completed.toLocal());
+  }
 
   final raw = scheduled ? trip.scheduledDate : trip.date;
   final parsed = DateTime.tryParse(raw ?? '');
@@ -1162,7 +1172,8 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
                   ),
                 ),
               ),
-              if (bulkSelectionMode || selectedPendingInvoiceIds.isNotEmpty) ...[
+              if (bulkSelectionMode ||
+                  selectedPendingInvoiceIds.isNotEmpty) ...[
                 const SizedBox(height: 7),
                 Row(
                   children: [
@@ -1179,9 +1190,8 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
                     SizedBox(
                       height: 30,
                       child: ElevatedButton(
-                        onPressed: selectedPendingInvoiceIds.isEmpty
-                            ? null
-                            : () {},
+                        onPressed:
+                            selectedPendingInvoiceIds.isEmpty ? null : () {},
                         style: ElevatedButton.styleFrom(
                           backgroundColor: accentBlue,
                           disabledBackgroundColor: Colors.white24,

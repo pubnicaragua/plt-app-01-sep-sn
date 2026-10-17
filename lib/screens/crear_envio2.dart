@@ -82,6 +82,7 @@ class CrearEnvio2 extends StatefulWidget {
     this.initialInvoiceNumber = '',
     this.initialProductPaymentStatus = 'Pendiente',
     this.initialProductPaymentMethod = 'Efectivo',
+    this.initialIsProductSale = true,
     this.originPlace,
     this.destinationPlace,
     this.transport = 'Moto',
@@ -114,6 +115,7 @@ class CrearEnvio2 extends StatefulWidget {
   final String initialInvoiceNumber;
   final String initialProductPaymentStatus;
   final String initialProductPaymentMethod;
+  final bool initialIsProductSale;
   final PlaceSuggestion? originPlace;
   final PlaceSuggestion? destinationPlace;
   final String transport;
@@ -295,7 +297,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   double get _baseTotalBeforeInsurance {
-    final productAmount = productPaymentStatus.trim().toLowerCase() == 'pagado'
+    final productAmount = !widget.initialIsProductSale ||
+            productPaymentStatus.trim().toLowerCase() == 'pagado'
         ? 0
         : invoiceAmountCs;
     final shippingAmount = widget.estimatedShipping ?? 0;
@@ -510,6 +513,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           invoiceAmount: invoiceAmountCs,
           productPaymentStatus: productPaymentStatus,
           productPaymentMethod: productPaymentMethod,
+          productIsSale: widget.initialIsProductSale,
           shipmentPaymentStatus: shipmentPaymentStatus,
           shipmentPaymentMethod: shipmentPaymentMethod,
           serviceMode: widget.serviceMode,
