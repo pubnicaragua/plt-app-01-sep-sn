@@ -630,7 +630,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
               label: widget.productIsSale
                   ? 'Valor del producto'
                   : 'Valor aproximado del producto',
-              amount: _invoiceAlreadyPaid ? 0 : _invoiceAmountCs,
+              amount: _invoiceAmountCs,
               status: widget.productIsSale
                   ? (_invoiceAlreadyPaid ? 'Pagado' : 'Paga destinatario')
                   : null,

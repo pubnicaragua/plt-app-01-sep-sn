@@ -26,15 +26,14 @@ void main() {
 
     expect(find.text('¿Este envío corresponde a una venta?'), findsOneWidget);
     expect(find.text('¿El producto ya está pagado?'), findsOneWidget);
-    expect(find.text('¿Quién paga el producto?'), findsOneWidget);
+    expect(find.text('Método de pago'), findsOneWidget);
     expect(find.text('Valor del producto'), findsOneWidget);
-    expect(find.text('Método de pago'), findsNothing);
 
     await tester.tap(find.text('No').first);
     await tester.pump();
 
     expect(find.text('¿El producto ya está pagado?'), findsNothing);
-    expect(find.text('¿Quién paga el producto?'), findsNothing);
+    expect(find.text('Método de pago'), findsNothing);
     expect(find.text('Valor aproximado del producto'), findsOneWidget);
 
     await tester.tap(find.text('Siguiente'));

@@ -813,7 +813,7 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
       'Quién paga el envío: ${invoiceServicePayerForTrip(trip)}',
       '',
       if (_productAmount > 0)
-        '${_productIsSale ? 'Factura del producto' : 'Valor aproximado del producto'}: ${formatFareCs(_productIsPaid ? 0 : _productAmount)}${_productIsSale ? ' · ${_productIsPaid ? 'Pagado' : 'Paga destinatario'}' : ''}',
+        '${_productIsSale ? 'Factura del producto' : 'Valor aproximado del producto'}: ${formatFareCs(_productAmount)}${_productIsSale ? ' · ${_productIsPaid ? 'Pagado' : 'Paga destinatario'}' : ''}',
       '$_baseLabel: ${formatFareCs(_baseAmount)}',
       ...trip.options.map((option) =>
           '${option.title}: ${formatFareCs(_optionAmount(option))}'),
@@ -1055,7 +1055,7 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
                               _productIsSale
                                   ? 'Factura'
                                   : 'Valor aproximado del producto',
-                              _productIsPaid ? 0 : _productAmount,
+                              _productAmount,
                               trailing: _productIsSale
                                   ? _StatusPill(
                                       label: _productIsPaid

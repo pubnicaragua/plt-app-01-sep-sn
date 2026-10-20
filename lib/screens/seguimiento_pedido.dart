@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
@@ -17,6 +18,7 @@ import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'finalizar_viaje.dart';
+import 'home_cliente.dart';
 import 'inicio.dart';
 import 'envio_asignado.dart';
 
@@ -199,6 +201,12 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         });
       }
     } catch (_) {}
+  }
+
+  void _returnToInicio() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const HomeCliente()),
+    );
   }
 
   Future<void> _shareTracking() async {
@@ -454,7 +462,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         center.dy - painter.height / 2,
       ),
     );
-    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final image =
+        await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final bytes = await image.toByteData(format: ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
@@ -826,57 +835,68 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         ? math.max(1, (_routeDurationSeconds! / 60).round())
         : math.max(4, (distance * 2.4).round());
     return Scaffold(
-      body: AppBackground(
-        child: Stack(
-          children: [
-            Positioned.fill(child: _buildGoogleMap()),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 116,
-                color: const Color(0xF20C1C53),
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-                    child: Row(
-                      children: [
-                        _HeaderButton(
-                          icon: Icons.arrow_back_ios_new_rounded,
-                          onTap: widget.closeable
-                              ? () => Navigator.of(context).pop()
-                              : null,
-                        ),
-                        Expanded(
-                          child: Center(
-                            child: Text(
-                              isTaxi ? 'Taxi en camino' : 'Seguimiento en vivo',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                fontFamily: 'Figtree',
-                              ),
+        body: AppBackground(
+            child: Stack(
+      children: [
+        Positioned(
+          top: 116,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _buildGoogleMap(),
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _returnToInicio,
+            child: Container(
+              height: 116,
+              color: const Color(0xF20C1C53),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                  child: Row(
+                    children: [
+                      _HeaderButton(
+                        icon: Icons.arrow_back_ios_new_rounded,
+                        onTap: _returnToInicio,
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            isTaxi ? 'Taxi en camino' : 'Seguimiento en vivo',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree',
                             ),
                           ),
                         ),
-                        const SizedBox(width: 42),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 42),
+                    ],
                   ),
                 ),
               ),
             ),
-            DraggableScrollableSheet(
+          ),
+        ),
+        PointerInterceptor(
+          intercepting: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {},
+            child: DraggableScrollableSheet(
               initialChildSize: isTaxi ? .48 : .59,
               minChildSize: .12,
               maxChildSize: .90,
               snap: true,
-              snapSizes: isTaxi
-                  ? const [.12, .48, .90]
-                  : const [.12, .59, .90],
+              snapSizes: isTaxi ? const [.12, .48, .90] : const [.12, .59, .90],
               builder: (context, scrollController) {
                 return ClipRRect(
                   borderRadius: const BorderRadius.vertical(
@@ -911,10 +931,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                 );
               },
             ),
-          ],
+          ),
         ),
-      ),
-    );
+      ],
+    )));
   }
 
   Widget _buildGoogleMap() {
@@ -925,7 +945,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           CameraPosition(target: _initialMapCenter, zoom: 12.8),
       // La hoja inferior ocupa la parte baja del mapa. Este padding hace que
       // la ruta quede centrada en el área visible y no detrás del glass.
-      padding: EdgeInsets.only(top: 116, bottom: height * sheetFraction),
+      padding: EdgeInsets.only(bottom: height * sheetFraction),
       markers: _mapMarkers(_mapData),
       polylines: _mapPolylines(_mapData),
       mapType: MapType.normal,
@@ -1303,7 +1323,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     required String currentLocation,
     required String currentStatus,
   }) {
-    final status = currentStatus == 'Pendiente' ? 'Buscando conductor' : 'En camino';
+    final status =
+        currentStatus == 'Pendiente' ? 'Buscando conductor' : 'En camino';
     return ListView(
       controller: scrollController,
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
@@ -1396,7 +1417,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                   ),
                   Container(
                     margin: const EdgeInsets.only(top: 3),
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: .10),
                       borderRadius: BorderRadius.circular(8),
@@ -1417,7 +1439,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             ),
             RoundBtn(
               asset: 'llamada.png',
-              onTap: () => _callDriver(liveData?.driverPhone ?? trip.contactPhone),
+              onTap: () =>
+                  _callDriver(liveData?.driverPhone ?? trip.contactPhone),
             ),
             const SizedBox(width: 7),
             RoundBtn(
@@ -1446,7 +1469,8 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
               child: _MiniBtn(
                 asset: 'copiar.png',
                 label: 'Copiar',
-                onTap: () => _copyText(trip.id, 'Código de seguimiento copiado'),
+                onTap: () =>
+                    _copyText(trip.id, 'Código de seguimiento copiado'),
               ),
             ),
             const SizedBox(width: 7),

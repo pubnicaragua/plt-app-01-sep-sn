@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 import '../core/api_client.dart';
 import '../core/location_service.dart';
@@ -683,7 +684,14 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             right: 0,
             bottom: 0,
             height: sheetHeight,
-            child: _buildBottomSheet(context),
+            child: PointerInterceptor(
+              intercepting: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {},
+                child: _buildBottomSheet(context),
+              ),
+            ),
           ),
         ],
       ),

@@ -207,8 +207,8 @@ class _MisEnviosState extends State<MisEnvios> {
   List<Trip> _visible(List<Trip> source) {
     return source.where((trip) {
       final inTab = switch (tab) {
-        'Activos' => !_isCancelled(trip) && !_isScheduled(trip),
-        'Programados' => !_isCancelled(trip) && _isScheduled(trip),
+        'Activos' => trip.isActive && !_isCancelled(trip) && !_isScheduled(trip),
+        'Programados' => trip.isActive && !_isCancelled(trip) && _isScheduled(trip),
         'Historial' => !trip.isActive,
         _ => true,
       };
@@ -306,10 +306,12 @@ class _MisEnviosState extends State<MisEnvios> {
           final visible = _visible(items);
           final tabCounts = <String, int>{
             'Activos': items
-                .where((trip) => !_isCancelled(trip) && !_isScheduled(trip))
+                .where((trip) =>
+                    trip.isActive && !_isCancelled(trip) && !_isScheduled(trip))
                 .length,
             'Programados': items
-                .where((trip) => !_isCancelled(trip) && _isScheduled(trip))
+                .where((trip) =>
+                    trip.isActive && !_isCancelled(trip) && _isScheduled(trip))
                 .length,
             'Historial': items.where((trip) => !trip.isActive).length,
           };
@@ -1029,16 +1031,20 @@ class _FigmaTripCard extends StatelessWidget {
                                   fontWeight: FontWeight.w700,
                                   fontFamily: 'Figtree')),
                           const Spacer(),
-                          Text(
-                              trip.destination.trim().isEmpty
-                                  ? 'Destino pendiente'
-                                  : trip.destination,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 9,
-                                  fontFamily: 'Figtree'))
+                          Expanded(
+                              child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                      trip.destination.trim().isEmpty
+                                          ? 'Destino pendiente'
+                                          : trip.destination,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.right,
+                                      style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 9,
+                                          fontFamily: 'Figtree'))))
                         ]),
                       if (trip.isActive && !scheduled) ...[
                         const SizedBox(height: 7),

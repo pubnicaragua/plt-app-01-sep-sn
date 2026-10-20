@@ -72,7 +72,6 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
   String productPaymentStatus = 'Pendiente';
   String productPaymentMethod = 'Efectivo';
   bool isForSale = true;
-  String productPayer = 'Remitente / Comercio';
 
   @override
   void initState() {
@@ -381,14 +380,16 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
             }),
           ),
           const SizedBox(height: 9),
-          _CargaChoiceCard(
-            icon: Icons.local_shipping_outlined,
-            title: '¿Quién paga el producto?',
-            subtitle: 'Selecciona quién cubrirá la tarifa del transporte',
-            options: const ['Remitente / Comercio', 'Destinatario'],
-            value: productPayer,
-            onChanged: (value) => setState(() => productPayer = value),
-          ),
+          if (!isPaid)
+            _CargaChoiceCard(
+              icon: Icons.payments_outlined,
+              title: 'Método de pago',
+              subtitle: 'Selecciona cómo se pagará el producto',
+              options: const ['Efectivo', 'Transferencia', 'Tarjeta'],
+              value: productPaymentMethod,
+              onChanged: (value) =>
+                  setState(() => productPaymentMethod = value),
+            ),
           const SizedBox(height: 9),
         ],
         _ProductValueCard(
