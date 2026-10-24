@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/notifications.dart';
+import 'core/navigation.dart';
 import 'core/theme.dart';
 import 'screens/onboarding_recoleccion.dart';
 
@@ -16,6 +17,7 @@ class IncoexApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [appRouteObserver],
       title: 'INCOEX Logistics',
       theme: ThemeData(
         useMaterial3: true,

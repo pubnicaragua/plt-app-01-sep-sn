@@ -26,4 +26,23 @@ void main() {
     expect(invoiceServicePaymentMethodForTrip(trip), 'Tarjeta');
     expect(invoiceServicePayerForTrip(trip), 'Destinatario');
   });
+
+  test('la factura de un viaje contado permite efectivo y tarjeta', () {
+    final trip = Trip(
+      id: 'viaje-1',
+      client: 'Cliente',
+      driver: 'Conductor',
+      origin: 'Origen',
+      destination: 'Destino',
+      date: '2026-10-13',
+      packages: 1,
+      status: 'Completado',
+      serviceMode: 'Viaje',
+      servicePaymentStatus: 'Contado',
+      servicePaymentMethod: 'Efectivo',
+    );
+
+    expect(invoiceServicePaymentMethodsForTrip(trip), ['Efectivo', 'Tarjeta']);
+    expect(invoiceServicePaymentMethodForTrip(trip), 'Efectivo');
+  });
 }

@@ -18,6 +18,7 @@ dependencies:
   url_launcher: ^6.3.1
   google_maps_flutter: ^2.10.1
   pointer_interceptor: ^0.10.1+2
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
@@ -31,6 +32,7 @@ flutter:
     - assets/img/
     - assets/img/fondo-incoex.png
     - assets/img/HomeCliente/
+    - assets/img/HomeCliente/bi_people-fill.png
     - assets/img/HomeCliente/ri_e-bike-fill.png
     - assets/img/HomeCliente/camion.png
     - assets/img/HomeCliente/EnviosNavbar.png

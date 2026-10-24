@@ -9,6 +9,7 @@ import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/notifications_sheet.dart';
 import 'inicio.dart';
+import 'perfiles_empresa.dart';
 
 class MiPerfilCliente extends StatefulWidget {
   const MiPerfilCliente({super.key, this.embedded = false});
@@ -168,6 +169,9 @@ class _MiPerfilClienteState extends State<MiPerfilCliente> {
                                         email: email.text.trim(),
                                         role: current.role,
                                         displayName: name.text.trim(),
+                                        accountId: current.accountId,
+                                        profileId: current.profileId,
+                                        profileRole: current.profileRole,
                                         vehicle: current.vehicle,
                                         plate: current.plate,
                                         phone: phone.text.trim(),
@@ -176,7 +180,9 @@ class _MiPerfilClienteState extends State<MiPerfilCliente> {
                                     }
                                     if (!mounted) return;
                                     Navigator.of(sheetContext).pop();
-                                    setState(() => profile = _loadProfile());
+                                    setState(() {
+                                      profile = _loadProfile();
+                                    });
                                   } on ApiException catch (error) {
                                     setSheetState(() => saving = false);
                                     _showMessage(error.message);
@@ -248,6 +254,14 @@ class _MiPerfilClienteState extends State<MiPerfilCliente> {
               ),
               const SizedBox(height: 12),
               _ProfileActionsCard(
+                supervisor: apiClient.currentUser?.profileRole == 'supervisor',
+                onProfiles: apiClient.currentUser?.profileRole == 'supervisor'
+                    ? () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const PerfilesEmpresaScreen(),
+                          ),
+                        )
+                    : null,
                 onPayments: () => _showMessage('Métodos de pago corporativos.'),
                 onNotifications: () => showAppNotifications(context),
                 onSupport: _openSupport,
@@ -370,9 +384,13 @@ class _HeroCard extends StatelessWidget {
             alignment: WrapAlignment.center,
             spacing: 6,
             runSpacing: 6,
-            children: const [
-              _ProfileBadge(text: 'Perfil de Empresa'),
-              _ProfileBadge(text: 'Cliente VIP'),
+            children: [
+              _ProfileBadge(
+                text: apiClient.currentUser?.profileRole == 'supervisor'
+                    ? 'Supervisor'
+                    : 'Perfil: ${apiClient.currentUser?.displayName ?? 'Operativo'}',
+              ),
+              const _ProfileBadge(text: 'Perfil de Empresa'),
             ],
           ),
           const SizedBox(height: 10),
@@ -434,11 +452,15 @@ class _ProfileBadge extends StatelessWidget {
 
 class _ProfileActionsCard extends StatelessWidget {
   const _ProfileActionsCard({
+    required this.supervisor,
+    this.onProfiles,
     required this.onPayments,
     required this.onNotifications,
     required this.onSupport,
   });
 
+  final bool supervisor;
+  final VoidCallback? onProfiles;
   final VoidCallback onPayments;
   final VoidCallback onNotifications;
   final VoidCallback onSupport;
@@ -450,23 +472,35 @@ class _ProfileActionsCard extends StatelessWidget {
       borderRadius: 23,
       child: Column(
         children: [
-          _ProfileActionRow(
-            iconAsset: 'assets/img/HomeCliente/perfil_pago.png',
-            title: 'Métodos de pago',
-            onTap: onPayments,
-          ),
-          const _ProfileActionDivider(),
+          if (onProfiles != null) ...[
+            _ProfileActionRow(
+              iconAsset: 'assets/img/HomeCliente/perfil_pago.png',
+              title: 'Perfiles de empresa',
+              onTap: onProfiles!,
+            ),
+            const _ProfileActionDivider(),
+          ],
+          if (supervisor) ...[
+            _ProfileActionRow(
+              iconAsset: 'assets/img/HomeCliente/perfil_pago.png',
+              title: 'Métodos de pago',
+              onTap: onPayments,
+            ),
+            const _ProfileActionDivider(),
+          ],
           _ProfileActionRow(
             iconAsset: 'assets/img/HomeCliente/perfil_notificaciones.png',
             title: 'Notificaciones',
             onTap: onNotifications,
           ),
-          const _ProfileActionDivider(),
-          _ProfileActionRow(
-            iconAsset: 'assets/img/HomeCliente/perfil_soporte.png',
-            title: 'Soporte empresarial',
-            onTap: onSupport,
-          ),
+          if (supervisor) ...[
+            const _ProfileActionDivider(),
+            _ProfileActionRow(
+              iconAsset: 'assets/img/HomeCliente/perfil_soporte.png',
+              title: 'Soporte empresarial',
+              onTap: onSupport,
+            ),
+          ],
         ],
       ),
     );

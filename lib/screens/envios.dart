@@ -67,6 +67,7 @@ const tripLocationIconAsset =
     'assets/img/HomeCliente/akar-icons_location.png';
 const tripScheduleIconAsset =
     'assets/img/HomeCliente/akar-icons_schedule.png';
+const tripProfileIconAsset = 'assets/img/HomeCliente/bi_people-fill.png';
 
 bool shouldShowTripSchedule(Trip trip) {
   return trip.isScheduled ||
@@ -88,11 +89,25 @@ String tripScheduleReference(Trip trip) {
   return '$time  •  ${tripIdLabel(trip)}';
 }
 
+String companyProfileCardLabel(CompanyProfile profile) {
+  final displayName = profile.displayName.trim();
+  final username = profile.username.trim();
+  if (username.isEmpty) return displayName;
+  if (displayName.isEmpty) return username;
+  return '$displayName  •  $username';
+}
+
 class MisEnvios extends StatefulWidget {
-  const MisEnvios({super.key, this.onRefresh, this.embedded = false});
+  const MisEnvios({
+    super.key,
+    this.onRefresh,
+    this.embedded = false,
+    this.refreshSignal = 0,
+  });
 
   final VoidCallback? onRefresh;
   final bool embedded;
+  final int refreshSignal;
 
   @override
   State<MisEnvios> createState() => _MisEnviosState();
@@ -100,6 +115,7 @@ class MisEnvios extends StatefulWidget {
 
 class _MisEnviosState extends State<MisEnvios> {
   late Future<List<Trip>> trips;
+  Map<String, String> profileNames = const {};
   String tab = 'Activos';
   String typeFilter = 'Todos';
   String vehicleFilter = 'Todos';
@@ -112,6 +128,32 @@ class _MisEnviosState extends State<MisEnvios> {
   void initState() {
     super.initState();
     trips = _loadTrips();
+    _loadProfileNames();
+  }
+
+  Future<void> _loadProfileNames() async {
+    if (apiClient.currentUser?.isSupervisor != true) return;
+    try {
+      final profiles = await apiClient.getCompanyProfiles();
+      if (!mounted) return;
+      setState(() {
+        profileNames = {
+          for (final profile in profiles)
+            if (!profile.isSupervisor &&
+                companyProfileCardLabel(profile).isNotEmpty)
+              profile.id: companyProfileCardLabel(profile),
+        };
+      });
+    } catch (_) {}
+  }
+
+  @override
+  void didUpdateWidget(covariant MisEnvios oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshSignal != widget.refreshSignal) {
+      _reload();
+      _loadProfileNames();
+    }
   }
 
   Future<List<Trip>> _loadTrips() {
@@ -125,7 +167,9 @@ class _MisEnviosState extends State<MisEnvios> {
   }
 
   void _reload() {
-    setState(() => trips = _loadTrips());
+    setState(() {
+      trips = _loadTrips();
+    });
     widget.onRefresh?.call();
   }
 
@@ -382,7 +426,8 @@ class _MisEnviosState extends State<MisEnvios> {
                 ]);
               }),
               const SizedBox(height: 14),
-              if (snapshot.connectionState == ConnectionState.waiting)
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  items.isEmpty)
                 const Center(
                     child: Padding(
                         padding: EdgeInsets.all(28),
@@ -425,6 +470,7 @@ class _MisEnviosState extends State<MisEnvios> {
                       trips: visible,
                       vehicle: _vehicle,
                       isTrip: _isTrip,
+                      profileNames: profileNames,
                       dateOf: _dateOf,
                       onTap: _openTrip,
                       showServiceStatusTag: false,
@@ -436,6 +482,9 @@ class _MisEnviosState extends State<MisEnvios> {
                           trip: trip,
                           vehicle: _vehicle(trip),
                           isTrip: _isTrip(trip),
+                          profileLabel: trip.profileId == null
+                              ? null
+                              : profileNames[trip.profileId!],
                           showServiceStatusTag:
                               _isTrip(trip) || tab == 'Historial',
                           darkServiceStatusText: tab == 'Historial',
@@ -576,6 +625,7 @@ class _ScheduledGroups extends StatelessWidget {
     required this.trips,
     required this.vehicle,
     required this.isTrip,
+    required this.profileNames,
     required this.dateOf,
     required this.onTap,
     required this.showServiceStatusTag,
@@ -585,6 +635,7 @@ class _ScheduledGroups extends StatelessWidget {
   final List<Trip> trips;
   final String Function(Trip) vehicle;
   final bool Function(Trip) isTrip;
+  final Map<String, String> profileNames;
   final DateTime? Function(Trip) dateOf;
   final void Function(Trip) onTap;
   final bool showServiceStatusTag;
@@ -670,6 +721,9 @@ class _ScheduledGroups extends StatelessWidget {
                 trip: trip,
                 vehicle: vehicle(trip),
                 isTrip: isTrip(trip),
+                profileLabel: trip.profileId == null
+                    ? null
+                    : profileNames[trip.profileId!],
                 showServiceStatusTag: showServiceStatusTag,
                 darkServiceStatusText: darkServiceStatusText,
                 onTap: () => onTap(trip),
@@ -885,12 +939,14 @@ class _FigmaTripCard extends StatelessWidget {
       {required this.trip,
       required this.vehicle,
       required this.isTrip,
+      this.profileLabel,
       required this.showServiceStatusTag,
       required this.darkServiceStatusText,
       required this.onTap});
   final Trip trip;
   final String vehicle;
   final bool isTrip;
+  final String? profileLabel;
   final bool showServiceStatusTag;
   final bool darkServiceStatusText;
   final VoidCallback onTap;
@@ -928,7 +984,7 @@ class _FigmaTripCard extends StatelessWidget {
                             child: Text(kind,
                                 style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 9,
+                                                    fontSize: 11,
                                     fontWeight: FontWeight.w800,
                                     fontFamily: 'Figtree'))),
                         if (scheduled) ...[
@@ -992,28 +1048,115 @@ class _FigmaTripCard extends StatelessWidget {
                               ]),
                               if (showSchedule) ...[
                                 const SizedBox(height: 8),
-                                Row(children: [
-                                  Image.asset(tripScheduleIconAsset,
-                                      width: 18,
-                                      height: 18,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (_, __, ___) => const Icon(
-                                          Icons.schedule_outlined,
-                                          color: Colors.white70,
-                                          size: 18)),
-                                  const SizedBox(width: 4),
-                                  Text(tripScheduleReference(trip),
-                                      style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 10,
-                                          fontFamily: 'Figtree'))
-                                ])
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Image.asset(
+                                          tripScheduleIconAsset,
+                                          width: 18,
+                                          height: 18,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (_, __, ___) =>
+                                              const Icon(
+                                            Icons.schedule_outlined,
+                                            color: Colors.white70,
+                                            size: 18,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            tripScheduleReference(trip),
+                                            style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 12,
+                                              fontFamily: 'Figtree',
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (profileLabel?.trim().isNotEmpty ==
+                                        true) ...[
+                                      const SizedBox(height: 3),
+                                      Row(
+                                        children: [
+                                          Image.asset(
+                                            tripProfileIconAsset,
+                                            width: 18,
+                                            height: 18,
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(
+                                              Icons.people_alt_outlined,
+                                              color: Color(0xFFD5B6FF),
+                                              size: 18,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              profileLabel!.trim(),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                                fontFamily: 'Figtree',
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                )
                               ] else
-                                Text(tripIdLabel(trip),
-                                    style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 10,
-                                        fontFamily: 'Figtree'))
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(tripIdLabel(trip),
+                                        style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                            fontFamily: 'Figtree')),
+                                    if (profileLabel?.trim().isNotEmpty ==
+                                        true) ...[
+                                      const SizedBox(height: 3),
+                                      Row(
+                                        children: [
+                                          Image.asset(
+                                            tripProfileIconAsset,
+                                            width: 16,
+                                            height: 16,
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(
+                                              Icons.people_alt_outlined,
+                                              color: Color(0xFFD5B6FF),
+                                              size: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              profileLabel!.trim(),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                                fontFamily: 'Figtree',
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                )
                             ])),
                         const Icon(Icons.chevron_right_rounded,
                             color: Colors.white, size: 27)
@@ -1027,7 +1170,7 @@ class _FigmaTripCard extends StatelessWidget {
                           Text(serviceStatus,
                               style: TextStyle(
                                   color: statusColor,
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   fontFamily: 'Figtree')),
                           const Spacer(),

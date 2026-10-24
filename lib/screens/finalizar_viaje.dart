@@ -46,6 +46,15 @@ String invoiceServicePaymentMethodForTrip(Trip trip) {
   return value;
 }
 
+List<String> invoiceServicePaymentMethodsForTrip(Trip trip) {
+  final status = invoiceServicePaymentStatusForTrip(trip);
+  if (isTripServiceMode(trip.serviceMode) &&
+      status.trim().toLowerCase() == 'contado') {
+    return const ['Efectivo', 'Tarjeta'];
+  }
+  return shipmentPaymentMethodsFor(status);
+}
+
 String invoiceProductPaymentStatusForTrip(Trip trip) {
   final description = trip.description ?? '';
   final match = RegExp(
@@ -1042,7 +1051,7 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
                             label: 'Método de pago',
                             trailing: _segmentedValue(
                               _paymentMethod,
-                              shipmentPaymentMethodsFor(_paymentStatus),
+                              invoiceServicePaymentMethodsForTrip(trip),
                             ),
                           ),
                           _PaymentRow(

@@ -849,22 +849,19 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           top: 0,
           left: 0,
           right: 0,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _returnToInicio,
-            child: Container(
-              height: 116,
-              color: const Color(0xF20C1C53),
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-                  child: Row(
-                    children: [
-                      _HeaderButton(
-                        icon: Icons.arrow_back_ios_new_rounded,
-                        onTap: _returnToInicio,
-                      ),
+          child: Container(
+            height: 116,
+            color: const Color(0xF20C1C53),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                child: Row(
+                  children: [
+                    _HeaderButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      onTap: _returnToInicio,
+                    ),
                       Expanded(
                         child: Center(
                           child: Text(
@@ -879,60 +876,55 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
                         ),
                       ),
                       const SizedBox(width: 42),
-                    ],
-                  ),
+                  ],
                 ),
               ),
             ),
           ),
         ),
-        PointerInterceptor(
-          intercepting: true,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {},
-            child: DraggableScrollableSheet(
+        DraggableScrollableSheet(
               initialChildSize: isTaxi ? .48 : .59,
               minChildSize: .12,
               maxChildSize: .90,
               snap: true,
               snapSizes: isTaxi ? const [.12, .48, .90] : const [.12, .59, .90],
               builder: (context, scrollController) {
-                return ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(22),
-                  ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 34, sigmaY: 34),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xD91F477F), Color(0xC2173264)],
-                        ),
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(22),
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: .28),
-                        ),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x45000000),
-                            blurRadius: 26,
-                            offset: Offset(0, -8),
+                return PointerInterceptor(
+                  intercepting: true,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(22),
+                    ),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 34, sigmaY: 34),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xD91F477F), Color(0xC2173264)],
                           ),
-                        ],
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(22),
+                          ),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .28),
+                          ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x45000000),
+                              blurRadius: 26,
+                              offset: Offset(0, -8),
+                            ),
+                          ],
+                        ),
+                        child: _buildBody(distance, eta, scrollController),
                       ),
-                      child: _buildBody(distance, eta, scrollController),
                     ),
                   ),
                 );
               },
             ),
-          ),
-        ),
       ],
     )));
   }

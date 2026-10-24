@@ -18,6 +18,7 @@ class WizardScaffold extends StatelessWidget {
     this.showProgress = true,
     this.showDescription = true,
     this.showStepBadge = false,
+    this.subtitleOffset = 0,
   });
 
   final String title;
@@ -32,6 +33,7 @@ class WizardScaffold extends StatelessWidget {
   final bool showProgress;
   final bool showDescription;
   final bool showStepBadge;
+  final double subtitleOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -167,14 +169,17 @@ class WizardScaffold extends StatelessWidget {
                 ),
                 const SizedBox(height: 22),
               ],
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                  fontFamily: 'Figtree',
+              Transform.translate(
+                offset: Offset(0, subtitleOffset),
+                child: Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    fontFamily: 'Figtree',
+                  ),
                 ),
               ),
               if (showDescription) ...[

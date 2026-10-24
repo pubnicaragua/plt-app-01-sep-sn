@@ -71,14 +71,17 @@ class _ResponsiveBackgroundArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/img/fondo-incoex.png',
-      fit: BoxFit.fill,
-      filterQuality: FilterQuality.high,
-      width: double.infinity,
-      height: double.infinity,
-      alignment: Alignment.center,
-      gaplessPlayback: true,
+    return Opacity(
+      opacity: .70,
+      child: Image.asset(
+        'assets/img/fondo-incoex.png',
+        fit: BoxFit.fill,
+        filterQuality: FilterQuality.high,
+        width: double.infinity,
+        height: double.infinity,
+        alignment: Alignment.center,
+        gaplessPlayback: true,
+      ),
     );
   }
 }

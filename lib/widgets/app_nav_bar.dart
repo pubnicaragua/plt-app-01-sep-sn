@@ -77,56 +77,53 @@ class AppNavBar extends StatelessWidget {
   Widget _item(int index, AppNavBarItem item) {
     final active = current == index;
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () => onChanged(index),
-        borderRadius: BorderRadius.circular(14),
-        hoverColor: Colors.white.withValues(alpha: .10),
-        splashColor: Colors.white.withValues(alpha: .18),
-        highlightColor: Colors.white.withValues(alpha: .08),
         child: Center(
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: active ? 62 : 56,
-            height: 56,
-            decoration: active
-                ? BoxDecoration(
-                    color: Colors.white.withValues(alpha: .14),
-                    shape: BoxShape.circle,
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: .24)),
-                  )
-                : null,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 27,
-                  height: 27,
-                  child: item.assetPath == null
-                      ? Icon(item.icon, color: Colors.white, size: 22)
-                      : Image.asset(
-                          item.assetPath!,
-                          fit: BoxFit.contain,
-                          semanticLabel: item.label,
-                          errorBuilder: (_, __, ___) => Icon(
-                            item.icon,
-                            color: Colors.white,
-                            size: 22,
+              duration: const Duration(milliseconds: 180),
+              width: active ? 62 : 56,
+              height: 56,
+              decoration: active
+                  ? BoxDecoration(
+                      color: Colors.white.withValues(alpha: .14),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: .24)),
+                    )
+                  : null,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 27,
+                    height: 27,
+                    child: item.assetPath == null
+                        ? Icon(item.icon, color: Colors.white, size: 22)
+                        : Image.asset(
+                            item.assetPath!,
+                            fit: BoxFit.contain,
+                            semanticLabel: item.label,
+                            errorBuilder: (_, __, ___) => Icon(
+                              item.icon,
+                              color: Colors.white,
+                              size: 22,
+                            ),
                           ),
-                        ),
-                ),
-                const SizedBox(height: 0),
-                Text(
-                  item.label,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                    fontFamily: 'Figtree',
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 0),
+                  Text(
+                    item.label,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ],
+              ),
           ),
         ),
       ),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/location_service.dart';
+import '../core/navigation.dart';
 import '../core/notifications.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
@@ -26,21 +27,44 @@ class HomeCliente extends StatefulWidget {
   State<HomeCliente> createState() => _HomeClienteState();
 }
 
-class _HomeClienteState extends State<HomeCliente> {
+class _HomeClienteState extends State<HomeCliente> with RouteAware {
   int tab = 0;
   int _tripRefreshVersion = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    appRouteObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    if (!mounted) return;
+    if (tab == 1 || tab == 2) {
+      setState(() => _tripRefreshVersion++);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final views = <Widget>[
       const _FigmaHomeTab(),
       MisEnvios(
-        key: ValueKey('mis-envios-$_tripRefreshVersion'),
         embedded: true,
+        refreshSignal: _tripRefreshVersion,
       ),
       ResumenCliente(
-        key: ValueKey('resumen-$_tripRefreshVersion'),
         embedded: true,
+        refreshSignal: _tripRefreshVersion,
       ),
       const MiPerfilCliente(embedded: true),
     ];
@@ -253,6 +277,8 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
           child: _NeedLocationButton(onTap: _openTaxiFlow),
         ),
         const SizedBox(height: 10),
+        const _VehicleRentalButton(),
+        const SizedBox(height: 10),
         const _LogisticsBanner(),
       ],
     );
@@ -391,6 +417,67 @@ class _NeedLocationButton extends StatelessWidget {
   }
 }
 
+class _VehicleRentalButton extends StatelessWidget {
+  const _VehicleRentalButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 47,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0x80315AA9), Color(0x66234580)],
+        ),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Colors.white.withValues(alpha: .18)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 28,
+            height: 28,
+            child: Icon(
+              Icons.directions_car_filled_rounded,
+              color: Color(0xB3FFFFFF),
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              '¿Necesitas rentar un vehículo?',
+              style: TextStyle(
+                color: Color(0xD9FFFFFF),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: .18)),
+            ),
+            child: const Text(
+              'Próximamente',
+              style: TextStyle(
+                color: Color(0xBFFFFFFF),
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _VehicleShowcaseCard extends StatelessWidget {
   const _VehicleShowcaseCard({
     required this.label,
@@ -470,22 +557,6 @@ class _VehicleShowcaseCard extends StatelessWidget {
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                  Positioned(
-                    right: 0,
-                    bottom: 5,
-                    child: Container(
-                      width: 29,
-                      height: 29,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .10),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: Colors.white.withValues(alpha: .20)),
-                      ),
-                      child: const Icon(Icons.chevron_right,
-                          color: Colors.white, size: 20),
                     ),
                   ),
                 ],

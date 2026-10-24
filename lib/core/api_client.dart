@@ -164,6 +164,54 @@ class ApiClient {
         .toList();
   }
 
+  Future<List<CompanyProfile>> getCompanyProfiles() async {
+    final json = await _send('GET', '/profiles');
+    final list = json is List
+        ? json
+        : json is Map && json['items'] is List
+            ? json['items'] as List
+            : const [];
+    return list
+        .whereType<Map>()
+        .map((item) => CompanyProfile.fromJson(item.cast<String, dynamic>()))
+        .toList();
+  }
+
+  Future<CompanyProfile> createCompanyProfile({
+    required String username,
+    required String displayName,
+    required String password,
+  }) async {
+    final json = (await _send(
+      'POST',
+      '/profiles',
+      body: {
+        'username': username,
+        'displayName': displayName,
+        'password': password,
+      },
+    )) as Map<String, dynamic>;
+    return CompanyProfile.fromJson(json);
+  }
+
+  Future<CompanyProfile> updateCompanyProfile(
+    String id, {
+    String? displayName,
+    String? password,
+    String? status,
+  }) async {
+    final json = (await _send(
+      'PATCH',
+      '/profiles/${Uri.encodeComponent(id)}',
+      body: {
+        if (displayName != null) 'displayName': displayName,
+        if (password != null && password.isNotEmpty) 'password': password,
+        if (status != null) 'status': status,
+      },
+    )) as Map<String, dynamic>;
+    return CompanyProfile.fromJson(json);
+  }
+
   Future<Trip> getTrip(String id) async {
     final json = (await _send(
       'GET',
@@ -177,6 +225,19 @@ class ApiClient {
       'PATCH',
       '/trips/${Uri.encodeComponent(id)}/status',
       body: {'status': status},
+    )) as Map<String, dynamic>;
+    return Trip.fromJson(json);
+  }
+
+  Future<Trip> updateTripSchedule(
+      String id, String scheduledDate, String scheduledTime) async {
+    final json = (await _send(
+      'PATCH',
+      '/trips/${Uri.encodeComponent(id)}/schedule',
+      body: {
+        'scheduledDate': scheduledDate,
+        'scheduledTime': scheduledTime,
+      },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);
   }

@@ -42,7 +42,7 @@ class _InicioState extends State<Inicio> {
 
   Future<void> _login() async {
     if (email.text.trim().isEmpty || password.text.isEmpty) {
-      setState(() => errorMessage = 'Ingresa tu correo y contraseña.');
+      setState(() => errorMessage = 'Ingresa tu correo o usuario y contraseña.');
       return;
     }
     setState(() {
@@ -206,9 +206,9 @@ class _InicioState extends State<Inicio> {
                   ),
                   const SizedBox(height: 14),
                   _LoginField(
-                    label: 'Correo',
+                    label: 'Correo o usuario',
                     controller: email,
-                    keyboardType: TextInputType.emailAddress,
+                    keyboardType: TextInputType.text,
                   ),
                   const SizedBox(height: 8),
                   _LoginField(

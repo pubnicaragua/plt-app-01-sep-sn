@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
@@ -47,6 +48,91 @@ class EnvioAsignadoScreen extends StatelessWidget {
           : 'Envío programado';
     }
     return trip.transport == 'Camión' ? 'Retiro y entrega' : 'Envío';
+  }
+
+  bool _canEditSchedule() {
+    final status = trip.status.trim().toLowerCase();
+    if (status != 'pendiente' && status != 'asignado') return false;
+    final date = trip.scheduledDate?.trim();
+    final time = trip.scheduledTime?.trim();
+    if (date == null || date.isEmpty || time == null || time.isEmpty) {
+      return false;
+    }
+    final scheduledAt = DateTime.tryParse('${date}T$time');
+    if (scheduledAt == null) return false;
+    return scheduledAt.difference(DateTime.now()) > const Duration(hours: 1);
+  }
+
+  String _dateForApi(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
+  String _timeForApi(TimeOfDay time) =>
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _editSchedule(BuildContext context) async {
+    if (!_canEditSchedule()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ya falta una hora o menos para iniciar el viaje; no se puede editar.',
+          ),
+        ),
+      );
+      return;
+    }
+    final currentDate = DateTime.tryParse(trip.scheduledDate ?? '') ??
+        DateTime.now().add(const Duration(days: 1));
+    final timeParts = (trip.scheduledTime ?? '09:00').split(':');
+    final currentTime = TimeOfDay(
+      hour: int.tryParse(timeParts.first) ?? 9,
+      minute: timeParts.length > 1 ? int.tryParse(timeParts[1]) ?? 0 : 0,
+    );
+    final date = await showDatePicker(
+      context: context,
+      initialDate: currentDate.isBefore(DateTime.now())
+          ? DateUtils.dateOnly(DateTime.now())
+          : DateUtils.dateOnly(currentDate),
+      firstDate: DateUtils.dateOnly(DateTime.now()),
+      lastDate: DateUtils.dateOnly(DateTime.now()).add(
+        const Duration(days: 365),
+      ),
+    );
+    if (date == null || !context.mounted) return;
+    final time = await showTimePicker(context: context, initialTime: currentTime);
+    if (time == null || !context.mounted) return;
+    final target = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    if (target.difference(DateTime.now()) <= const Duration(hours: 1)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('La nueva fecha debe quedar a más de una hora del inicio.'),
+        ),
+      );
+      return;
+    }
+    try {
+      final updated = await apiClient.updateTripSchedule(
+        trip.id,
+        _dateForApi(date),
+        _timeForApi(time),
+      );
+      if (!context.mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => EnvioAsignadoScreen(trip: updated)),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is ApiException
+                ? error.message
+                : 'No se pudo actualizar la fecha programada.',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -180,6 +266,42 @@ class EnvioAsignadoScreen extends StatelessWidget {
                                 value: '#${trip.id.isEmpty ? 'PENDIENTE' : trip.id}'),
                             _AssignmentLine(
                                 label: 'Servicio', value: _serviceLabel()),
+                            if (isTruck && isScheduled) ...[
+                              const SizedBox(height: 5),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _canEditSchedule()
+                                      ? () => _editSchedule(context)
+                                      : null,
+                                  icon: const Icon(Icons.edit_calendar_outlined,
+                                      size: 16),
+                                  label: Text(
+                                    _canEditSchedule()
+                                        ? 'Editar fecha y hora'
+                                        : 'Edición bloqueada (menos de 1 hora)',
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    disabledForegroundColor:
+                                        Colors.white.withValues(alpha: .45),
+                                    side: BorderSide(
+                                      color: Colors.white.withValues(alpha: .25),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 10),
+                                    textStyle: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'Figtree',
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(

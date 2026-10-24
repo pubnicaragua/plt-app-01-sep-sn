@@ -6,6 +6,9 @@ class SessionUser {
     required this.email,
     required this.role,
     required this.displayName,
+    this.accountId,
+    this.profileId,
+    this.profileRole,
     this.vehicle,
     this.plate,
     this.phone,
@@ -16,10 +19,15 @@ class SessionUser {
   final String email;
   final String role;
   final String displayName;
+  final String? accountId;
+  final String? profileId;
+  final String? profileRole;
   final String? vehicle;
   final String? plate;
   final String? phone;
   final String? companyName;
+
+  bool get isSupervisor => profileRole == 'supervisor';
 
   factory SessionUser.fromJson(Map<String, dynamic> json) {
     return SessionUser(
@@ -27,6 +35,9 @@ class SessionUser {
       email: json['email']?.toString() ?? '',
       role: json['role']?.toString() ?? '',
       displayName: json['displayName']?.toString() ?? 'Usuario INCOEX',
+      accountId: json['accountId']?.toString(),
+      profileId: json['profileId']?.toString(),
+      profileRole: json['profileRole']?.toString(),
       vehicle: json['vehicle']?.toString(),
       plate: json['plate']?.toString(),
       phone: json['phone']?.toString(),
@@ -53,6 +64,43 @@ class LoginResponse {
         (json['user'] as Map?)?.cast<String, dynamic>() ?? const {},
       ),
       profile: (json['profile'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+  }
+}
+
+class CompanyProfile {
+  const CompanyProfile({
+    required this.id,
+    required this.accountId,
+    required this.username,
+    required this.displayName,
+    required this.role,
+    required this.status,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String accountId;
+  final String username;
+  final String displayName;
+  final String role;
+  final String status;
+  final String? createdAt;
+  final String? updatedAt;
+
+  bool get isSupervisor => role == 'supervisor';
+
+  factory CompanyProfile.fromJson(Map<String, dynamic> json) {
+    return CompanyProfile(
+      id: json['id']?.toString() ?? '',
+      accountId: json['accountId']?.toString() ?? '',
+      username: json['username']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
+      role: json['role']?.toString() ?? 'operator',
+      status: json['status']?.toString() ?? 'Activo',
+      createdAt: json['createdAt']?.toString(),
+      updatedAt: json['updatedAt']?.toString(),
     );
   }
 }
@@ -97,6 +145,7 @@ class DashboardSummary {
 class Trip {
   const Trip({
     required this.id,
+    this.profileId,
     required this.client,
     required this.driver,
     required this.origin,
@@ -148,6 +197,7 @@ class Trip {
   });
 
   final String id;
+  final String? profileId;
   final String client;
   final String driver;
   final String origin;
@@ -239,6 +289,7 @@ class Trip {
     final invoiceAmount = (json['invoiceAmountCs'] as num?)?.toDouble();
     return Trip(
       id: json['id']?.toString() ?? '',
+      profileId: json['profileId']?.toString(),
       client: json['client']?.toString() ?? 'Cliente pendiente',
       driver: json['driver']?.toString() ?? 'Sin asignar',
       origin: json['origin']?.toString() ?? '',

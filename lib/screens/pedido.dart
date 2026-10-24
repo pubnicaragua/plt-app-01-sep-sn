@@ -30,7 +30,9 @@ class _LegacyMisEnviosState extends State<_LegacyMisEnvios> {
   }
 
   void _reload() {
-    setState(() => trips = _loadTrips());
+    setState(() {
+      trips = _loadTrips();
+    });
     widget.onRefresh?.call();
   }
 

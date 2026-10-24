@@ -24,7 +24,7 @@ ServiceCatalogItem? fallbackAdditionalServiceOption(
   String code, {
   String? title,
 }) {
-  final definitions = <String, (String, String, String, String)> {
+  final definitions = <String, (String, String, String, String)>{
     'delivery-more-vehicles': (
       title ?? 'Más vehículos',
       'A una misma ruta',
@@ -37,16 +37,61 @@ ServiceCatalogItem? fallbackAdditionalServiceOption(
       'taxi',
       'Vehículo',
     ),
-    'delivery-round-trip': ('Ida y vuelta', 'Regreso al origen', 'delivery', 'Vehículo'),
-    'taxi-round-trip': ('Ida y vuelta', 'Regreso al origen', 'taxi', 'Vehículo'),
-    'cargo-round-trip': ('Ida y vuelta', 'Regreso al origen', 'cargo', 'Camión'),
-    'delivery-multiple-stops': ('Varios destinos', 'Múltiples destinos', 'delivery', 'Vehículo'),
-    'taxi-multiple-stops': ('Varios destinos', 'Múltiples destinos', 'taxi', 'Vehículo'),
-    'cargo-multiple-stops': ('Varios destinos', 'Múltiples destinos', 'cargo', 'Camión'),
-    'delivery-waiting': ('Espera en destino', '6 horas espera', 'delivery', 'Vehículo'),
+    'delivery-round-trip': (
+      'Ida y vuelta',
+      'Regreso al origen',
+      'delivery',
+      'Vehículo'
+    ),
+    'taxi-round-trip': (
+      'Ida y vuelta',
+      'Regreso al origen',
+      'taxi',
+      'Vehículo'
+    ),
+    'cargo-round-trip': (
+      'Ida y vuelta',
+      'Regreso al origen',
+      'cargo',
+      'Camión'
+    ),
+    'delivery-multiple-stops': (
+      'Varios destinos',
+      'Múltiples destinos',
+      'delivery',
+      'Vehículo'
+    ),
+    'taxi-multiple-stops': (
+      'Varios destinos',
+      'Múltiples destinos',
+      'taxi',
+      'Vehículo'
+    ),
+    'cargo-multiple-stops': (
+      'Varios destinos',
+      'Múltiples destinos',
+      'cargo',
+      'Camión'
+    ),
+    'delivery-waiting': (
+      'Espera en destino',
+      '6 horas espera',
+      'delivery',
+      'Vehículo'
+    ),
     'cargo-helper': ('Ayudante', 'Para carga y descarga', 'cargo', 'Camión'),
-    'cargo-refrigerated': ('Refrigerado', 'Para productos fríos', 'cargo', 'Camión'),
-    'cargo-more-trucks': ('¿Más camiones?', 'Escoge tu producto', 'cargo', 'Camión'),
+    'cargo-refrigerated': (
+      'Refrigerado',
+      'Para productos fríos',
+      'cargo',
+      'Camión'
+    ),
+    'cargo-more-trucks': (
+      '¿Más camiones?',
+      'Escoge tu producto',
+      'cargo',
+      'Camión'
+    ),
   };
   final definition = definitions[code];
   if (definition == null) return null;
@@ -138,12 +183,22 @@ class CrearEnvio2 extends StatefulWidget {
   State<CrearEnvio2> createState() => _CrearEnvio2State();
 }
 
+class _SavedPickupDetails {
+  const _SavedPickupDetails({
+    required this.name,
+    required this.phone,
+    required this.references,
+  });
+
+  final String name;
+  final String phone;
+  final String references;
+}
+
 class _CrearEnvio2State extends State<CrearEnvio2> {
   // Datos del último recojo confirmado para reutilizarlos en el siguiente envío.
-  // Se mantienen en memoria durante la sesión y los campos siguen siendo editables.
-  static String _savedPickupName = '';
-  static String _savedPickupPhone = '';
-  static String _savedPickupReferences = '';
+  // Se mantienen en memoria durante la sesión, separados por perfil.
+  static final Map<String, _SavedPickupDetails> _savedPickupByProfile = {};
 
   late String _routeOrigin;
   late String _routeDestination;
@@ -184,6 +239,15 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   AppSettings? settings;
   Timer? _settingsPoll;
 
+  String get _profileScope {
+    final user = apiClient.currentUser;
+    final profileId = user?.profileId?.trim();
+    if (profileId?.isNotEmpty == true) return 'profile:$profileId';
+    final accountId = user?.accountId?.trim();
+    if (accountId?.isNotEmpty == true) return 'account:$accountId';
+    return 'account:${user?.id ?? 'anonymous'}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -204,12 +268,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     currency = widget.initialInvoiceCurrency == 'USD' ? 'USD' : 'C\$';
     productPaymentStatus = widget.initialProductPaymentStatus;
     productPaymentMethod = widget.initialProductPaymentMethod;
-    pickupName = TextEditingController(text: _savedPickupName);
-    pickupPhone = TextEditingController(text: _savedPickupPhone);
+    final savedPickup = _savedPickupByProfile[_profileScope];
+    pickupName = TextEditingController(text: savedPickup?.name ?? '');
+    pickupPhone = TextEditingController(text: savedPickup?.phone ?? '');
     pickupReferences = TextEditingController(
       text: widget.originRefs.trim().isNotEmpty
           ? widget.originRefs
-          : _savedPickupReferences,
+          : savedPickup?.references ?? '',
     );
     pickupNotes = TextEditingController();
     recipient = TextEditingController(text: widget.recipientName);
@@ -290,9 +355,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   double get _insurancePriceCs {
-    final code = widget.transport == 'Camión'
-        ? 'cargo-insurance'
-        : 'delivery-insurance';
+    final code =
+        widget.transport == 'Camión' ? 'cargo-insurance' : 'delivery-insurance';
     return _findOption(code)?.priceCs ?? 15;
   }
 
@@ -544,9 +608,11 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   void _rememberPickupDetails() {
-    _savedPickupName = pickupName.text.trim();
-    _savedPickupPhone = pickupPhone.text.trim();
-    _savedPickupReferences = pickupReferences.text.trim();
+    _savedPickupByProfile[_profileScope] = _SavedPickupDetails(
+      name: pickupName.text.trim(),
+      phone: pickupPhone.text.trim(),
+      references: pickupReferences.text.trim(),
+    );
   }
 
   ServiceCatalogItem? _findOption(String code, {String? fallbackTitle}) {
@@ -609,12 +675,12 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   }
 
   ServiceCatalogItem? _localAdditionalOption(String code) {
-    final fallbackTitle = code == 'delivery-more-vehicles' &&
-            widget.transport == 'Moto'
-        ? '¿Más motos?'
-        : code == 'delivery-more-vehicles' && widget.transport != 'Moto'
-            ? '¿Más autos?'
-            : null;
+    final fallbackTitle =
+        code == 'delivery-more-vehicles' && widget.transport == 'Moto'
+            ? '¿Más motos?'
+            : code == 'delivery-more-vehicles' && widget.transport != 'Moto'
+                ? '¿Más autos?'
+                : null;
     return fallbackAdditionalServiceOption(code, title: fallbackTitle);
   }
 
@@ -1087,10 +1153,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                       const SizedBox(height: 14),
                       _fragileBlock(),
                     ],
-                    if (widget.serviceMode == 'Taxi Privado') ...[
-                      const SizedBox(height: 14),
-                      _paymentBlock(includeInvoice: false),
-                    ] else if (widget.serviceMode != 'Envíos') ...[
+                    if (widget.serviceMode != 'Envíos' &&
+                        widget.serviceMode != 'Taxi Privado') ...[
                       const SizedBox(height: 12),
                       _productPhotosBlock(),
                     ],
@@ -1845,8 +1909,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                 enabled: true,
                 onTap: () =>
                     _selectAdditional('cargo-round-trip', 'Ida y vuelta'),
-                onSelectionTap: () =>
-                    _deactivateAdditional('cargo-round-trip'),
+                onSelectionTap: () => _deactivateAdditional('cargo-round-trip'),
               ),
             ),
             const SizedBox(width: 8),
@@ -2827,8 +2890,8 @@ class _AdditionalOptionCard extends StatelessWidget {
                         selected
                             ? Icons.check_circle_rounded
                             : Icons.radio_button_unchecked_rounded,
-                        color: Colors.white
-                            .withValues(alpha: enabled ? .95 : .25),
+                        color:
+                            Colors.white.withValues(alpha: enabled ? .95 : .25),
                         size: large ? 17 : 15,
                       ),
                     ),
@@ -3039,6 +3102,8 @@ class _TaxiVehiclePreview extends StatelessWidget {
 
   String get _asset {
     switch (vehicle) {
+      case 'Moto':
+        return 'assets/img/HomeCliente/figma_moto.png';
       case 'SUV':
         return 'assets/img/HomeCliente/taxi_suv.png';
       case 'Microbus':
@@ -3050,6 +3115,8 @@ class _TaxiVehiclePreview extends StatelessWidget {
 
   String get _passengerLabel {
     switch (vehicle) {
+      case 'Moto':
+        return '1 pasajero';
       case 'SUV':
         return '6 pasajeros';
       case 'Microbus':

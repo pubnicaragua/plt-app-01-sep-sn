@@ -26,8 +26,7 @@ DateTime? summaryDateForTrip(Trip trip, DateTime now) {
     'entregada',
   }.contains(status);
   final active = !terminal && !{'cancelado', 'anulado'}.contains(status);
-  final scheduled = trip.isScheduled ||
-      trip.serviceType?.trim().toLowerCase() == 'programado';
+  final scheduled = isScheduledTrip(trip);
 
   if (active && !scheduled) return DateUtils.dateOnly(now);
 
@@ -39,6 +38,35 @@ DateTime? summaryDateForTrip(Trip trip, DateTime now) {
   final raw = scheduled ? trip.scheduledDate : trip.date;
   final parsed = DateTime.tryParse(raw ?? '');
   return parsed == null ? null : DateUtils.dateOnly(parsed.toLocal());
+}
+
+bool isScheduledTrip(Trip trip) {
+  final serviceType = trip.serviceType?.trim().toLowerCase();
+  final serviceMode = trip.serviceMode?.trim().toLowerCase();
+  final status = trip.status.trim().toLowerCase();
+  return trip.isScheduled ||
+      serviceType == 'programado' ||
+      serviceMode == 'programado' ||
+      status == 'programado' ||
+      trip.scheduledDate?.trim().isNotEmpty == true;
+}
+
+bool isScheduledPendingForChart(Trip trip) {
+  if (!isScheduledTrip(trip)) return false;
+  final status = trip.status.trim().toLowerCase();
+  const progressedStatuses = {
+    'activo',
+    'en camino',
+    'recogio',
+    'recogió',
+    'en viaje',
+    'en entrega',
+    'completado',
+    'finalizado',
+    'entregado',
+    'entregada',
+  };
+  return !progressedStatuses.contains(status);
 }
 
 int summaryTripCount(Iterable<Trip> trips) => trips.length;
@@ -64,12 +92,30 @@ double summaryInvoiceTotalInRange(
   );
 }
 
-bool isInvoiceHistoryStatus(Trip trip) {
+bool _isInvoiceTerminalStatus(Trip trip) {
   final status = trip.status.trim().toLowerCase();
   return status == 'completado' ||
       status == 'finalizado' ||
       status == 'entregado' ||
       status == 'entregada';
+}
+
+bool _isInvoiceActiveStatus(Trip trip) {
+  const activeStatuses = {
+    'activo',
+    'en camino',
+    'recogio',
+    'recogió',
+    'en viaje',
+    'en entrega',
+  };
+  return activeStatuses.contains(trip.status.trim().toLowerCase());
+}
+
+bool isInvoiceHistoryStatus(Trip trip) {
+  final status = trip.status.trim().toLowerCase();
+  if (status == 'cancelado' || status == 'anulado') return false;
+  return _isInvoiceTerminalStatus(trip) || isScheduledTrip(trip);
 }
 
 bool tripHasInvoice(Trip trip) {
@@ -98,6 +144,14 @@ String invoicePaymentStatusForTrip(Trip trip) {
               : match?.group(1) ?? '')!
       .trim()
       .toLowerCase();
+  if (raw.isEmpty) {
+    final method = (trip.invoicePaymentMethod ?? trip.servicePaymentMethod ?? '')
+        .trim()
+        .toLowerCase();
+    if ({'efectivo', 'cash', 'contado', 'tarjeta', 'card'}.contains(method)) {
+      return 'Pagada';
+    }
+  }
   return raw.contains('pagad') || raw.contains('paid') || raw == 'contado'
       ? 'Pagada'
       : 'Pendiente';
@@ -111,11 +165,14 @@ bool invoicePaymentMatchesFilter(Trip trip, String filter) {
 }
 
 DateTime? invoiceHistoryDateForTrip(Trip trip, {DateTime? fallback}) {
-  final raw = trip.completedAt?.trim().isNotEmpty == true
-      ? trip.completedAt
-      : (trip.scheduledDate?.trim().isNotEmpty == true
-          ? trip.scheduledDate
-          : trip.date);
+  final scheduled = isScheduledTrip(trip) && !_isInvoiceTerminalStatus(trip);
+  final raw = scheduled
+      ? trip.scheduledDate
+      : (trip.completedAt?.trim().isNotEmpty == true
+          ? trip.completedAt
+          : (trip.scheduledDate?.trim().isNotEmpty == true
+              ? trip.scheduledDate
+              : trip.date));
   final parsed = DateTime.tryParse(raw ?? '');
   if (parsed != null) return DateUtils.dateOnly(parsed.toLocal());
   return isInvoiceHistoryStatus(trip) && fallback != null
@@ -143,18 +200,55 @@ String invoiceHistoryVehicleLabel(Trip trip, {required bool isTrip}) {
 }
 
 String invoiceServiceStatusForTrip(Trip trip) {
-  final status = trip.status.trim().toLowerCase();
-  if (status == 'entregado' || status == 'entregada') return 'Entregado';
+  if (_isInvoiceTerminalStatus(trip)) return 'Finalizado';
+  if (_isInvoiceActiveStatus(trip)) return 'Activo';
+  if (isScheduledTrip(trip)) {
+    return 'Programado';
+  }
   return 'Finalizado';
+}
+
+Color invoiceServiceStatusColor(String status) {
+  switch (status.trim().toLowerCase()) {
+    case 'programado':
+      return const Color(0xFF9B59FF);
+    case 'activo':
+    case 'finalizado':
+    case 'entregado':
+      return const Color(0xFF19D27D);
+    default:
+      return const Color(0xFF19D27D);
+  }
+}
+
+Color invoiceServiceTypeColor({required bool isTrip}) {
+  return isTrip ? const Color(0xFFFFC928) : accentBlue;
+}
+
+Color invoiceServiceTypeTextColor({required bool isTrip}) {
+  return isTrip ? Colors.black : Colors.white;
 }
 
 double invoiceHistoryAmountForTrip(Trip trip) =>
     trip.invoiceAmountCs ?? trip.estimatedCostCs ?? 0;
 
+String invoiceProfileCardLabel(CompanyProfile profile) {
+  final displayName = profile.displayName.trim();
+  final username = profile.username.trim();
+  if (username.isEmpty) return displayName;
+  if (displayName.isEmpty) return username;
+  return '$displayName  •  $username';
+}
+
 class ResumenCliente extends StatefulWidget {
-  const ResumenCliente({super.key, this.embedded = false});
+  const ResumenCliente({
+    super.key,
+    this.embedded = false,
+    this.refreshSignal = 0,
+  });
 
   final bool embedded;
+  final int refreshSignal;
 
   @override
   State<ResumenCliente> createState() => _ResumenClienteState();
@@ -162,6 +256,7 @@ class ResumenCliente extends StatefulWidget {
 
 class _ResumenClienteState extends State<ResumenCliente> {
   late Future<List<Trip>> trips;
+  Map<String, String> profileNames = const {};
   int tab = 0; // 0 = Envíos, 1 = Viajes, 2 = Historial de facturas
 
   Future<List<Trip>> _fetchTrips() {
@@ -180,6 +275,34 @@ class _ResumenClienteState extends State<ResumenCliente> {
   void initState() {
     super.initState();
     trips = _fetchTrips();
+    _loadProfileNames();
+  }
+
+  Future<void> _loadProfileNames() async {
+    if (apiClient.currentUser?.isSupervisor != true) return;
+    try {
+      final profiles = await apiClient.getCompanyProfiles();
+      if (!mounted) return;
+      setState(() {
+        profileNames = {
+          for (final profile in profiles)
+            if (!profile.isSupervisor &&
+                invoiceProfileCardLabel(profile).isNotEmpty)
+              profile.id: invoiceProfileCardLabel(profile),
+        };
+      });
+    } catch (_) {}
+  }
+
+  @override
+  void didUpdateWidget(covariant ResumenCliente oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshSignal != widget.refreshSignal) {
+      setState(() {
+        trips = _fetchTrips();
+      });
+      _loadProfileNames();
+    }
   }
 
   @override
@@ -202,7 +325,8 @@ class _ResumenClienteState extends State<ResumenCliente> {
                 if (tab == 2) {
                   return _InvoiceHistoryPanel(
                     trips: items,
-                    loading: loading,
+                    profileNames: profileNames,
+                    loading: loading && items.isEmpty,
                     error: snapshot.error,
                     onTabChanged: (value) => setState(() {
                       tab = value;
@@ -275,6 +399,9 @@ class _ResumenClienteState extends State<ResumenCliente> {
                 final totalTripCount = summaryTripCount(selectedTrips);
                 final totalAmount = summaryInvoiceTotal(selectedTrips);
                 final weeklyCounts = _weeklyCounts(selectedTrips);
+                final weeklyScheduledCounts = tab == 2
+                    ? List<int>.filled(7, 0)
+                    : _weeklyScheduledCounts(selectedTrips);
                 final weeklyValues = tab == 2
                     ? _weeklyInvoiceAmounts(selectedTrips, summaryNow)
                     : weeklyCounts;
@@ -307,7 +434,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                               'Todo lo que necesitas saber',
                               style: TextStyle(
                                 color: Color(0xE0FFFFFF),
-                                fontSize: 10,
+                                fontSize: 13,
                                 fontFamily: 'Figtree',
                               ),
                             ),
@@ -434,7 +561,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                             'vs. mes anterior',
                                             style: TextStyle(
                                               color: Color(0xFFB9D4FF),
-                                              fontSize: 8.5,
+                                              fontSize: 11,
                                               fontFamily: 'Figtree',
                                             ),
                                           ),
@@ -674,7 +801,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                                   : 'Comparativa de facturas movilizadas',
                                           style: TextStyle(
                                             color: Color(0xFFB9D4FF),
-                                            fontSize: 9,
+                                            fontSize: 12,
                                             fontFamily: 'Figtree',
                                           ),
                                         ),
@@ -692,6 +819,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                             const SizedBox(height: 14),
                             _WeeklyChart(
                               counts: weeklyValues,
+                              scheduledCounts: weeklyScheduledCounts,
                               unit: tab == 0
                                   ? 'Envíos'
                                   : tab == 1
@@ -703,7 +831,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 const _LegendDot(color: figmaBlue),
-                                SizedBox(width: 6),
+                                const SizedBox(width: 6),
                                 Text(
                                   tab == 0
                                       ? 'Envíos realizados'
@@ -712,10 +840,25 @@ class _ResumenClienteState extends State<ResumenCliente> {
                                           : 'Facturas movilizadas',
                                   style: const TextStyle(
                                     color: Color(0xFFB9D4FF),
-                                    fontSize: 10.5,
+                                    fontSize: 13,
                                     fontFamily: 'Figtree',
                                   ),
                                 ),
+                                if (tab != 2) ...[
+                                  const SizedBox(width: 14),
+                                  const _LegendDot(color: Color(0xFF9B59FF)),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    tab == 0
+                                        ? 'Envíos programados'
+                                        : 'Viajes programados',
+                                    style: const TextStyle(
+                                      color: Color(0xFFB9D4FF),
+                                      fontSize: 13,
+                                      fontFamily: 'Figtree',
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ],
@@ -798,6 +941,20 @@ class _ResumenClienteState extends State<ResumenCliente> {
     });
   }
 
+  List<int> _weeklyScheduledCounts(List<Trip> trips) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    return List.generate(7, (index) {
+      final day = monday.add(Duration(days: index));
+      return trips.where((trip) {
+        final date = _tripDate(trip);
+        return date != null &&
+        isScheduledPendingForChart(trip) &&
+            _sameDay(date, day);
+      }).length;
+    });
+  }
+
   List<int> _weeklyInvoiceAmounts(List<Trip> trips, DateTime now) {
     final today = DateUtils.dateOnly(now);
     final monday = today.subtract(Duration(days: today.weekday - 1));
@@ -835,12 +992,14 @@ class _ResumenClienteState extends State<ResumenCliente> {
 class _InvoiceHistoryPanel extends StatefulWidget {
   const _InvoiceHistoryPanel({
     required this.trips,
+    required this.profileNames,
     required this.loading,
     required this.error,
     required this.onTabChanged,
   });
 
   final List<Trip> trips;
+  final Map<String, String> profileNames;
   final bool loading;
   final Object? error;
   final ValueChanged<int> onTabChanged;
@@ -884,6 +1043,61 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
         id,
       );
     });
+  }
+
+  Future<void> _paySelectedInvoices() async {
+    final selected = widget.trips
+        .where((trip) => selectedPendingInvoiceIds.contains(trip.id))
+        .where((trip) => invoicePaymentStatusForTrip(trip) == 'Pendiente')
+        .toList();
+    if (selected.isEmpty) return;
+
+    final method = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Selecciona el método de pago'),
+        children: [
+          for (final option in const ['Efectivo', 'Transferencia', 'Tarjeta'])
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(option),
+              child: Text(option),
+            ),
+        ],
+      ),
+    );
+    if (!mounted || method == null) return;
+
+    try {
+      for (final trip in selected) {
+        final amount = invoiceHistoryAmountForTrip(trip);
+        await apiClient.updateTripPayment(
+          id: trip.id,
+          method: method,
+          amount: amount,
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        bulkSelectionMode = false;
+        selectedPendingInvoiceIds = <String>{};
+      });
+      widget.onTabChanged(2);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pago registrado correctamente.')),
+      );
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo registrar el pago.')),
+        );
+      }
+    }
   }
 
   bool _isTrip(Trip trip) {
@@ -1099,7 +1313,7 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
               Text('Todo lo que necesitas saber',
                   style: TextStyle(
                       color: Color(0xE0FFFFFF),
-                      fontSize: 10,
+                      fontSize: 13,
                       fontFamily: 'Figtree')),
             ],
           ),
@@ -1190,8 +1404,9 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
                     SizedBox(
                       height: 30,
                       child: ElevatedButton(
-                        onPressed:
-                            selectedPendingInvoiceIds.isEmpty ? null : () {},
+                        onPressed: selectedPendingInvoiceIds.isEmpty
+                            ? null
+                            : _paySelectedInvoices,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: accentBlue,
                           disabledBackgroundColor: Colors.white24,
@@ -1263,6 +1478,9 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
                 child: _InvoiceHistoryCard(
                   trip: trip,
                   isTrip: _isTrip(trip),
+                  profileLabel: trip.profileId == null
+                      ? null
+                      : widget.profileNames[trip.profileId!],
                   selectionMode: bulkSelectionMode,
                   selected: selectedPendingInvoiceIds.contains(trip.id),
                   selectable: invoicePaymentStatusForTrip(trip) == 'Pendiente',
@@ -1287,6 +1505,7 @@ class _InvoiceHistoryCard extends StatelessWidget {
   const _InvoiceHistoryCard({
     required this.trip,
     required this.isTrip,
+    this.profileLabel,
     this.selectionMode = false,
     this.selected = false,
     this.selectable = false,
@@ -1296,6 +1515,7 @@ class _InvoiceHistoryCard extends StatelessWidget {
 
   final Trip trip;
   final bool isTrip;
+  final String? profileLabel;
   final bool selectionMode;
   final bool selected;
   final bool selectable;
@@ -1363,12 +1583,17 @@ class _InvoiceHistoryCard extends StatelessWidget {
                   const SizedBox(width: 4),
                 ],
                 _InvoiceTag(
-                    label: isTrip ? 'Viaje' : 'Envío', color: accentBlue),
+                  label: isTrip ? 'Viaje' : 'Envío',
+                  color: invoiceServiceTypeColor(isTrip: isTrip),
+                  textColor: invoiceServiceTypeTextColor(isTrip: isTrip),
+                ),
                 const SizedBox(width: 4),
                 _InvoiceTag(label: invoiceStatus, color: statusColor),
                 const SizedBox(width: 4),
                 _InvoiceTag(
-                    label: serviceStatus, color: const Color(0xFF19D27D)),
+                  label: serviceStatus,
+                  color: invoiceServiceStatusColor(serviceStatus),
+                ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Align(
@@ -1417,8 +1642,39 @@ class _InvoiceHistoryCard extends StatelessWidget {
                           '${trip.pickupTime?.trim().isNotEmpty == true ? trip.pickupTime : 'Pendiente'}  •  #${trip.id.replaceFirst('#', '')}',
                           style: const TextStyle(
                               color: Colors.white70,
-                              fontSize: 9,
+                              fontSize: 12,
                               fontFamily: 'Figtree')),
+                      if (profileLabel?.trim().isNotEmpty == true) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Image.asset(
+                              'assets/img/HomeCliente/bi_people-fill.png',
+                              width: 16,
+                              height: 16,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.people_alt_outlined,
+                                color: Color(0xFFD5B6FF),
+                                size: 16,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                profileLabel!.trim(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontFamily: 'Figtree',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1437,7 +1693,7 @@ class _InvoiceHistoryCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: Colors.white70,
-                          fontSize: 8.5,
+                          fontSize: 11,
                           fontFamily: 'Figtree'),
                     ),
                   ),
@@ -1461,10 +1717,11 @@ String formatInvoiceHistoryAmount(double amount) =>
     'C\$ ${amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2)}';
 
 class _InvoiceTag extends StatelessWidget {
-  const _InvoiceTag({required this.label, required this.color});
+  const _InvoiceTag({required this.label, required this.color, this.textColor});
 
   final String label;
   final Color color;
+  final Color? textColor;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1477,9 +1734,10 @@ class _InvoiceTag extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                color: color.computeLuminance() > 0.55
-                    ? Colors.black
-                    : Colors.white,
+                color: textColor ??
+                    (color.computeLuminance() > 0.55
+                        ? Colors.black
+                        : Colors.white),
                 fontSize: 7.5,
                 fontWeight: FontWeight.w800,
                 fontFamily: 'Figtree')),
@@ -1543,7 +1801,7 @@ class _PeriodCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Color(0xFFB9D4FF),
-                fontSize: 9,
+                fontSize: 12,
                 fontFamily: 'Figtree',
               ),
             ),
@@ -1572,9 +1830,14 @@ class _PeriodCard extends StatelessWidget {
 }
 
 class _WeeklyChart extends StatefulWidget {
-  const _WeeklyChart({required this.counts, required this.unit});
+  const _WeeklyChart({
+    required this.counts,
+    required this.scheduledCounts,
+    required this.unit,
+  });
 
   final List<int> counts;
+  final List<int> scheduledCounts;
   final String unit;
 
   @override
@@ -1613,9 +1876,24 @@ class _WeeklyChartState extends State<_WeeklyChart> {
   @override
   void didUpdateWidget(covariant _WeeklyChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.counts != widget.counts || oldWidget.unit != widget.unit) {
+    if (oldWidget.counts != widget.counts ||
+        oldWidget.scheduledCounts != widget.scheduledCounts ||
+        oldWidget.unit != widget.unit) {
       selectedIndex = _bestIndex(widget.counts);
     }
+  }
+
+  int _scheduledCount(int index) {
+    return widget.scheduledCounts[index]
+        .clamp(0, widget.counts[index])
+        .toInt();
+  }
+
+  int _completedCount(int index) => widget.counts[index] - _scheduledCount(index);
+
+  double _segmentHeight(int count, int highest) {
+    if (highest == 0) return 0;
+    return (74 * count / highest).clamp(0, 74).toDouble();
   }
 
   @override
@@ -1640,20 +1918,25 @@ class _WeeklyChartState extends State<_WeeklyChart> {
                       height: 38,
                       child: selectedIndex == i
                           ? OverflowBox(
-                              maxWidth: 96,
+                              maxWidth: 130,
                               alignment: i == 0
                                   ? Alignment.topLeft
                                   : i == 6
                                       ? Alignment.topRight
                                       : Alignment.topCenter,
                               child: SizedBox(
-                                width: 88,
+                                width: 116,
                                 child: _ChartTooltip(
                                   day: dayLabels[i],
-                                  value: weeklyChartValueLabel(
-                                    widget.counts[i],
-                                    widget.unit,
-                                  ),
+                                  value: _completedCount(i) > 0
+                                      ? weeklyChartValueLabel(
+                                          _completedCount(i),
+                                          widget.unit,
+                                        )
+                                      : null,
+                                  scheduledValue: _scheduledCount(i) > 0
+                                      ? 'Programados: ${_scheduledCount(i)}'
+                                      : null,
                                 ),
                               ),
                             )
@@ -1664,19 +1947,65 @@ class _WeeklyChartState extends State<_WeeklyChart> {
                       height: 74,
                       child: Align(
                         alignment: Alignment.bottomCenter,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
+                        child: SizedBox(
                           width: 10,
-                          height: highest == 0
-                              ? 4
-                              : (74 * widget.counts[i] / highest)
-                                  .clamp(4, 74)
-                                  .toDouble(),
-                          decoration: BoxDecoration(
-                            color: selectedIndex == i && highest > 0
-                                ? figmaBlue
-                                : const Color(0xFF31477E),
-                            borderRadius: BorderRadius.circular(5),
+                          height: 74,
+                          child: Stack(
+                            alignment: Alignment.bottomCenter,
+                            children: [
+                              if (widget.counts[i] == 0)
+                                Container(
+                                  width: 10,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF31477E),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                              if (widget.counts[i] > 0) ...[
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  width: 10,
+                                  height: _segmentHeight(
+                                    _completedCount(i),
+                                    highest,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: selectedIndex == i
+                                        ? figmaBlue
+                                        : const Color(0xFF31477E),
+                                    borderRadius: BorderRadius.vertical(
+                                      bottom: const Radius.circular(5),
+                                      top: _scheduledCount(i) == 0
+                                          ? const Radius.circular(5)
+                                          : Radius.zero,
+                                    ),
+                                  ),
+                                ),
+                                if (_scheduledCount(i) > 0)
+                                  Positioned(
+                                    bottom: _segmentHeight(
+                                      _completedCount(i),
+                                      highest,
+                                    ),
+                                    child: Container(
+                                      width: 10,
+                                      height: _segmentHeight(
+                                        _scheduledCount(i),
+                                        highest,
+                                      ).clamp(4, 74).toDouble(),
+                                      decoration: BoxDecoration(
+                                        color: selectedIndex == i
+                                            ? const Color(0xFF9B59FF)
+                                            : const Color(0xFF31477E),
+                                        borderRadius: BorderRadius.vertical(
+                                          top: Radius.circular(5),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ],
                           ),
                         ),
                       ),
@@ -1686,7 +2015,7 @@ class _WeeklyChartState extends State<_WeeklyChart> {
                       shortLabels[i],
                       style: const TextStyle(
                         color: Color(0xFF8FA0C4),
-                        fontSize: 10,
+                        fontSize: 12,
                         fontFamily: 'Figtree',
                       ),
                     ),
@@ -1701,10 +2030,15 @@ class _WeeklyChartState extends State<_WeeklyChart> {
 }
 
 class _ChartTooltip extends StatelessWidget {
-  const _ChartTooltip({required this.day, required this.value});
+  const _ChartTooltip({
+    required this.day,
+    this.value,
+    this.scheduledValue,
+  });
 
   final String day;
-  final String value;
+  final String? value;
+  final String? scheduledValue;
 
   @override
   Widget build(BuildContext context) => AppGlassSurface(
@@ -1723,13 +2057,22 @@ class _ChartTooltip extends StatelessWidget {
                       fontSize: 9.5,
                       fontWeight: FontWeight.w800,
                       fontFamily: 'Figtree')),
-              Text(value,
-                  textAlign: TextAlign.left,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'Figtree')),
+              if (value != null)
+                Text(value!,
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Figtree')),
+              if (scheduledValue != null)
+                Text(scheduledValue!,
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(
+                        color: Color(0xFFD5B6FF),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Figtree')),
             ],
           ),
         ),

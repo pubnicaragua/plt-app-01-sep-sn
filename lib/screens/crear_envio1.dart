@@ -13,6 +13,8 @@ import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 import '../core/api_client.dart';
 import '../core/location_service.dart';
+import '../core/map_tap_place.dart';
+import '../core/place_history.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
@@ -22,6 +24,28 @@ import 'confirmar_pedido.dart';
 import 'crear_envio_carga.dart';
 import 'crear_envio2.dart';
 import 'seleccionar_camion.dart';
+
+int maxPassengersForTripVehicle(String vehicle) {
+  switch (vehicle) {
+    case 'Moto':
+      return 1;
+    case 'SUV':
+      return 6;
+    case 'Microbus':
+      return 12;
+    default:
+      return 4;
+  }
+}
+
+const tripVehicleOptions = ['Moto', 'Sedán', 'SUV', 'Microbus'];
+
+TextEditingValue destinationEditingValueForSavedPlace(SavedPlace place) {
+  return TextEditingValue(
+    text: place.address,
+    selection: TextSelection.collapsed(offset: place.address.length),
+  );
+}
 
 /// Primera vista del flujo de creación de envío.
 ///
@@ -69,6 +93,7 @@ class CrearEnvio1 extends StatefulWidget {
 class _CrearEnvio1State extends State<CrearEnvio1> {
   late final TextEditingController origin;
   late final TextEditingController destination;
+  late final FocusNode _originFocusNode;
   late final FocusNode _destinationFocusNode;
   late final bool _autoFocusDestinationOnEntry;
   PlaceSuggestion? originPlace;
@@ -83,16 +108,24 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   double? _routeDistanceKm;
   int? _routeDurationSeconds;
   bool _routeLoading = false;
+  bool _mapSelectionIsOrigin = false;
   bool _scheduleMode = false;
   DateTime? _scheduledDate;
   TimeOfDay? _scheduledTime;
+  PlaceHistory _placeHistory = PlaceHistory();
+  late final String _profileKey;
 
   @override
   void initState() {
     super.initState();
+    _profileKey = placeHistoryProfileKey(apiClient.currentUser);
     origin = TextEditingController(text: widget.startOrigin);
     destination = TextEditingController(text: widget.startDestination);
+    origin.addListener(_clearOriginWhenEmpty);
+    destination.addListener(_clearDestinationWhenEmpty);
+    _originFocusNode = FocusNode()..addListener(_updateMapSelectionFromFocus);
     _destinationFocusNode = FocusNode();
+    _destinationFocusNode.addListener(_updateMapSelectionFromFocus);
     _autoFocusDestinationOnEntry = widget.startOrigin.trim().isEmpty &&
         widget.startDestination.trim().isEmpty &&
         widget.startOriginPlace == null &&
@@ -106,6 +139,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
         DateTime.now().add(const Duration(days: 1));
     _scheduledTime = _parseScheduleTime(widget.startTime) ??
         const TimeOfDay(hour: 9, minute: 0);
+    unawaited(_loadPlaceHistory());
 
     apiClient.getSettings().then((data) {
       if (mounted) setState(() => settings = data);
@@ -135,12 +169,20 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
         _loadRoadRoute();
       });
     }
+    _mapSelectionIsOrigin =
+        !_autoFocusDestinationOnEntry && widget.startDestination.trim().isEmpty;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadRoadRoute();
       if (_autoFocusDestinationOnEntry && mounted) {
         _destinationFocusNode.requestFocus();
       }
     });
+  }
+
+  Future<void> _loadPlaceHistory() async {
+    final history = await PlaceHistoryStore.load(_profileKey);
+    if (!mounted) return;
+    setState(() => _placeHistory = history);
   }
 
   DateTime? _parseScheduleDate(String? value) {
@@ -230,6 +272,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     _settingsPoll?.cancel();
     origin.dispose();
     destination.dispose();
+    _originFocusNode.dispose();
     _destinationFocusNode.dispose();
     super.dispose();
   }
@@ -271,6 +314,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
 
   Future<void> _selectPlace(
       {required bool isOrigin, required PlaceSuggestion place}) async {
+    if (!isOrigin) {
+      _placeHistory.remember(place);
+      unawaited(PlaceHistoryStore.save(_profileKey, _placeHistory));
+    }
     setState(() {
       if (isOrigin) {
         originPlace = place;
@@ -284,6 +331,110 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
       _routeDurationSeconds = null;
     });
     await _loadRoadRoute();
+  }
+
+  void _toggleDestinationFavorite() {
+    final place = destinationPlace;
+    if (place == null) return;
+    _placeHistory.remember(place);
+    _placeHistory.toggleFavorite(place.placeId);
+    unawaited(PlaceHistoryStore.save(_profileKey, _placeHistory));
+    setState(() {});
+  }
+
+  void _selectSavedDestination(SavedPlace place) {
+    final suggestion = place.toSuggestion();
+    destinationPlace = suggestion;
+    destination.value = destinationEditingValueForSavedPlace(place);
+    _roadRoute = const [];
+    _routeDistanceKm = null;
+    _routeDurationSeconds = null;
+    FocusScope.of(context).unfocus();
+    setState(() {});
+    unawaited(_loadRoadRoute());
+  }
+
+  void _toggleSavedFavorite(SavedPlace place) {
+    _placeHistory.toggleFavorite(place.placeId);
+    unawaited(PlaceHistoryStore.save(_profileKey, _placeHistory));
+    setState(() {});
+  }
+
+  void _clearOriginWhenEmpty() {
+    if (origin.text.trim().isEmpty && originPlace != null) {
+      _clearPlace(isOrigin: true);
+    }
+  }
+
+  void _clearDestinationWhenEmpty() {
+    if (destination.text.trim().isEmpty && destinationPlace != null) {
+      _clearPlace(isOrigin: false);
+    }
+  }
+
+  void _clearPlace({required bool isOrigin}) {
+    if ((isOrigin ? originPlace : destinationPlace) == null) return;
+    setState(() {
+      if (isOrigin) {
+        originPlace = null;
+      } else {
+        destinationPlace = null;
+      }
+      _roadRoute = const [];
+      _routeDistanceKm = null;
+      _routeDurationSeconds = null;
+    });
+  }
+
+  void _updateMapSelectionFromFocus() {
+    if (_originFocusNode.hasFocus) {
+      _mapSelectionIsOrigin = true;
+    } else if (_destinationFocusNode.hasFocus) {
+      _mapSelectionIsOrigin = false;
+    }
+  }
+
+  Future<void> _handleMapTap(LatLng point) async {
+    final isOrigin = _mapSelectionIsOrigin;
+    final place = await _reverseGeocodeMapPoint(point);
+    if (!mounted) return;
+    await _selectPlace(isOrigin: isOrigin, place: place);
+    FocusScope.of(context).unfocus();
+  }
+
+  Future<PlaceSuggestion> _reverseGeocodeMapPoint(LatLng point) async {
+    const mapsKey = String.fromEnvironment(
+      'GOOGLE_MAPS_API_KEY',
+      defaultValue: 'AIzaSyCMwxArmM-BEJuxgbjOiON8KdH_IsNH1F4',
+    );
+    if (mapsKey.isNotEmpty) {
+      try {
+        final response = await http.get(Uri.https(
+          'maps.googleapis.com',
+          '/maps/api/geocode/json',
+          {
+            'latlng': '${point.latitude},${point.longitude}',
+            'language': 'es',
+            'key': mapsKey,
+          },
+        ));
+        if (response.statusCode == 200) {
+          final payload = jsonDecode(response.body);
+          final results = payload is Map ? payload['results'] : null;
+          if (results is List && results.isNotEmpty && results.first is Map) {
+            return placeFromGeocode(
+              latitude: point.latitude,
+              longitude: point.longitude,
+              result: (results.first as Map).cast<String, dynamic>(),
+            );
+          }
+        }
+      } catch (_) {}
+    }
+    return placeFromGeocode(
+      latitude: point.latitude,
+      longitude: point.longitude,
+    );
   }
 
   Future<void> _loadRoadRoute() async {
@@ -489,6 +640,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
         markerId: const MarkerId('pickup'),
         position: LatLng(from!.latitude!, from.longitude!),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        onTap: () {
+          origin.clear();
+          _clearPlace(isOrigin: true);
+        },
       ));
     }
     if (to?.latitude != null && to?.longitude != null) {
@@ -496,6 +651,10 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
         markerId: const MarkerId('dropoff'),
         position: LatLng(to!.latitude!, to.longitude!),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        onTap: () {
+          destination.clear();
+          _clearPlace(isOrigin: false);
+        },
       ));
     }
     return markers;
@@ -512,20 +671,6 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             jointType: JointType.round,
           ),
         };
-
-  void _focusRouteOnMap() {
-    if (_roadRoute.length >= 2) {
-      _fitRoute(_roadRoute);
-      return;
-    }
-    final place = destinationPlace ?? originPlace;
-    if (place?.latitude != null && place?.longitude != null) {
-      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(
-        LatLng(place!.latitude!, place.longitude!),
-        14,
-      ));
-    }
-  }
 
   void _handleMapBack() {
     Navigator.of(context).pop();
@@ -549,11 +694,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             destinationPlace: destinationPlace,
             transport: transport,
             taxiVariant: taxiVariant,
-            maxPassengers: taxiVariant == 'Microbus'
-                ? 12
-                : taxiVariant == 'SUV'
-                    ? 6
-                    : 4,
+            maxPassengers: maxPassengersForTripVehicle(taxiVariant),
             serviceMode: serviceTab,
             estimatedShipping: _priceFor(transport),
             originRefs: widget.startOriginRefs,
@@ -629,6 +770,9 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
+    // Google Maps keeps its attribution strip at the bottom of the platform
+    // view, so cover that strip as well as the device inset.
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom + 32;
     final hasFare = _distanceKm != null;
     final sheetHeight = _scheduleMode
         ? 320.0
@@ -653,6 +797,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             mapToolbarEnabled: false,
             rotateGesturesEnabled: false,
             tiltGesturesEnabled: false,
+            onTap: _handleMapTap,
             onMapCreated: (controller) {
               _mapController = controller;
               _fitRoute(_roadRoute);
@@ -667,23 +812,56 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             top: MediaQuery.paddingOf(context).top + 62,
             left: 14,
             right: 14,
-            child: _RouteEditor(
-              origin: origin,
-              destination: destination,
-              onOriginSelected: (place) =>
-                  _selectPlace(isOrigin: true, place: place),
-              onDestinationSelected: (place) =>
-                  _selectPlace(isOrigin: false, place: place),
-              onMap: _focusRouteOnMap,
-              loading: _routeLoading,
-              durationSeconds: _routeDurationSeconds,
+            child: PointerInterceptor(
+              intercepting: true,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _RouteEditor(
+                    origin: origin,
+                    destination: destination,
+                    originFocusNode: _originFocusNode,
+                    destinationFocusNode: _destinationFocusNode,
+                    placeHistory: _placeHistory,
+                    destinationPlace: destinationPlace,
+                    onToggleDestinationFavorite: _toggleDestinationFavorite,
+                    onOriginSelected: (place) =>
+                        _selectPlace(isOrigin: true, place: place),
+                    onDestinationSelected: (place) =>
+                        _selectPlace(isOrigin: false, place: place),
+                    loading: _routeLoading,
+                    durationSeconds: _routeDurationSeconds,
+                  ),
+                  AnimatedBuilder(
+                    animation:
+                        Listenable.merge([_destinationFocusNode, destination]),
+                    builder: (context, _) {
+                      if (!shouldShowPlaceHistory(
+                            hasFocus: _destinationFocusNode.hasFocus,
+                            query: destination.text,
+                          ) ||
+                          _placeHistory.recent.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return _RouteHistoryPanel(
+                        history: _placeHistory,
+                        onSelect: _selectSavedDestination,
+                        onToggleFavorite: _toggleSavedFavorite,
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           Positioned(
             left: 0,
             right: 0,
-            bottom: 0,
-            height: sheetHeight,
+            // Extend through the system/map bottom inset so the sheet remains
+            // attached to the physical bottom edge instead of exposing the
+            // map attribution strip below it.
+            bottom: -bottomInset,
+            height: sheetHeight + bottomInset,
             child: PointerInterceptor(
               intercepting: true,
               child: GestureDetector(
@@ -800,41 +978,66 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                       ),
                       const SizedBox(height: 8),
                       if (serviceTab == 'Taxi Privado')
-                        Row(
-                          children: [
-                            _ImageVehicleCard(
-                              label: 'Sedán',
-                              subtitle: '4 pasajeros',
-                              asset: 'assets/img/HomeCliente/taxi_sedan.png',
-                              selected: taxiVariant == 'Sedán',
-                              onTap: () => setState(() {
-                                taxiVariant = 'Sedán';
-                                transport = 'Vehículo';
-                              }),
+                        SizedBox(
+                          height: 104,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            padding: EdgeInsets.zero,
+                            child: Row(
+                              children: [
+                                _ImageVehicleCard(
+                                  width: 136,
+                                  label: 'Moto',
+                                  subtitle: '1 pasajero',
+                                  asset:
+                                      'assets/img/HomeCliente/figma_moto.png',
+                                  selected: taxiVariant == 'Moto',
+                                  onTap: () => setState(() {
+                                    taxiVariant = 'Moto';
+                                    transport = 'Moto';
+                                  }),
+                                ),
+                                const SizedBox(width: 7),
+                                _ImageVehicleCard(
+                                  width: 136,
+                                  label: 'Sedán',
+                                  subtitle: '4 pasajeros',
+                                  asset:
+                                      'assets/img/HomeCliente/taxi_sedan.png',
+                                  selected: taxiVariant == 'Sedán',
+                                  onTap: () => setState(() {
+                                    taxiVariant = 'Sedán';
+                                    transport = 'Vehículo';
+                                  }),
+                                ),
+                                const SizedBox(width: 7),
+                                _ImageVehicleCard(
+                                  width: 136,
+                                  label: 'SUV',
+                                  subtitle: '6 pasajeros',
+                                  asset: 'assets/img/HomeCliente/taxi_suv.png',
+                                  selected: taxiVariant == 'SUV',
+                                  onTap: () => setState(() {
+                                    taxiVariant = 'SUV';
+                                    transport = 'Vehículo';
+                                  }),
+                                ),
+                                const SizedBox(width: 7),
+                                _ImageVehicleCard(
+                                  width: 136,
+                                  label: 'Microbus',
+                                  subtitle: '12 pasajeros',
+                                  asset:
+                                      'assets/img/HomeCliente/taxi_microbus.png',
+                                  selected: taxiVariant == 'Microbus',
+                                  onTap: () => setState(() {
+                                    taxiVariant = 'Microbus';
+                                    transport = 'Vehículo';
+                                  }),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 7),
-                            _ImageVehicleCard(
-                              label: 'SUV',
-                              subtitle: '6 pasajeros',
-                              asset: 'assets/img/HomeCliente/taxi_suv.png',
-                              selected: taxiVariant == 'SUV',
-                              onTap: () => setState(() {
-                                taxiVariant = 'SUV';
-                                transport = 'Vehículo';
-                              }),
-                            ),
-                            const SizedBox(width: 7),
-                            _ImageVehicleCard(
-                              label: 'Microbus',
-                              subtitle: '12 pasajeros',
-                              asset: 'assets/img/HomeCliente/taxi_microbus.png',
-                              selected: taxiVariant == 'Microbus',
-                              onTap: () => setState(() {
-                                taxiVariant = 'Microbus';
-                                transport = 'Vehículo';
-                              }),
-                            ),
-                          ],
+                          ),
                         )
                       else
                         Row(
@@ -1239,18 +1442,26 @@ class _RouteEditor extends StatelessWidget {
   const _RouteEditor({
     required this.origin,
     required this.destination,
+    required this.originFocusNode,
+    required this.destinationFocusNode,
+    required this.placeHistory,
+    required this.destinationPlace,
+    required this.onToggleDestinationFavorite,
     required this.onOriginSelected,
     required this.onDestinationSelected,
-    required this.onMap,
     required this.loading,
     required this.durationSeconds,
   });
 
   final TextEditingController origin;
   final TextEditingController destination;
+  final FocusNode originFocusNode;
+  final FocusNode destinationFocusNode;
+  final PlaceHistory placeHistory;
+  final PlaceSuggestion? destinationPlace;
+  final VoidCallback onToggleDestinationFavorite;
   final ValueChanged<PlaceSuggestion> onOriginSelected;
   final ValueChanged<PlaceSuggestion> onDestinationSelected;
-  final VoidCallback onMap;
   final bool loading;
   final int? durationSeconds;
 
@@ -1267,6 +1478,7 @@ class _RouteEditor extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Image.asset('assets/img/HomeCliente/route_origin_home.png',
                     width: 27, height: 27, fit: BoxFit.contain),
@@ -1274,6 +1486,7 @@ class _RouteEditor extends StatelessWidget {
                 Expanded(
                   child: PlaceAutocompleteField(
                     controller: origin,
+                    focusNode: originFocusNode,
                     label: 'Origen',
                     hint: '¿Dónde recogemos?',
                     bare: true,
@@ -1288,6 +1501,7 @@ class _RouteEditor extends StatelessWidget {
               color: Colors.white.withValues(alpha: .22),
             ),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Image.asset('assets/img/HomeCliente/route_destination_flag.png',
                     width: 27, height: 27, fit: BoxFit.contain),
@@ -1295,29 +1509,22 @@ class _RouteEditor extends StatelessWidget {
                 Expanded(
                   child: PlaceAutocompleteField(
                     controller: destination,
+                    focusNode: destinationFocusNode,
                     label: 'Hacia',
                     hint: 'Selecciona el punto de entrega',
                     bare: true,
                     onSelected: onDestinationSelected,
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: destination.text.trim().isEmpty ? null : onMap,
-                  icon: const Icon(Icons.map_outlined, size: 13),
-                  label: const Text('Mapa'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    backgroundColor: accentBlue,
-                    disabledBackgroundColor:
-                        Colors.white.withValues(alpha: .08),
-                    padding: const EdgeInsets.symmetric(horizontal: 9),
-                    minimumSize: const Size(58, 29),
-                    shape: const StadiumBorder(),
-                    textStyle: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Figtree',
-                    ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 7),
+                  child: _RouteFavoriteButton(
+                    active: destinationPlace != null &&
+                        placeHistory.favorites.any(
+                          (saved) => saved.placeId == destinationPlace!.placeId,
+                        ),
+                    enabled: destinationPlace != null,
+                    onPressed: onToggleDestinationFavorite,
                   ),
                 ),
               ],
@@ -1341,6 +1548,257 @@ class _RouteEditor extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteHistoryPanel extends StatefulWidget {
+  const _RouteHistoryPanel({
+    required this.history,
+    required this.onSelect,
+    required this.onToggleFavorite,
+  });
+
+  final PlaceHistory history;
+  final ValueChanged<SavedPlace> onSelect;
+  final ValueChanged<SavedPlace> onToggleFavorite;
+
+  @override
+  State<_RouteHistoryPanel> createState() => _RouteHistoryPanelState();
+}
+
+class _RouteHistoryPanelState extends State<_RouteHistoryPanel> {
+  bool _showFavorites = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.history.recent.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final visible = widget.history.itemsForTab(favorites: _showFavorites);
+    return Padding(
+      padding: const EdgeInsets.only(left: 30, top: 7),
+      child: Container(
+        constraints: const BoxConstraints(maxHeight: 185),
+        padding: const EdgeInsets.fromLTRB(10, 8, 4, 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0B2D6C).withValues(alpha: .92),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: .22)),
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          children: [
+            Row(
+              children: [
+                _RouteHistoryTitle(
+                  icon: Icons.history_rounded,
+                  label: 'Recientes',
+                  selected: !_showFavorites,
+                  onTap: () => setState(() => _showFavorites = false),
+                ),
+                const SizedBox(width: 5),
+                _RouteHistoryTitle(
+                  icon: Icons.star_rounded,
+                  label: 'Favoritos',
+                  selected: _showFavorites,
+                  onTap: () => setState(() => _showFavorites = true),
+                ),
+              ],
+            ),
+            if (visible.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 9, 4, 4),
+                child: Text(
+                  _showFavorites
+                      ? 'Aún no tienes favoritos'
+                      : 'Aún no hay lugares recientes',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .64),
+                    fontSize: 10,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+            for (final place in visible)
+              _RouteHistoryRow(
+                place: place,
+                leading:
+                    _showFavorites ? Icons.star_rounded : Icons.history_rounded,
+                onSelect: () => widget.onSelect(place),
+                onToggleFavorite: () => widget.onToggleFavorite(place),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteHistoryTitle extends StatelessWidget {
+  const _RouteHistoryTitle({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: selected
+                ? accentBlue.withValues(alpha: .30)
+                : Colors.white.withValues(alpha: .07),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white.withValues(alpha: .85), size: 14),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteHistoryRow extends StatelessWidget {
+  const _RouteHistoryRow({
+    required this.place,
+    required this.leading,
+    required this.onSelect,
+    required this.onToggleFavorite,
+  });
+
+  final SavedPlace place;
+  final IconData leading;
+  final VoidCallback onSelect;
+  final VoidCallback onToggleFavorite;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onSelect,
+      borderRadius: BorderRadius.circular(9),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Icon(leading, color: Colors.white.withValues(alpha: .70), size: 15),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    place.main.isEmpty ? place.address : place.main,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                  if (place.secondary.isNotEmpty)
+                    Text(
+                      place.secondary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .68),
+                        fontSize: 9,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            _RouteFavoriteButton(
+              active: place.isFavorite,
+              enabled: true,
+              onPressed: onToggleFavorite,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteFavoriteButton extends StatelessWidget {
+  const _RouteFavoriteButton({
+    required this.active,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final bool active;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: enabled ? onPressed : null,
+      tooltip: active ? 'Quitar de favoritos' : 'Guardar en favoritos',
+      splashRadius: 16,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 29, height: 29),
+      icon: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: active
+              ? accentBlue.withValues(alpha: .23)
+              : Colors.white.withValues(alpha: .06),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: accentBlue.withValues(alpha: .42),
+                    blurRadius: 7,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: Icon(
+          active ? Icons.star_rounded : Icons.star_border_rounded,
+          color: enabled
+              ? (active
+                  ? const Color(0xFF58A6FF)
+                  : Colors.white.withValues(alpha: .82))
+              : Colors.white.withValues(alpha: .28),
+          size: 16,
         ),
       ),
     );
@@ -1411,6 +1869,7 @@ class _ServiceTab extends StatelessWidget {
 
 class _ImageVehicleCard extends StatelessWidget {
   const _ImageVehicleCard({
+    this.width,
     required this.label,
     required this.subtitle,
     required this.asset,
@@ -1418,6 +1877,7 @@ class _ImageVehicleCard extends StatelessWidget {
     required this.onTap,
   });
 
+  final double? width;
   final String label;
   final String subtitle;
   final String asset;
@@ -1426,8 +1886,8 @@ class _ImageVehicleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-        child: GestureDetector(
+    final isMainVehicle = asset.contains('figma_');
+    final card = GestureDetector(
       onTap: onTap,
       child: AppGlassSurface(
         borderRadius: 13,
@@ -1439,14 +1899,17 @@ class _ImageVehicleCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Image.asset(
-                  asset,
-                  width: double.infinity,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.local_shipping_outlined,
-                    color: Colors.white70,
-                    size: 30,
+                child: Transform.scale(
+                  scale: isMainVehicle ? 1.16 : 1,
+                  child: Image.asset(
+                    asset,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.local_shipping_outlined,
+                      color: Colors.white70,
+                      size: 30,
+                    ),
                   ),
                 ),
               ),
@@ -1473,7 +1936,10 @@ class _ImageVehicleCard extends StatelessWidget {
           ),
         ),
       ),
-    ));
+    );
+    return width == null
+        ? Expanded(child: card)
+        : SizedBox(width: width, child: card);
   }
 }
 
@@ -1776,8 +2242,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
     if (rate == null) return null;
     final chargeableKm =
         (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
-    return roundFareCs(
-        rate.baseFeeCs + chargeableKm * rate.farePerKmCs,
+    return roundFareCs(rate.baseFeeCs + chargeableKm * rate.farePerKmCs,
         settings?.fareRoundingCs ?? 5);
   }
 
@@ -2216,9 +2681,8 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 9, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: fragile
-                                      ? accentBlue
-                                      : Colors.transparent,
+                                  color:
+                                      fragile ? accentBlue : Colors.transparent,
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: const Text('SÍ',

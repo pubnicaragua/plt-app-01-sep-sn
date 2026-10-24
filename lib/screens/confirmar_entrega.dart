@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
+import '../core/trip_routing.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
@@ -182,9 +183,11 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                         children: [
                           Row(
                             children: [
-                              const Expanded(
+                              Expanded(
                                 child: Text(
-                                  'Detalles del envío',
+                                  isTripServiceMode(trip.serviceMode)
+                                      ? 'Detalles del viaje'
+                                      : 'Detalles del envío',
                                   style: TextStyle(
                                     color: Color(0xFF10224A),
                                     fontSize: 16,

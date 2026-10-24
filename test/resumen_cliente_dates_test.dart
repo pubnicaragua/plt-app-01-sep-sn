@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:incoex_logistics_app/core/theme.dart';
 import 'package:incoex_logistics_app/models/api_models.dart';
 import 'package:incoex_logistics_app/screens/resumen_cliente.dart';
 
@@ -11,6 +12,7 @@ Trip _trip({
   bool isScheduled = false,
   String? scheduledDate,
   double? invoiceAmountCs,
+  String? servicePaymentMethod,
 }) {
   return Trip(
     id: 'test',
@@ -25,6 +27,7 @@ Trip _trip({
     isScheduled: isScheduled,
     scheduledDate: scheduledDate,
     invoiceAmountCs: invoiceAmountCs,
+    servicePaymentMethod: servicePaymentMethod,
   );
 }
 
@@ -80,6 +83,57 @@ void main() {
     );
 
     expect(invoiceHistoryDateForTrip(trip), DateTime(2026, 10, 8));
+  });
+
+  test('un programado no cancelado aparece en el historial de facturas', () {
+    final trip = _trip(
+      status: 'Pendiente',
+      isScheduled: true,
+      scheduledDate: '2026-10-24',
+    );
+
+    expect(isInvoiceHistoryStatus(trip), isTrue);
+    expect(invoiceHistoryDateForTrip(trip), DateTime(2026, 10, 24));
+  });
+
+  test('un programado cancelado no aparece en el historial de facturas', () {
+    final trip = _trip(
+      status: 'Cancelado',
+      isScheduled: true,
+      scheduledDate: '2026-10-24',
+    );
+
+    expect(isInvoiceHistoryStatus(trip), isFalse);
+  });
+
+  test('un programado contado sin estado explícito se considera pagado', () {
+    final trip = _trip(
+      status: 'Pendiente',
+      isScheduled: true,
+      scheduledDate: '2026-10-24',
+      servicePaymentMethod: 'Efectivo',
+    );
+
+    expect(invoicePaymentStatusForTrip(trip), 'Pagada');
+  });
+
+  test('las etiquetas del historial distinguen programado, activo y finalizado', () {
+    expect(
+      invoiceServiceStatusForTrip(
+        _trip(status: 'Pendiente', isScheduled: true, scheduledDate: '2026-10-24'),
+      ),
+      'Programado',
+    );
+    expect(invoiceServiceStatusForTrip(_trip(status: 'Activo')), 'Activo');
+    expect(invoiceServiceStatusForTrip(_trip(status: 'Completado')), 'Finalizado');
+    expect(invoiceServiceStatusColor('Programado'), const Color(0xFF9B59FF));
+    expect(invoiceServiceStatusColor('Activo'), const Color(0xFF19D27D));
+  });
+
+  test('los viajes usan etiqueta amarilla con texto negro', () {
+    expect(invoiceServiceTypeColor(isTrip: true), const Color(0xFFFFC928));
+    expect(invoiceServiceTypeTextColor(isTrip: true), Colors.black);
+    expect(invoiceServiceTypeColor(isTrip: false), accentBlue);
   });
 
   test('los filtros de pago aceptan sus etiquetas en plural', () {

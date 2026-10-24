@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../core/api_client.dart';
+import '../core/place_history.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
@@ -41,16 +45,18 @@ class SeleccionarPuntosEnvio extends StatefulWidget {
       onOpenMap;
 
   @override
-  State<SeleccionarPuntosEnvio> createState() =>
-      _SeleccionarPuntosEnvioState();
+  State<SeleccionarPuntosEnvio> createState() => _SeleccionarPuntosEnvioState();
 }
 
 class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
-  static final List<PlaceSuggestion> _recentPlaces = [];
   late final TextEditingController origin;
   late final TextEditingController destination;
+  late final FocusNode destinationFocusNode;
   late PlaceSuggestion? originPlace;
   late PlaceSuggestion? destinationPlace;
+  PlaceHistory _placeHistory = PlaceHistory();
+  late final String _profileKey;
+  bool _showDestinationHistory = false;
 
   static const _defaultOrigin = PlaceSuggestion(
     placeId: 'incoex-edificio-pellas',
@@ -97,6 +103,8 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
   @override
   void initState() {
     super.initState();
+    _profileKey = placeHistoryProfileKey(apiClient.currentUser);
+    destinationFocusNode = FocusNode()..addListener(_onDestinationFocusChanged);
     originPlace = widget.startOriginPlace ?? _defaultOrigin;
     destinationPlace = widget.startDestinationPlace;
     origin = TextEditingController(
@@ -105,12 +113,40 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
           : widget.startOrigin,
     );
     destination = TextEditingController(text: widget.startDestination);
+    destination.addListener(_onDestinationTextChanged);
+    unawaited(_loadPlaceHistory());
+  }
+
+  Future<void> _loadPlaceHistory() async {
+    final history = await PlaceHistoryStore.load(_profileKey);
+    if (!mounted) return;
+    setState(() => _placeHistory = history);
+  }
+
+  void _onDestinationFocusChanged() {
+    _updateDestinationHistoryVisibility();
+  }
+
+  void _onDestinationTextChanged() {
+    _updateDestinationHistoryVisibility();
+  }
+
+  void _updateDestinationHistoryVisibility() {
+    final shouldShow = shouldShowPlaceHistory(
+      hasFocus: destinationFocusNode.hasFocus,
+      query: destination.text,
+    );
+    if (!mounted || _showDestinationHistory == shouldShow) {
+      return;
+    }
+    setState(() => _showDestinationHistory = shouldShow);
   }
 
   @override
   void dispose() {
     origin.dispose();
     destination.dispose();
+    destinationFocusNode.dispose();
     super.dispose();
   }
 
@@ -131,9 +167,23 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
   }
 
   void _rememberPlace(PlaceSuggestion place) {
-    _recentPlaces.removeWhere((item) => item.placeId == place.placeId);
-    _recentPlaces.insert(0, place);
-    if (_recentPlaces.length > 8) _recentPlaces.removeLast();
+    _placeHistory.remember(place);
+    unawaited(PlaceHistoryStore.save(_profileKey, _placeHistory));
+  }
+
+  void _toggleDestinationFavorite() {
+    final place = destinationPlace;
+    if (place == null) return;
+    _placeHistory.remember(place);
+    _placeHistory.toggleFavorite(place.placeId);
+    unawaited(PlaceHistoryStore.save(_profileKey, _placeHistory));
+    setState(() {});
+  }
+
+  void _toggleSavedFavorite(SavedPlace place) {
+    _placeHistory.toggleFavorite(place.placeId);
+    unawaited(PlaceHistoryStore.save(_profileKey, _placeHistory));
+    setState(() {});
   }
 
   RouteSelectionResult get _result => RouteSelectionResult(
@@ -206,34 +256,25 @@ class _SeleccionarPuntosEnvioState extends State<SeleccionarPuntosEnvio> {
               _RouteSelectionCard(
                 origin: origin,
                 destination: destination,
+                destinationFocusNode: destinationFocusNode,
+                destinationPlace: destinationPlace,
+                destinationFavorite: destinationPlace != null &&
+                    _placeHistory.favorites.any(
+                      (item) => item.placeId == destinationPlace!.placeId,
+                    ),
                 onOriginSelected: _setOrigin,
                 onDestinationSelected: _setDestination,
+                onToggleDestinationFavorite: _toggleDestinationFavorite,
                 onMap: _continue,
                 selectionOnly: widget.selectionOnly,
               ),
               const SizedBox(height: 9),
-              if (_recentPlaces.isNotEmpty)
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(8, 8, 8, 2),
-                  child: Text('LUGARES RECIENTES', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1, fontFamily: 'Figtree')),
+              if (_showDestinationHistory) ...[
+                _SavedPlacesPanel(
+                  history: _placeHistory,
+                  onSelect: (place) => _setDestination(place.toSuggestion()),
+                  onToggleFavorite: _toggleSavedFavorite,
                 ),
-              for (var index = 0; index < (_recentPlaces.isNotEmpty ? _recentPlaces.length : _recommended.length); index++) ...[
-                _RecommendedPlaceCard(
-                  item: _RecommendedPlace(
-                    place: _recentPlaces.isNotEmpty
-                        ? _recentPlaces[index]
-                        : _recommended[index].place,
-                  ),
-                  selected: destinationPlace?.placeId ==
-                      (_recentPlaces.isNotEmpty
-                          ? _recentPlaces[index].placeId
-                          : _recommended[index].place.placeId),
-                  onTap: () => _setDestination(_recentPlaces.isNotEmpty
-                      ? _recentPlaces[index]
-                      : _recommended[index].place),
-                ),
-                if (index != (_recentPlaces.isNotEmpty ? _recentPlaces.length : _recommended.length) - 1)
-                  const SizedBox(height: 2),
               ],
               if (widget.selectionOnly) ...[
                 const SizedBox(height: 18),
@@ -270,16 +311,24 @@ class _RouteSelectionCard extends StatelessWidget {
   const _RouteSelectionCard({
     required this.origin,
     required this.destination,
+    required this.destinationFocusNode,
+    required this.destinationPlace,
+    required this.destinationFavorite,
     required this.onOriginSelected,
     required this.onDestinationSelected,
+    required this.onToggleDestinationFavorite,
     required this.onMap,
     required this.selectionOnly,
   });
 
   final TextEditingController origin;
   final TextEditingController destination;
+  final FocusNode destinationFocusNode;
+  final PlaceSuggestion? destinationPlace;
+  final bool destinationFavorite;
   final ValueChanged<PlaceSuggestion> onOriginSelected;
   final ValueChanged<PlaceSuggestion> onDestinationSelected;
+  final VoidCallback onToggleDestinationFavorite;
   final VoidCallback onMap;
   final bool selectionOnly;
 
@@ -320,6 +369,7 @@ class _RouteSelectionCard extends StatelessWidget {
                 Expanded(
                   child: PlaceAutocompleteField(
                     controller: destination,
+                    focusNode: destinationFocusNode,
                     label: 'Destino',
                     hint: '¿A dónde va tu pedido?',
                     bare: true,
@@ -327,6 +377,12 @@ class _RouteSelectionCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
+                _FavoritePlaceButton(
+                  active: destinationFavorite,
+                  enabled: destinationPlace != null,
+                  onPressed: onToggleDestinationFavorite,
+                ),
+                const SizedBox(width: 2),
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: TextButton(
@@ -334,7 +390,8 @@ class _RouteSelectionCard extends StatelessWidget {
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
                       backgroundColor: accentBlue,
-                    disabledBackgroundColor: Colors.white.withValues(alpha: .10),
+                      disabledBackgroundColor:
+                          Colors.white.withValues(alpha: .10),
                       padding: const EdgeInsets.symmetric(horizontal: 15),
                       minimumSize: const Size(58, 30),
                       shape: const StadiumBorder(),
@@ -352,6 +409,233 @@ class _RouteSelectionCard extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedPlacesPanel extends StatelessWidget {
+  const _SavedPlacesPanel({
+    required this.history,
+    required this.onSelect,
+    required this.onToggleFavorite,
+  });
+
+  final PlaceHistory history;
+  final ValueChanged<SavedPlace> onSelect;
+  final ValueChanged<SavedPlace> onToggleFavorite;
+
+  @override
+  Widget build(BuildContext context) {
+    final favorites = history.favorites;
+    final recent = history.recent;
+    if (favorites.isEmpty && recent.isEmpty) {
+      return AppGlassSurface(
+        borderRadius: 16,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Text(
+            'Tus direcciones seleccionadas aparecerán aquí.',
+            style: TextStyle(
+              color: Color(0xCCFFFFFF),
+              fontSize: 11,
+              fontFamily: 'Figtree',
+            ),
+          ),
+        ),
+      );
+    }
+
+    return AppGlassSurface(
+      borderRadius: 18,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'LUGARES GUARDADOS',
+              style: TextStyle(
+                color: Color(0xD9FFFFFF),
+                fontSize: 10,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Figtree',
+              ),
+            ),
+            if (favorites.isNotEmpty) ...[
+              const SizedBox(height: 7),
+              const _SavedPlacesSectionTitle(
+                icon: Icons.star_rounded,
+                label: 'Favoritos',
+              ),
+              for (final place in favorites)
+                _SavedPlaceRow(
+                  place: place,
+                  icon: Icons.star_rounded,
+                  onTap: () => onSelect(place),
+                  onToggleFavorite: () => onToggleFavorite(place),
+                ),
+            ],
+            if (recent.isNotEmpty) ...[
+              const SizedBox(height: 7),
+              const _SavedPlacesSectionTitle(
+                icon: Icons.history_rounded,
+                label: 'Recientes',
+              ),
+              for (final place in recent)
+                _SavedPlaceRow(
+                  place: place,
+                  icon: Icons.history_rounded,
+                  onTap: () => onSelect(place),
+                  onToggleFavorite: () => onToggleFavorite(place),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedPlacesSectionTitle extends StatelessWidget {
+  const _SavedPlacesSectionTitle({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white.withValues(alpha: .82), size: 15),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Figtree',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SavedPlaceRow extends StatelessWidget {
+  const _SavedPlaceRow({
+    required this.place,
+    required this.icon,
+    required this.onTap,
+    required this.onToggleFavorite,
+  });
+
+  final SavedPlace place;
+  final IconData icon;
+  final VoidCallback onTap;
+  final VoidCallback onToggleFavorite;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.white.withValues(alpha: .70), size: 17),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    place.main.isEmpty ? place.address : place.main,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                  if (place.secondary.isNotEmpty)
+                    Text(
+                      place.secondary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xCCFFFFFF),
+                        fontSize: 10.5,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            _FavoritePlaceButton(
+              active: place.isFavorite,
+              enabled: true,
+              onPressed: onToggleFavorite,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FavoritePlaceButton extends StatelessWidget {
+  const _FavoritePlaceButton({
+    required this.active,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final bool active;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: enabled ? onPressed : null,
+      tooltip: active ? 'Quitar de favoritos' : 'Guardar en favoritos',
+      splashRadius: 18,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+      icon: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: active
+              ? accentBlue.withValues(alpha: .24)
+              : Colors.white.withValues(alpha: .08),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: accentBlue.withValues(alpha: .42),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: Icon(
+          active ? Icons.star_rounded : Icons.star_border_rounded,
+          size: 18,
+          color: enabled
+              ? (active
+                  ? const Color(0xFF58A6FF)
+                  : Colors.white.withValues(alpha: .82))
+              : Colors.white.withValues(alpha: .25),
         ),
       ),
     );
@@ -427,7 +711,8 @@ class _RecommendedPlaceCard extends StatelessWidget {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 10.5,
-                        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                        fontWeight:
+                            selected ? FontWeight.w800 : FontWeight.w600,
                         fontFamily: 'Figtree',
                       ),
                     ),

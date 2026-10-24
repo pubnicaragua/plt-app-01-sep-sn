@@ -14,6 +14,11 @@ bool shouldShowProductPaymentMethod(String status) =>
 String productPaymentStatusForSelection(bool paid) =>
     paid ? 'Pagado' : 'Pendiente';
 
+int? parseBundleCount(String value) {
+  final parsed = int.tryParse(value.trim());
+  return parsed != null && parsed > 0 ? parsed : null;
+}
+
 class CrearEnvioCarga extends StatefulWidget {
   const CrearEnvioCarga({
     super.key,
@@ -68,6 +73,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
   late final TextEditingController weightController;
   late final TextEditingController invoicePriceController;
   late final TextEditingController invoiceNumberController;
+  late final TextEditingController bundlesController;
   String currency = 'C\$';
   String productPaymentStatus = 'Pendiente';
   String productPaymentMethod = 'Efectivo';
@@ -80,6 +86,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
     weightController = TextEditingController(text: '$weight');
     invoicePriceController = TextEditingController();
     invoiceNumberController = TextEditingController();
+    bundlesController = TextEditingController(text: '1');
   }
 
   @override
@@ -88,6 +95,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
     weightController.dispose();
     invoicePriceController.dispose();
     invoiceNumberController.dispose();
+    bundlesController.dispose();
     super.dispose();
   }
 
@@ -117,16 +125,21 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
     if (mounted) setState(() => photos.addAll(bytes));
   }
 
-  bool get _hasProductValue {
-    final normalized = invoicePriceController.text.trim().replaceAll(',', '.');
-    final value = double.tryParse(normalized);
-    return value != null && value > 0;
-  }
-
   void _continue() {
-    if (!_hasProductValue) {
+    final bundles = parseBundleCount(bundlesController.text);
+    if (bundles == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa el valor del producto para continuar.')),
+        const SnackBar(
+          content: Text('Ingresa una cantidad válida de bultos.'),
+        ),
+      );
+      return;
+    }
+    if (packageTypeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresa el tipo de paquete para continuar.'),
+        ),
       );
       return;
     }
@@ -140,7 +153,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           transport: widget.transport,
           estimatedShipping: widget.estimatedShipping,
           weight: weight,
-          bundles: 1,
+          bundles: bundles,
           packageType: packageTypeController.text.trim(),
           initialProductPhotos: List<Uint8List>.of(photos),
           initialFragile: fragile,
@@ -163,6 +176,17 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
         ),
       ),
     );
+  }
+
+  void _changeBundles(int delta) {
+    final current = parseBundleCount(bundlesController.text) ?? 1;
+    final next = current + delta;
+    setState(() {
+      bundlesController.text = (next < 1 ? 1 : next).toString();
+      bundlesController.selection = TextSelection.fromPosition(
+        TextPosition(offset: bundlesController.text.length),
+      );
+    });
   }
 
   @override
@@ -282,8 +306,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
                 onChanged: (value) => setState(() {
                   productPaymentStatus = value;
                   if (value == 'Pagado') productPaymentMethod = '';
-                  if (value == 'Pendiente' &&
-                      productPaymentMethod.isEmpty) {
+                  if (value == 'Pendiente' && productPaymentMethod.isEmpty) {
                     productPaymentMethod = 'Efectivo';
                   }
                 }),
@@ -358,9 +381,10 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _CargaChoiceCard(
-          icon: Icons.shopping_cart_outlined,
+          iconAsset: 'assets/img/HomeCliente/icono_venta.png',
           title: '¿Este envío corresponde a una venta?',
-          subtitle: 'Indica si este envío tiene un producto asociado a una venta',
+          subtitle:
+              'Indica si este envío tiene un producto asociado a una venta',
           options: const ['Sí', 'No'],
           value: isForSale ? 'Sí' : 'No',
           onChanged: (value) => setState(() => isForSale = value == 'Sí'),
@@ -368,7 +392,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
         const SizedBox(height: 9),
         if (isForSale) ...[
           _CargaChoiceCard(
-            icon: Icons.payments_outlined,
+            iconAsset: 'assets/img/HomeCliente/icono_dinero.png',
             title: '¿El producto ya está pagado?',
             subtitle: 'Indica el estado de pago del producto',
             options: const ['Sí', 'No'],
@@ -382,7 +406,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           const SizedBox(height: 9),
           if (!isPaid)
             _CargaChoiceCard(
-              icon: Icons.payments_outlined,
+              iconAsset: 'assets/img/HomeCliente/icono_dinero.png',
               title: 'Método de pago',
               subtitle: 'Selecciona cómo se pagará el producto',
               options: const ['Efectivo', 'Transferencia', 'Tarjeta'],
@@ -394,11 +418,14 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
         ],
         _ProductValueCard(
           controller: invoicePriceController,
+          bundlesController: bundlesController,
           title: isForSale
-              ? 'Valor del producto'
-              : 'Valor aproximado del producto',
+              ? 'Cantidad y valor del producto'
+              : 'Cantidad y valor aproximado del producto',
           currency: currency,
           onCurrencyChanged: (value) => setState(() => currency = value),
+          onDecreaseBundles: () => _changeBundles(-1),
+          onIncreaseBundles: () => _changeBundles(1),
         ),
       ],
     );
@@ -408,15 +435,21 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
 class _ProductValueCard extends StatelessWidget {
   const _ProductValueCard({
     required this.controller,
+    required this.bundlesController,
     required this.title,
     required this.currency,
     required this.onCurrencyChanged,
+    required this.onDecreaseBundles,
+    required this.onIncreaseBundles,
   });
 
   final TextEditingController controller;
+  final TextEditingController bundlesController;
   final String title;
   final String currency;
   final ValueChanged<String> onCurrencyChanged;
+  final VoidCallback onDecreaseBundles;
+  final VoidCallback onIncreaseBundles;
 
   @override
   Widget build(BuildContext context) {
@@ -433,8 +466,13 @@ class _ProductValueCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.inventory_2_outlined,
-                          color: Colors.white, size: 14),
+                      Image.asset(
+                        'assets/img/HomeCliente/icono_producto.png',
+                        width: 16,
+                        height: 16,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                      ),
                       const SizedBox(width: 5),
                       Text(title,
                           style: const TextStyle(
@@ -444,64 +482,155 @@ class _ProductValueCard extends StatelessWidget {
                               fontFamily: 'Figtree')),
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  const Text('Ingresa el valor total del producto a enviar.',
-                      style: TextStyle(
-                          color: Color(0xFFB9D4FF),
-                          fontSize: 7.5,
-                          fontFamily: 'Figtree')),
-                  const SizedBox(height: 3),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Container(
-                          height: 29,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: .12),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: glassBorder),
-                          ),
-                          child: TextField(
-                            controller: controller,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Ingresa el valor total del producto a enviar.',
+                              style: TextStyle(
+                                color: Color(0xFFB9D4FF),
+                                fontSize: 9,
+                                fontFamily: 'Figtree',
+                              ),
                             ),
-                            textAlignVertical: const TextAlignVertical(y: 0.35),
-                            textAlign: TextAlign.left,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                fontFamily: 'Figtree'),
-                            decoration: InputDecoration(
-                              hintText: '0.00',
-                              hintStyle: const TextStyle(
-                                  color: Color(0xFFB9D4FF),
-                                  fontSize: 10,
-                                  fontFamily: 'Figtree'),
-                              prefixText: currency == 'USD' ? 'US\$ ' : 'C\$ ',
-                              prefixStyle: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  fontFamily: 'Figtree'),
-                              isDense: true,
-                              border: InputBorder.none,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 0),
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                SizedBox(
+                                  width: 150,
+                                  child: Container(
+                                    height: 29,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Colors.black.withValues(alpha: .12),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: glassBorder),
+                                    ),
+                                    child: TextField(
+                                      controller: controller,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                      textAlignVertical:
+                                          const TextAlignVertical(y: 0.35),
+                                      textAlign: TextAlign.left,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        fontFamily: 'Figtree',
+                                      ),
+                                      decoration: InputDecoration(
+                                        hintText: '0.00',
+                                        hintStyle: const TextStyle(
+                                          color: Color(0xFFB9D4FF),
+                                          fontSize: 10,
+                                          fontFamily: 'Figtree',
+                                        ),
+                                        prefixText: currency == 'USD'
+                                            ? 'US\$ '
+                                            : 'C\$ ',
+                                        prefixStyle: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          fontFamily: 'Figtree',
+                                        ),
+                                        isDense: true,
+                                        border: InputBorder.none,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 0,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                SizedBox(
+                                  width: 68,
+                                  child: _InvoiceSegment(
+                                    options: const ['C\$', 'USD'],
+                                    value: currency,
+                                    onChanged: onCurrencyChanged,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 8),
-                      SizedBox(
-                        width: 82,
-                        child: _InvoiceSegment(
-                          options: const ['C\$', 'USD'],
-                          value: currency,
-                          onChanged: onCurrencyChanged,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Cantidad de bultos',
+                            style: TextStyle(
+                              color: Color(0xFFB9D4FF),
+                              fontSize: 9,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            height: 36,
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: .14),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: glassBorder),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _BundleStepButton(
+                                  icon: Icons.remove,
+                                  tooltip: 'Disminuir bultos',
+                                  onPressed: onDecreaseBundles,
+                                ),
+                                SizedBox(
+                                  width: 42,
+                                  child: TextField(
+                                    controller: bundlesController,
+                                    keyboardType: TextInputType.number,
+                                    textAlignVertical:
+                                        const TextAlignVertical(y: 0.35),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      fontFamily: 'Figtree',
+                                    ),
+                                    decoration: const InputDecoration(
+                                      hintText: '1',
+                                      hintStyle: TextStyle(
+                                        color: Color(0xFFB9D4FF),
+                                        fontSize: 11,
+                                        fontFamily: 'Figtree',
+                                      ),
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                  ),
+                                ),
+                                _BundleStepButton(
+                                  icon: Icons.add,
+                                  tooltip: 'Aumentar bultos',
+                                  onPressed: onIncreaseBundles,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -513,6 +642,37 @@ class _ProductValueCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BundleStepButton extends StatelessWidget {
+  const _BundleStepButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: accentBlue.withValues(alpha: .72),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: .28)),
+            ),
+            child: Icon(icon, color: Colors.white, size: 15),
+          ),
+        ),
+      );
 }
 
 class _CargaHeader extends StatelessWidget {
@@ -763,7 +923,7 @@ class _InvoiceInputField extends StatelessWidget {
 
 class _CargaChoiceCard extends StatelessWidget {
   const _CargaChoiceCard({
-    required this.icon,
+    required this.iconAsset,
     required this.title,
     required this.subtitle,
     required this.options,
@@ -771,7 +931,7 @@ class _CargaChoiceCard extends StatelessWidget {
     required this.onChanged,
   });
 
-  final IconData icon;
+  final String iconAsset;
   final String title;
   final String subtitle;
   final List<String> options;
@@ -789,7 +949,13 @@ class _CargaChoiceCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(icon, color: Colors.white, size: 17),
+                  Image.asset(
+                    iconAsset,
+                    width: 18,
+                    height: 18,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                  ),
                   const SizedBox(width: 7),
                   Expanded(
                     child: Column(
@@ -805,7 +971,7 @@ class _CargaChoiceCard extends StatelessWidget {
                         Text(subtitle,
                             style: const TextStyle(
                                 color: Colors.white70,
-                                fontSize: 8,
+                                fontSize: 10,
                                 fontFamily: 'Figtree')),
                       ],
                     ),
@@ -861,7 +1027,7 @@ class _CargaChoiceSegment extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: Colors.white,
-                              fontSize: 8.5,
+                              fontSize: 10,
                               fontWeight: value == option
                                   ? FontWeight.w800
                                   : FontWeight.w600,
@@ -888,11 +1054,11 @@ class _InvoiceSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        height: 32,
+        height: 27,
         padding: const EdgeInsets.all(2),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: .14),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: Colors.white.withValues(alpha: .16)),
         ),
         child: Row(
@@ -912,7 +1078,7 @@ class _InvoiceSegment extends StatelessWidget {
                     option,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 9.5,
+                      fontSize: 8.5,
                       fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                       fontFamily: 'Figtree',
                     ),

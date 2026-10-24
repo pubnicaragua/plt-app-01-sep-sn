@@ -163,7 +163,8 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     shipmentPaymentStatus = widget.shipmentPaymentStatus;
     shipmentPaymentMethod = widget.shipmentPaymentMethod;
     final availableMethods = _shipmentMethodsFor(shipmentPaymentStatus);
-    if (!availableMethods.contains(shipmentPaymentMethod)) {
+    if (availableMethods.isNotEmpty &&
+        !availableMethods.contains(shipmentPaymentMethod)) {
       shipmentPaymentMethod = availableMethods.first;
     }
     invoicePhoto = widget.invoicePhoto;
@@ -293,6 +294,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     return isTripServiceMode(widget.serviceMode);
   }
 
+  bool get _isShipmentRecipient {
+    return !_isTripService && shipmentPayer == 'Destinatario';
+  }
+
   double get _invoiceToCollect =>
       !widget.productIsSale || _invoiceAlreadyPaid ? 0 : _invoiceAmountCs;
 
@@ -311,16 +316,26 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     final methods = _shipmentMethodsFor(value);
     setState(() {
       shipmentPaymentStatus = value;
-      if (!methods.contains(shipmentPaymentMethod)) {
+      if (methods.isNotEmpty && !methods.contains(shipmentPaymentMethod)) {
         shipmentPaymentMethod = methods.first;
       }
     });
   }
 
   List<String> _shipmentMethodsFor(String status) {
+    if (_isTripService) {
+      return status.trim().toLowerCase() == shipmentCashStatus.toLowerCase()
+          ? const ['Efectivo', 'Tarjeta']
+          : const [];
+    }
+    if (_isShipmentRecipient) {
+      return status.trim().toLowerCase() == shipmentCashStatus.toLowerCase()
+          ? const ['Efectivo']
+          : const [];
+    }
     return status.trim().toLowerCase() == shipmentCashStatus.toLowerCase()
         ? const ['Tarjeta']
-        : const ['Efectivo', 'Transferencia'];
+        : const [];
   }
 
   InvoiceBreakdown get _invoiceBreakdown {
@@ -412,7 +427,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
               _isTripService || !widget.productIsSale ? '' : productPaymentStatus,
           productPaymentMethod: _isTripService ? '' : productPaymentMethod,
           paymentStatus: shipmentPaymentStatus,
-          paymentMethod: shipmentPaymentMethod,
+          paymentMethod: !_isTripService &&
+                  shipmentPaymentStatus == shipmentCreditStatus
+              ? ''
+              : shipmentPaymentMethod,
           shipmentPayer: shipmentPayer,
           productIsSale: widget.productIsSale,
           productPhotos: _isTripService ? const [] : widget.productPhotos,
@@ -459,31 +477,50 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       showProgress: false,
       showDescription: false,
       showStepBadge: true,
+      subtitleOffset: -30,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _paymentStatusCard(),
-          const SizedBox(height: 10),
-          _paymentCard(),
-          const SizedBox(height: 10),
-          _payerCard(),
-          const SizedBox(height: 10),
-          _orderSummaryCard(breakdown),
-          if (!_isTripService) ...[
-            const SizedBox(height: 10),
-            _invoiceUploadCard(),
-          ],
-          if (errorMessage != null) ...[
-            const SizedBox(height: 13),
-            Text(errorMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: Color(0xFFFFC3C3),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Figtree')),
-          ],
-          const SizedBox(height: 22),
+          Transform.translate(
+            offset: const Offset(0, -46),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!_isTripService) ...[
+                  _payerCard(),
+                  if (!_isShipmentRecipient) ...[
+                    const SizedBox(height: 10),
+                    _paymentStatusCard(),
+                  ],
+                  const SizedBox(height: 10),
+                  _paymentCard(),
+                ] else ...[
+                  _paymentStatusCard(),
+                  if (shipmentPaymentStatus == shipmentCashStatus) ...[
+                    const SizedBox(height: 10),
+                    _paymentCard(),
+                  ],
+                ],
+                const SizedBox(height: 10),
+                _orderSummaryCard(breakdown),
+                if (!_isTripService) ...[
+                  const SizedBox(height: 10),
+                  _invoiceUploadCard(),
+                ],
+                if (errorMessage != null) ...[
+                  const SizedBox(height: 13),
+                  Text(errorMessage!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Color(0xFFFFC3C3),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Figtree')),
+                ],
+              ],
+            ),
+          ),
+          SizedBox(height: _isTripService ? 42 : 22),
           GlassButton(
             label: submitting ? 'Creando envío…' : 'Siguiente',
             filled: true,
@@ -500,8 +537,12 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     return _billingCard(
       icon: Icons.account_balance_wallet_outlined,
       title: 'Estado del pago',
-      subtitle: 'Selecciona cómo se realizará el pago del envío',
-      options: const [shipmentCashStatus, shipmentCreditStatus],
+      subtitle: _isTripService
+          ? 'Selecciona cómo se realizará el pago del viaje'
+          : 'Selecciona cómo se realizará el pago del envío',
+      options: _isShipmentRecipient
+          ? const [shipmentCashStatus]
+          : const [shipmentCashStatus, shipmentCreditStatus],
       value: shipmentPaymentStatus,
       onChanged: _setShipmentPaymentStatus,
     );
@@ -514,11 +555,21 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       subtitle: 'Selecciona quién cubrirá la tarifa del transporte.',
       options: const ['Remitente / Comercio', 'Destinatario'],
       value: shipmentPayer,
-      onChanged: (value) => setState(() => shipmentPayer = value),
+      onChanged: (value) => setState(() {
+        shipmentPayer = value;
+        if (value == 'Destinatario') {
+          shipmentPaymentStatus = shipmentCashStatus;
+          shipmentPaymentMethod = 'Efectivo';
+        } else if (shipmentPaymentStatus == shipmentCashStatus) {
+          shipmentPaymentMethod = 'Tarjeta';
+        }
+      }),
     );
   }
 
   Widget _paymentCard() {
+    final methods = _shipmentMethodsFor(shipmentPaymentStatus);
+    if (methods.isEmpty) return const SizedBox.shrink();
     return AppGlassSurface(
       borderRadius: 14,
       child: Padding(
@@ -534,7 +585,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                     fontFamily: 'Figtree')),
             const SizedBox(height: 5),
             _billingSegment(
-              options: _shipmentMethodsFor(shipmentPaymentStatus),
+              options: methods,
               value: shipmentPaymentMethod,
               onChanged: (value) =>
                   setState(() => shipmentPaymentMethod = value),
@@ -618,27 +669,28 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Resumen del pedido',
+            Text(_isTripService ? 'Resumen del viaje' : 'Resumen del pedido',
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                     fontFamily: 'Figtree')),
             const SizedBox(height: 8),
-            _summaryLine(
-              icon: Icons.inventory_2_outlined,
-              label: widget.productIsSale
-                  ? 'Valor del producto'
-                  : 'Valor aproximado del producto',
-              amount: _invoiceAmountCs,
-              status: widget.productIsSale
-                  ? (_invoiceAlreadyPaid ? 'Pagado' : 'Paga destinatario')
-                  : null,
-              statusPositive: _invoiceAlreadyPaid,
-            ),
+            if (!_isTripService)
+              _summaryLine(
+                icon: Icons.inventory_2_outlined,
+                label: widget.productIsSale
+                    ? 'Valor del producto'
+                    : 'Valor aproximado del producto',
+                amount: _invoiceAmountCs,
+                status: widget.productIsSale
+                    ? (_invoiceAlreadyPaid ? 'Pagado' : 'Paga destinatario')
+                    : null,
+                statusPositive: _invoiceAlreadyPaid,
+              ),
             _summaryLine(
               icon: Icons.local_shipping_outlined,
-              label: 'Tarifa de envío',
+              label: _isTripService ? 'Tarifa del viaje' : 'Tarifa de envío',
               amount: shipping,
             ),
             _summaryLine(
@@ -656,16 +708,20 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Expanded(
-                  child: Text('Subtotal del envío',
+                Expanded(
+                  child: Text(_isTripService
+                      ? 'Subtotal del viaje'
+                      : 'Subtotal del envío',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
                           fontFamily: 'Figtree')),
                 ),
-                _orderPill(_payerSummaryLabel(shipmentPayer)),
-                const SizedBox(width: 6),
+                if (!_isTripService) ...[
+                  _orderPill(_payerSummaryLabel(shipmentPayer)),
+                  const SizedBox(width: 6),
+                ],
                 Text(_money(breakdown.shippingSubtotalCs),
                     style: const TextStyle(
                         color: Colors.white,
