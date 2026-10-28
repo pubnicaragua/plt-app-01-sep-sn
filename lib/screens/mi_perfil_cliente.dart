@@ -11,6 +11,26 @@ import '../widgets/notifications_sheet.dart';
 import 'inicio.dart';
 import 'perfiles_empresa.dart';
 
+String? passwordChangeValidationError({
+  required String currentPassword,
+  required String newPassword,
+  required String confirmation,
+}) {
+  if (currentPassword.trim().isEmpty) {
+    return 'Ingresa tu contraseña actual.';
+  }
+  if (newPassword.length < 8) {
+    return 'La nueva contraseña debe tener al menos 8 caracteres.';
+  }
+  if (newPassword == currentPassword) {
+    return 'La nueva contraseña debe ser diferente a la actual.';
+  }
+  if (newPassword != confirmation) {
+    return 'Las contraseñas nuevas no coinciden.';
+  }
+  return null;
+}
+
 class MiPerfilCliente extends StatefulWidget {
   const MiPerfilCliente({super.key, this.embedded = false});
 
@@ -169,6 +189,7 @@ class _MiPerfilClienteState extends State<MiPerfilCliente> {
                                         email: email.text.trim(),
                                         role: current.role,
                                         displayName: name.text.trim(),
+                                        username: current.username,
                                         accountId: current.accountId,
                                         profileId: current.profileId,
                                         profileRole: current.profileRole,
@@ -206,6 +227,149 @@ class _MiPerfilClienteState extends State<MiPerfilCliente> {
     name.dispose();
     email.dispose();
     phone.dispose();
+  }
+
+  Future<void> _changePassword() async {
+    final currentPassword = TextEditingController();
+    final newPassword = TextEditingController();
+    final confirmation = TextEditingController();
+    var saving = false;
+    await showDialog<void>(
+      context: context,
+      builder: (sheetContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+          child: StatefulBuilder(
+            builder: (context, setSheetState) {
+              return Padding(
+                padding: EdgeInsets.only(
+                  left: 18,
+                  right: 18,
+                  bottom: MediaQuery.viewInsetsOf(context).bottom + 18,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF132D70).withValues(alpha: .96),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: .3)),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 42,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .55),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 17),
+                          const Text(
+                            'Cambiar contraseña',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Solo cambiarás la contraseña de tu perfil activo.',
+                            style: TextStyle(
+                              color: Color(0xFFB9D4FF),
+                              fontSize: 12,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          GlassField(
+                            label: 'Contraseña actual',
+                            icon: Icons.lock_outline_rounded,
+                            obscure: true,
+                            controller: currentPassword,
+                            showFloatingLabel: false,
+                          ),
+                          const SizedBox(height: 10),
+                          GlassField(
+                            label: 'Nueva contraseña',
+                            icon: Icons.lock_reset_rounded,
+                            obscure: true,
+                            controller: newPassword,
+                            showFloatingLabel: false,
+                          ),
+                          const SizedBox(height: 10),
+                          GlassField(
+                            label: 'Confirmar contraseña',
+                            icon: Icons.check_circle_outline_rounded,
+                            obscure: true,
+                            controller: confirmation,
+                            showFloatingLabel: false,
+                          ),
+                          const SizedBox(height: 14),
+                          GlassButton(
+                            label: saving ? 'Guardando…' : 'Cambiar contraseña',
+                            icon: Icons.lock_reset_rounded,
+                            filled: true,
+                            onPressed: saving
+                                ? () {}
+                                : () async {
+                                    final validation =
+                                        passwordChangeValidationError(
+                                      currentPassword: currentPassword.text,
+                                      newPassword: newPassword.text,
+                                      confirmation: confirmation.text,
+                                    );
+                                    if (validation != null) {
+                                      _showMessage(validation);
+                                      return;
+                                    }
+                                    setSheetState(() => saving = true);
+                                    try {
+                                      await apiClient.changeOwnPassword(
+                                        currentPassword: currentPassword.text,
+                                        newPassword: newPassword.text,
+                                      );
+                                      if (!mounted) return;
+                                      Navigator.of(sheetContext).pop();
+                                      _showMessage(
+                                          'Contraseña actualizada correctamente.');
+                                    } on ApiException catch (error) {
+                                      setSheetState(() => saving = false);
+                                      _showMessage(error.message);
+                                    } catch (_) {
+                                      setSheetState(() => saving = false);
+                                      _showMessage(
+                                          'No se pudo cambiar la contraseña.');
+                                    }
+                                  },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+    currentPassword.dispose();
+    newPassword.dispose();
+    confirmation.dispose();
   }
 
   void _showMessage(String message) {
@@ -255,6 +419,7 @@ class _MiPerfilClienteState extends State<MiPerfilCliente> {
               const SizedBox(height: 12),
               _ProfileActionsCard(
                 supervisor: apiClient.currentUser?.profileRole == 'supervisor',
+                onChangePassword: _changePassword,
                 onProfiles: apiClient.currentUser?.profileRole == 'supervisor'
                     ? () => Navigator.of(context).push(
                           MaterialPageRoute(
@@ -453,6 +618,7 @@ class _ProfileBadge extends StatelessWidget {
 class _ProfileActionsCard extends StatelessWidget {
   const _ProfileActionsCard({
     required this.supervisor,
+    required this.onChangePassword,
     this.onProfiles,
     required this.onPayments,
     required this.onNotifications,
@@ -460,6 +626,7 @@ class _ProfileActionsCard extends StatelessWidget {
   });
 
   final bool supervisor;
+  final VoidCallback onChangePassword;
   final VoidCallback? onProfiles;
   final VoidCallback onPayments;
   final VoidCallback onNotifications;
@@ -472,7 +639,13 @@ class _ProfileActionsCard extends StatelessWidget {
       borderRadius: 23,
       child: Column(
         children: [
+          _ProfileActionRow(
+            icon: Icons.lock_outline_rounded,
+            title: 'Cambiar contraseña',
+            onTap: onChangePassword,
+          ),
           if (onProfiles != null) ...[
+            const _ProfileActionDivider(),
             _ProfileActionRow(
               iconAsset: 'assets/img/HomeCliente/perfil_pago.png',
               title: 'Perfiles de empresa',
@@ -520,12 +693,14 @@ class _ProfileActionDivider extends StatelessWidget {
 
 class _ProfileActionRow extends StatelessWidget {
   const _ProfileActionRow({
-    required this.iconAsset,
+    this.iconAsset,
+    this.icon,
     required this.title,
     required this.onTap,
   });
 
-  final String iconAsset;
+  final String? iconAsset;
+  final IconData? icon;
   final String title;
   final VoidCallback onTap;
 
@@ -547,16 +722,18 @@ class _ProfileActionRow extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFF0863D7).withValues(alpha: .82),
                     shape: BoxShape.circle,
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: .32)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: .32)),
                   ),
                   alignment: Alignment.center,
-                  child: Image.asset(
-                    iconAsset,
-                    width: 18,
-                    height: 18,
-                    fit: BoxFit.contain,
-                  ),
+                  child: icon != null
+                      ? Icon(icon, color: Colors.white, size: 18)
+                      : Image.asset(
+                          iconAsset!,
+                          width: 18,
+                          height: 18,
+                          fit: BoxFit.contain,
+                        ),
                 ),
               ),
             ),

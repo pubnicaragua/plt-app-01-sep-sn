@@ -20,6 +20,21 @@ import 'pedido.dart';
 import 'mi_perfil_cliente.dart';
 import 'resumen_cliente.dart';
 
+String homeGreetingName(
+  SessionUser? user, {
+  String supervisorFallback = 'Logística Nica SA',
+  String profileFallback = 'Usuario INCOEX',
+}) {
+  if (user?.isSupervisor == true) {
+    final displayName = user?.displayName.trim() ?? '';
+    return displayName.isNotEmpty ? displayName : supervisorFallback;
+  }
+  final username = user?.username?.trim() ?? '';
+  if (username.isNotEmpty) return username;
+  final displayName = user?.displayName.trim() ?? '';
+  return displayName.isNotEmpty ? displayName : profileFallback;
+}
+
 class HomeCliente extends StatefulWidget {
   const HomeCliente({super.key});
 
@@ -165,9 +180,7 @@ class _FigmaHomeTabState extends State<_FigmaHomeTab> {
   @override
   Widget build(BuildContext context) {
     final user = apiClient.currentUser;
-    final name = user?.displayName.trim().isNotEmpty == true
-        ? user!.displayName.trim()
-        : 'Logística Nica SA';
+    final name = homeGreetingName(user);
     final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 20.0;
 
     return ListView(
@@ -858,8 +871,7 @@ class _HomeTabState extends State<_HomeTab> {
     if (rate == null) return null;
     final chargeableKm =
         (km - rate.includedKm).clamp(0, double.infinity).toDouble();
-    return roundFareCs(
-        rate.baseFeeCs + chargeableKm * rate.farePerKmCs,
+    return roundFareCs(rate.baseFeeCs + chargeableKm * rate.farePerKmCs,
         settings?.fareRoundingCs ?? 5);
   }
 
@@ -947,8 +959,10 @@ class _HomeTabState extends State<_HomeTab> {
   @override
   Widget build(BuildContext context) {
     final user = apiClient.currentUser;
-    final apiName = user?.displayName.trim() ?? '';
-    final displayName = apiName.isEmpty ? 'Usuario INCOEX' : apiName;
+    final displayName = homeGreetingName(
+      user,
+      supervisorFallback: 'Usuario INCOEX',
+    );
     final horizontal = MediaQuery.sizeOf(context).width < 380 ? 16.0 : 20.0;
     return ListView(
       physics: const BouncingScrollPhysics(),

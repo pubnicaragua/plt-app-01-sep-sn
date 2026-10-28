@@ -17,8 +17,7 @@ void main() {
     expect(productPaymentStatusForSelection(false), 'Pendiente');
   });
 
-  testWidgets('muestra los datos de venta del nuevo diseño',
-      (tester) async {
+  testWidgets('muestra los datos de venta del nuevo diseño', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: CrearEnvioCarga(
@@ -35,7 +34,7 @@ void main() {
     expect(find.text('¿Este envío corresponde a una venta?'), findsOneWidget);
     expect(find.text('¿El producto ya está pagado?'), findsOneWidget);
     expect(find.text('Método de pago'), findsOneWidget);
-    expect(find.text('Cantidad y valor del producto'), findsOneWidget);
+    expect(find.text('Ingrese el total de factura'), findsOneWidget);
     expect(find.text('Cantidad de bultos'), findsOneWidget);
     expect(find.byTooltip('Disminuir bultos'), findsOneWidget);
     expect(find.byTooltip('Aumentar bultos'), findsOneWidget);

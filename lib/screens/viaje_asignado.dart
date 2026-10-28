@@ -7,6 +7,125 @@ import '../widgets/glass.dart';
 import '../widgets/wizard.dart';
 import 'viaje_en_curso.dart';
 
+String conductorServiceLabel(Trip trip) {
+  final mode = (trip.serviceMode ?? '').trim().toLowerCase();
+  final service =
+      mode.contains('taxi') || mode.contains('viaje') ? 'Viajes' : 'Envíos';
+  final vehicle = conductorVehicleLabel(trip);
+  return vehicle.isEmpty ? service : '$service · $vehicle';
+}
+
+String conductorVehicleLabel(Trip trip) {
+  for (final value in [trip.vehicleVariant, trip.truckType, trip.transport]) {
+    final normalized = value?.trim();
+    if (normalized != null && normalized.isNotEmpty) return normalized;
+  }
+  return '';
+}
+
+String conductorQuantityLabel(Trip trip) {
+  final mode = (trip.serviceMode ?? '').toLowerCase();
+  if (mode.contains('taxi') || mode.contains('viaje')) {
+    final passengers = trip.passengerCount ?? 0;
+    return '$passengers pasajero${passengers == 1 ? '' : 's'}';
+  }
+  return '${trip.packages} paquete${trip.packages == 1 ? '' : 's'}';
+}
+
+String _firstNonEmpty(Iterable<String?> values) {
+  for (final value in values) {
+    final normalized = value?.trim();
+    if (normalized != null && normalized.isNotEmpty) return normalized;
+  }
+  return '';
+}
+
+String conductorPaymentLabel(Trip trip) {
+  final rawStatus = _firstNonEmpty(
+    [trip.servicePaymentStatus, trip.paymentStatus],
+  ).toLowerCase();
+  final status = rawStatus == 'pagado'
+      ? 'Pagado'
+      : rawStatus == 'parcial'
+          ? 'Parcial'
+          : 'Pendiente';
+  final method = _firstNonEmpty(
+    [trip.servicePaymentMethod, trip.paymentMethod],
+  );
+  return method.isEmpty ? status : '$status · $method';
+}
+
+String conductorPaymentMethodLabel(Trip trip) =>
+    _firstNonEmpty([trip.servicePaymentMethod, trip.paymentMethod]);
+
+String conductorInstructionText(Trip trip) {
+  final raw = (trip.description ?? '')
+      .replaceAll(RegExp(r'\s*\[INCOEX_RETURN_AT=[^\]]+\]'), '')
+      .trim();
+  if (raw.isEmpty) return '';
+  const internalPrefixes = [
+    'peso ',
+    'valor de factura',
+    'factura ',
+    'estado factura',
+    'método factura',
+    'estado pago envío',
+    'método pago envío',
+    'quién paga envío',
+    'tipo valor producto',
+    'evidencias',
+    'regreso programado',
+  ];
+  final visible = raw
+      .split(' · ')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .where((item) => !internalPrefixes.any(item.toLowerCase().startsWith))
+      .toList();
+  return visible.join(' · ');
+}
+
+String conductorScheduleLabel(Trip trip) {
+  final rawDate = (trip.scheduledDate ?? trip.date).trim();
+  final date = DateTime.tryParse(rawDate);
+  final time = (trip.scheduledTime ?? trip.pickupTime ?? '').trim();
+  if (date == null) return time.isEmpty ? rawDate : '$rawDate · $time';
+  const weekdays = [
+    'lunes',
+    'martes',
+    'miércoles',
+    'jueves',
+    'viernes',
+    'sábado',
+    'domingo',
+  ];
+  const months = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ];
+  final weekday = weekdays[date.weekday - 1];
+  final capitalizedWeekday =
+      '${weekday[0].toUpperCase()}${weekday.substring(1)}';
+  final label =
+      '$capitalizedWeekday, ${date.day} ${months[date.month - 1]} ${date.year}';
+  return time.isEmpty ? label : '$label · $time';
+}
+
+double conductorTotalAmount(Trip trip) =>
+    trip.quotedServiceTotalCs ?? trip.estimatedCostCs ?? 0;
+
+double conductorPaidAmount(Trip trip) => trip.paymentAmount ?? 0;
+
 class ViajeAsignado extends StatefulWidget {
   const ViajeAsignado({super.key, required this.tripId});
 
@@ -36,15 +155,22 @@ class _ViajeAsignadoState extends State<ViajeAsignado> {
     _future!.then((_) {
       if (mounted) setState(() => loading = false);
     }).catchError((_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           loading = false;
           error = 'No se pudo cargar el viaje.';
         });
+      }
     });
   }
 
   Future<void> _startTrip(Trip trip) async {
+    if (trip.status == 'En camino' || trip.status == 'En entrega') {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => ViajeEnCurso(trip: trip)),
+      );
+      return;
+    }
     if (trip.status != 'Asignado') {
       if (mounted) {
         setState(() => error =
@@ -122,7 +248,7 @@ class _ViajeAsignadoState extends State<ViajeAsignado> {
                               if (!snapshot.hasData) {
                                 return const SizedBox.shrink();
                               }
-                              return _DetailBody(
+                              return _DetailBodyV2(
                                 trip: snapshot.data!,
                                 onStart: _startTrip,
                               );
@@ -137,6 +263,7 @@ class _ViajeAsignadoState extends State<ViajeAsignado> {
   }
 }
 
+// ignore: unused_element
 class _DetailBody extends StatelessWidget {
   const _DetailBody({required this.trip, required this.onStart});
 
@@ -189,6 +316,8 @@ class _DetailBody extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 11),
+        _MetadataChips(trip: trip),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -595,16 +724,820 @@ class _DetailBody extends StatelessWidget {
   }
 }
 
+class _DetailBodyV2 extends StatelessWidget {
+  const _DetailBodyV2({required this.trip, required this.onStart});
+
+  final Trip trip;
+  final void Function(Trip trip) onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final distance = trip.distanceKm ?? 12.4;
+    final minutes = (distance * 2.8).round();
+    final isTrip = (trip.serviceMode ?? '').toLowerCase().contains('taxi');
+    final instructions = conductorInstructionText(trip);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+      children: [
+        const SizedBox(height: 6),
+        Center(child: _StatusPill(status: trip.statusLabel)),
+        const SizedBox(height: 10),
+        Center(
+          child: Text(
+            'Viaje ${trip.id}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'Figtree',
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _ScheduleCard2(trip: trip),
+        const SizedBox(height: 13),
+        _BlueCard2(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _LabeledDot(
+                color: Colors.white,
+                label: 'RECOGIDA',
+                value: trip.origin,
+                detail: trip.originRefs,
+              ),
+              const SizedBox(height: 7),
+              Padding(
+                padding: const EdgeInsets.only(left: 7),
+                child: Container(
+                  width: 2,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: .55),
+                        Colors.white.withValues(alpha: .12),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 7),
+              _LabeledDot(
+                color: const Color(0xFFE5484D),
+                label: 'DESTINO',
+                value: trip.destination,
+                detail: trip.destinationRefs,
+              ),
+            ],
+          ),
+        ),
+        if (trip.stops.isNotEmpty) ...[
+          const SizedBox(height: 13),
+          _StopsCard2(stops: trip.stops),
+        ],
+        const SizedBox(height: 13),
+        _BlueCard2(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Row(
+            children: [
+              _Stat(
+                icon: Icons.near_me_rounded,
+                value: '${distance.toStringAsFixed(1)} km',
+                label: 'Distancia',
+              ),
+              _statDivider,
+              _Stat(
+                icon: Icons.timeline_rounded,
+                value: '$minutes min',
+                label: 'Tiempo est.',
+              ),
+              _statDivider,
+              _Stat(
+                icon: isTrip
+                    ? Icons.people_alt_rounded
+                    : Icons.inventory_2_rounded,
+                value: conductorQuantityLabel(trip),
+                label: isTrip ? 'Pasajeros' : 'Cantidad',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 17),
+        const _SectionTitle2('INFORMACIÓN DEL SERVICIO'),
+        const SizedBox(height: 9),
+        _ServiceCard2(trip: trip),
+        if (trip.options.isNotEmpty) ...[
+          const SizedBox(height: 13),
+          const _SectionTitle2('SERVICIOS ADICIONALES'),
+          const SizedBox(height: 9),
+          _OptionsCard2(trip: trip),
+        ],
+        const SizedBox(height: 17),
+        const _SectionTitle2('PAGO Y FACTURACIÓN'),
+        const SizedBox(height: 9),
+        _PaymentCard2(trip: trip),
+        const SizedBox(height: 17),
+        const _SectionTitle2('CLIENTE Y ENTREGA'),
+        const SizedBox(height: 9),
+        _ContactCard2(trip: trip, onCall: () => _dial(context)),
+        if (instructions.isNotEmpty) ...[
+          const SizedBox(height: 13),
+          _NoteCard2(title: 'Instrucciones', text: instructions),
+        ],
+        if (trip.returnTrip) ...[
+          const SizedBox(height: 13),
+          _NoteCard2(
+            title: 'Regreso programado',
+            text:
+                'El servicio incluye regreso. Hora prevista: ${trip.scheduledTime ?? trip.pickupTime ?? 'Hora pendiente'}.',
+          ),
+        ],
+        const SizedBox(height: 26),
+        SizedBox(
+          height: 54,
+          child: Material(
+            color: const Color(0xFF0D47D9),
+            borderRadius: BorderRadius.circular(30),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(30),
+              onTap: () => onStart(trip),
+              child: const Center(
+                child: Text(
+                  'Iniciar viaje',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _dial(BuildContext context) {
+    final phone = trip.contactPhone ?? trip.recipientPhone;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0B1D4D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 26),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Llamar al contacto',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '${trip.contactName ?? trip.recipientName ?? trip.client} · ${phone?.isNotEmpty == true ? phone : 'Teléfono no disponible'}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D5BFF),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: const Color(0xFF5FA6FF), width: 1.1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .15),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Text(
+        status,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Figtree',
+        ),
+      ),
+    );
+  }
+}
+
+class _MetadataChips extends StatelessWidget {
+  const _MetadataChips({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final payment = conductorPaymentLabel(trip);
+    final paymentIsDone = payment.toLowerCase().startsWith('pagado');
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 7,
+      runSpacing: 7,
+      children: [
+        _DesignChip(
+          icon: Icons.local_shipping_outlined,
+          label: conductorServiceLabel(trip),
+          color: const Color(0xFF0D5BFF),
+        ),
+        _DesignChip(
+          icon: paymentIsDone
+              ? Icons.check_circle_outline_rounded
+              : Icons.schedule_rounded,
+          label: payment,
+          color: paymentIsDone ? const Color(0xFF16C784) : cyan,
+        ),
+      ],
+    );
+  }
+}
+
+class _DesignChip extends StatelessWidget {
+  const _DesignChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: .24),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 13),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Figtree',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleCard2 extends StatelessWidget {
+  const _ScheduleCard2({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final time = (trip.scheduledTime ?? trip.pickupTime ?? '').trim();
+    return _BlueCard2(
+      padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_rounded, color: cyan, size: 16),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  conductorScheduleLabel(trip).split(' · ').first,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Divider(color: glassBorder, height: 1),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.schedule_rounded, color: cyan, size: 16),
+              const SizedBox(width: 10),
+              Text(
+                time.isEmpty ? 'Hora pendiente' : '$time (Hora de recogida)',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceCard2 extends StatelessWidget {
+  const _ServiceCard2({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final vehicle = conductorVehicleLabel(trip);
+    return _BlueCard2(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+      child: Column(
+        children: [
+          DetailRow(label: 'Servicio', value: conductorServiceLabel(trip)),
+          if (vehicle.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            DetailRow(label: 'Vehículo', value: vehicle),
+          ],
+          const SizedBox(height: 4),
+          DetailRow(label: 'Cantidad', value: conductorQuantityLabel(trip)),
+          if (trip.weight != null) ...[
+            const SizedBox(height: 4),
+            DetailRow(
+              label: 'Peso',
+              value:
+                  '${trip.weight!.toStringAsFixed(trip.weight! % 1 == 0 ? 0 : 1)} ${trip.weightUnit ?? 'kg'}',
+            ),
+          ],
+          if (trip.fragile) ...[
+            const SizedBox(height: 11),
+            Divider(color: glassBorder, height: 1),
+            const SizedBox(height: 11),
+            const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded,
+                    color: Colors.amber, size: 17),
+                SizedBox(width: 8),
+                Text(
+                  'Carga frágil: manipular con cuidado',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionsCard2 extends StatelessWidget {
+  const _OptionsCard2({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    return _BlueCard2(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+      child: Column(
+        children: [
+          for (var index = 0; index < trip.options.length; index++) ...[
+            if (index > 0) const SizedBox(height: 8),
+            _OptionRow2(option: trip.options[index]),
+          ],
+          if (trip.optionsTotalCs > 0) ...[
+            const SizedBox(height: 11),
+            Divider(color: glassBorder, height: 1),
+            const SizedBox(height: 11),
+            DetailRow(
+              label: 'Total adicionales',
+              value: formatFareCs(trip.optionsTotalCs),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionRow2 extends StatelessWidget {
+  const _OptionRow2({required this.option});
+
+  final TripOptionSelection option;
+
+  @override
+  Widget build(BuildContext context) {
+    final quantity = option.quantity;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.add_circle_outline_rounded, color: cyan, size: 17),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                option.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              if (quantity > 1)
+                Text(
+                  'Cantidad: $quantity',
+                  style: const TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 11,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Text(
+          formatFareCs(option.priceCs * quantity),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'Figtree',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PaymentCard2 extends StatelessWidget {
+  const _PaymentCard2({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = conductorTotalAmount(trip);
+    final paid = conductorPaidAmount(trip);
+    final pending = total > paid ? total - paid : 0.0;
+    final invoice = trip.serviceInvoiceNumber ?? trip.invoiceNumber;
+    return _BlueCard2(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+      child: Column(
+        children: [
+          DetailRow(label: 'Estado', value: conductorPaymentLabel(trip)),
+          if (conductorPaymentMethodLabel(trip).isNotEmpty) ...[
+            const SizedBox(height: 4),
+            DetailRow(
+              label: 'Método',
+              value: conductorPaymentMethodLabel(trip),
+            ),
+          ],
+          if (total > 0) ...[
+            const SizedBox(height: 11),
+            Divider(color: glassBorder, height: 1),
+            const SizedBox(height: 11),
+            DetailRow(label: 'Total del servicio', value: formatFareCs(total)),
+            if (paid > 0) ...[
+              const SizedBox(height: 4),
+              DetailRow(label: 'Pagado', value: formatFareCs(paid)),
+            ],
+            if (pending > 0) ...[
+              const SizedBox(height: 4),
+              DetailRow(label: 'Pendiente', value: formatFareCs(pending)),
+            ],
+          ],
+          if (invoice?.isNotEmpty == true) ...[
+            const SizedBox(height: 11),
+            Divider(color: glassBorder, height: 1),
+            const SizedBox(height: 11),
+            DetailRow(label: 'Factura', value: invoice!),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactCard2 extends StatelessWidget {
+  const _ContactCard2({required this.trip, required this.onCall});
+
+  final Trip trip;
+  final VoidCallback onCall;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = trip.contactName ?? trip.recipientName ?? trip.client;
+    final recipient = trip.recipientName;
+    final phone = trip.contactPhone ?? trip.recipientPhone;
+    return _BlueCard2(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF0D47D9), Color(0xFF083EC0)],
+                  ),
+                ),
+                child: Text(
+                  initials(name),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                    Text(
+                      recipient != null && recipient != name
+                          ? 'Recogida · Destinatario: $recipient'
+                          : 'Contacto de recogida',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFB9D4FF),
+                        fontSize: 11,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (phone?.isNotEmpty == true)
+                InkWell(
+                  onTap: onCall,
+                  borderRadius: BorderRadius.circular(30),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: .10),
+                      border: Border.all(color: glassBorder),
+                    ),
+                    child: const Icon(Icons.call_rounded,
+                        color: Colors.white, size: 18),
+                  ),
+                ),
+            ],
+          ),
+          if (phone?.isNotEmpty == true) ...[
+            const SizedBox(height: 13),
+            Divider(color: glassBorder, height: 1),
+            const SizedBox(height: 13),
+            DetailRow(label: 'Teléfono', value: phone!),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StopsCard2 extends StatelessWidget {
+  const _StopsCard2({required this.stops});
+
+  final List<TripStop> stops;
+
+  @override
+  Widget build(BuildContext context) {
+    return _BlueCard2(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'PARADAS ADICIONALES',
+            style: TextStyle(
+              color: Color(0xFFB9D4FF),
+              fontSize: 10,
+              letterSpacing: .8,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Figtree',
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (var index = 0; index < stops.length; index++) ...[
+            if (index > 0) const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_on_outlined, color: cyan, size: 18),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${index + 1}. ${stops[index].label}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                      Text(
+                        stops[index].address,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFB9D4FF),
+                          fontSize: 11,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _NoteCard2 extends StatelessWidget {
+  const _NoteCard2({required this.title, required this.text});
+
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return _BlueCard2(
+      padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.notes_rounded, color: cyan, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlueCard2 extends StatelessWidget {
+  const _BlueCard2(
+      {required this.child, this.padding = const EdgeInsets.all(16)});
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: const Color(0xA8143474),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: const Color(0x6687B7FF)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .12),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _SectionTitle2 extends StatelessWidget {
+  const _SectionTitle2(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 11.5,
+        letterSpacing: .8,
+        fontWeight: FontWeight.w800,
+        fontFamily: 'Figtree',
+      ),
+    );
+  }
+}
+
 class _LabeledDot extends StatelessWidget {
   const _LabeledDot({
     required this.color,
     required this.label,
     required this.value,
+    this.detail,
   });
 
   final Color color;
   final String label;
   final String value;
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
@@ -638,6 +1571,8 @@ class _LabeledDot extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -645,6 +1580,17 @@ class _LabeledDot extends StatelessWidget {
                   fontFamily: 'Figtree',
                 ),
               ),
+              if (detail?.trim().isNotEmpty == true)
+                Text(
+                  detail!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 11,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
             ],
           ),
         ),

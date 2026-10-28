@@ -136,6 +136,22 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       210.0
     ),
     (
+      'Pickup',
+      'Para cargas medianas',
+      'Hasta 500 kg',
+      Icons.local_shipping_rounded,
+      500,
+      120.0
+    ),
+    (
+      'VAN',
+      'Para cargas voluminosas',
+      'Hasta 800 kg',
+      Icons.airport_shuttle_rounded,
+      800,
+      160.0
+    ),
+    (
       'Camión',
       'Para cargas grandes o pesadas',
       'Hasta 1,500 kg',
@@ -156,9 +172,8 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           ? widget.invoiceAmount.toStringAsFixed(2)
           : '',
     );
-    productPaymentStatus = widget.productIsSale
-        ? widget.productPaymentStatus
-        : 'Pendiente';
+    productPaymentStatus =
+        widget.productIsSale ? widget.productPaymentStatus : 'Pendiente';
     productPaymentMethod = widget.productPaymentMethod;
     shipmentPaymentStatus = widget.shipmentPaymentStatus;
     shipmentPaymentMethod = widget.shipmentPaymentMethod;
@@ -259,7 +274,17 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   double? get _distance =>
       distanceKm(widget.originPlace, widget.destinationPlace);
 
-  VehicleRate? _rateFor(String vehicle) => settings?.rateFor(vehicle);
+  VehicleRate? _rateFor(String vehicle) {
+    final configured = settings?.vehicleRates[vehicle];
+    if (configured != null) return configured;
+    if (vehicle == 'Pickup') {
+      return const VehicleRate(baseFeeCs: 120, farePerKmCs: 12, includedKm: 5);
+    }
+    if (vehicle == 'VAN') {
+      return const VehicleRate(baseFeeCs: 160, farePerKmCs: 15, includedKm: 5);
+    }
+    return settings?.rateFor(vehicle);
+  }
 
   double _shippingFor(String vehicle) {
     if (vehicle == widget.transport && widget.estimatedShipping != null) {
@@ -277,8 +302,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       final chargeableKm =
           (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
       return roundFareCs(
-          (rate.baseFeeCs +
-                  chargeableKm * rate.farePerKmCs) *
+          (rate.baseFeeCs + chargeableKm * rate.farePerKmCs) *
               (1 + surcharge / 100),
           settings?.fareRoundingCs ?? 5);
     }
@@ -345,8 +369,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   InvoiceBreakdown _invoiceBreakdownFor(List<TripOptionSelection> options) {
     final shipping = _shippingFor(selectedTransport);
     final base = _baseFor(selectedTransport);
-    final additional =
-        (shipping - base).clamp(0, double.infinity).toDouble();
+    final additional = (shipping - base).clamp(0, double.infinity).toDouble();
     return buildInvoiceBreakdown(
       serviceMode: widget.serviceMode,
       transport: selectedTransport,
@@ -364,9 +387,8 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   }
 
   double get _insurancePriceCs {
-    final preferredCode = widget.transport == 'Camión'
-        ? 'cargo-insurance'
-        : 'delivery-insurance';
+    final preferredCode =
+        widget.transport == 'Camión' ? 'cargo-insurance' : 'delivery-insurance';
     final catalog = settings?.serviceCatalog ?? const <ServiceCatalogItem>[];
     for (final item in catalog) {
       if (item.enabled && item.code == preferredCode) return item.priceCs;
@@ -420,17 +442,17 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           description: widget.description,
           fragile: widget.fragile,
           invoiceNumber: _isTripService ? '' : invoiceNumber.text.trim(),
-          invoiceAmount: _isTripService || !widget.productIsSale
-              ? 0
-              : _invoiceAmountCs,
-          productPaymentStatus:
-              _isTripService || !widget.productIsSale ? '' : productPaymentStatus,
+          invoiceAmount:
+              _isTripService || !widget.productIsSale ? 0 : _invoiceAmountCs,
+          productPaymentStatus: _isTripService || !widget.productIsSale
+              ? ''
+              : productPaymentStatus,
           productPaymentMethod: _isTripService ? '' : productPaymentMethod,
           paymentStatus: shipmentPaymentStatus,
-          paymentMethod: !_isTripService &&
-                  shipmentPaymentStatus == shipmentCreditStatus
-              ? ''
-              : shipmentPaymentMethod,
+          paymentMethod:
+              !_isTripService && shipmentPaymentStatus == shipmentCreditStatus
+                  ? ''
+                  : shipmentPaymentMethod,
           shipmentPayer: shipmentPayer,
           productIsSale: widget.productIsSale,
           productPhotos: _isTripService ? const [] : widget.productPhotos,
@@ -709,9 +731,10 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(_isTripService
-                      ? 'Subtotal del viaje'
-                      : 'Subtotal del envío',
+                  child: Text(
+                      _isTripService
+                          ? 'Subtotal del viaje'
+                          : 'Subtotal del envío',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -805,12 +828,11 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
     );
   }
 
-  String _payerSummaryLabel(String payer) =>
-      payer == '—'
-          ? '—'
-          : payer == 'Destinatario'
-              ? 'Paga destinatario'
-              : 'Paga remitente';
+  String _payerSummaryLabel(String payer) => payer == '—'
+      ? '—'
+      : payer == 'Destinatario'
+          ? 'Paga destinatario'
+          : 'Paga remitente';
 
   Widget _billingSegment({
     required List<String> options,

@@ -73,12 +73,14 @@ void main() {
     expect(shouldShowPlaceHistory(hasFocus: false, query: ''), isFalse);
   });
 
-  test('separa los elementos visibles por filtro', () {
+  test('mantiene las favoritas en recientes y las muestra en ambos filtros',
+      () {
     final history = PlaceHistory()
       ..remember(place)
       ..toggleFavorite(place.placeId);
 
     expect(history.itemsForTab(favorites: true), hasLength(1));
-    expect(history.itemsForTab(favorites: false), isEmpty);
+    expect(history.itemsForTab(favorites: false), hasLength(1));
+    expect(history.itemsForTab(favorites: false).single.isFavorite, isTrue);
   });
 }

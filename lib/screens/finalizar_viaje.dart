@@ -478,8 +478,17 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
     final transport =
         '${widget.trip.transport ?? ''} ${widget.trip.truckType ?? ''}'
             .toLowerCase();
+    if (transport.contains('minibus') || transport.contains('minibús')) {
+      return 'assets/img/HomeCliente/figma_minibus.png';
+    }
     if (transport.contains('moto')) {
       return 'assets/img/HomeCliente/figma_moto.png';
+    }
+    if (transport.contains('pickup')) {
+      return 'assets/img/HomeCliente/figma_pickup.png';
+    }
+    if (transport.contains('van')) {
+      return 'assets/img/HomeCliente/figma_van.png';
     }
     if (transport.contains('camion') ||
         transport.contains('camión') ||
@@ -569,14 +578,17 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                             children: [
                               for (var i = 1; i <= 5; i++)
                                 IconButton(
-                                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 3),
                                   constraints: const BoxConstraints(),
                                   onPressed: () => setState(() => stars = i),
                                   icon: Icon(
                                     i <= stars
                                         ? Icons.star_rounded
                                         : Icons.star_outline_rounded,
-                                    color: i <= stars ? Colors.white : Colors.white38,
+                                    color: i <= stars
+                                        ? Colors.white
+                                        : Colors.white38,
                                     size: 30,
                                   ),
                                 ),
@@ -600,13 +612,16 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                                         borderRadius: BorderRadius.circular(15),
                                         border: Border.all(color: glassBorder),
                                       ),
-                                      child: const Icon(Icons.description_outlined,
-                                          color: Colors.white, size: 28),
+                                      child: const Icon(
+                                          Icons.description_outlined,
+                                          color: Colors.white,
+                                          size: 28),
                                     ),
                                     const SizedBox(width: 12),
                                     const Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text('Tu factura ya está lista',
                                               style: TextStyle(
@@ -615,7 +630,8 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
                                                   fontWeight: FontWeight.w800,
                                                   fontFamily: 'Figtree')),
                                           SizedBox(height: 4),
-                                          Text('Puedes ver los detalles del viaje y descargar la factura',
+                                          Text(
+                                              'Puedes ver los detalles del viaje y descargar la factura',
                                               style: TextStyle(
                                                   color: Color(0xC9FFFFFF),
                                                   fontSize: 10.5,
@@ -699,6 +715,9 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
         '${trip.transport ?? ''} ${trip.serviceMode ?? ''} ${trip.description ?? ''}'
             .toLowerCase();
     if (_isTaxi) {
+      if (variant.contains('minibus') || variant.contains('minibús')) {
+        return 'assets/img/HomeCliente/figma_minibus.png';
+      }
       if (variant.contains('suv')) return 'assets/img/HomeCliente/taxi_suv.png';
       if (variant.contains('micro') || variant.contains('bus')) {
         return 'assets/img/HomeCliente/taxi_microbus.png';
@@ -713,7 +732,14 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
         transport.contains('carga')) {
       return 'assets/img/HomeCliente/camion.png';
     }
-    if (transport.contains('moto')) return 'assets/img/HomeCliente/figma_moto.png';
+    if (transport.contains('moto'))
+      return 'assets/img/HomeCliente/figma_moto.png';
+    if (transport.contains('pickup')) {
+      return 'assets/img/HomeCliente/figma_pickup.png';
+    }
+    if (transport.contains('van')) {
+      return 'assets/img/HomeCliente/figma_van.png';
+    }
     return 'assets/img/HomeCliente/figma_auto_hd.png';
   }
 
@@ -781,7 +807,8 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
 
   double get _total => trip.quotedServiceTotalCs ?? trip.estimatedCostCs ?? 0;
 
-  double get _baseAmount => trip.quotedBaseCs ??
+  double get _baseAmount =>
+      trip.quotedBaseCs ??
       (_total - _optionsTotal - (trip.quotedAdditionalCs ?? 0))
           .clamp(0, double.infinity)
           .toDouble();
@@ -1056,7 +1083,8 @@ class _FacturaServicioScreenState extends State<FacturaServicioScreen> {
                           ),
                           _PaymentRow(
                             label: 'Moneda',
-                            trailing: _segmentedValue('C\$', const ['C\$', 'USD']),
+                            trailing:
+                                _segmentedValue('C\$', const ['C\$', 'USD']),
                           ),
                           const Divider(color: Colors.white38, height: 22),
                           if (_productAmount > 0)
@@ -1227,7 +1255,8 @@ class _PaymentRow extends StatelessWidget {
                   fontFamily: 'Figtree')),
           trailing ??
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: .11),
                   borderRadius: BorderRadius.circular(18),

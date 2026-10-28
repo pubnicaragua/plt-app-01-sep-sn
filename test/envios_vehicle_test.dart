@@ -33,6 +33,16 @@ void main() {
     expect(vehicleAssetForTrip(trip), 'assets/img/HomeCliente/taxi_suv.png');
   });
 
+  test('muestra Minibus con 36 pasajeros y su asset en el historial', () {
+    final trip = _trip(vehicleVariant: 'Minibus', transport: 'Vehículo');
+
+    expect(vehicleLabelForTrip(trip), 'MINIBUS');
+    expect(
+      vehicleAssetForTrip(trip),
+      'assets/img/HomeCliente/figma_minibus.png',
+    );
+  });
+
   test('recupera el vehículo desde la descripción de un viaje antiguo', () {
     final trip = _trip(
       transport: 'Vehículo',
@@ -51,5 +61,22 @@ void main() {
 
     expect(vehicleLabelForTrip(trip), 'AUTO');
     expect(vehicleAssetForTrip(trip), 'assets/img/HomeCliente/figma_auto.png');
+  });
+
+  test('muestra Pickup con su asset en el historial de envíos', () {
+    final trip = _trip(transport: 'Pickup');
+
+    expect(vehicleLabelForTrip(trip), 'PICKUP');
+    expect(
+      vehicleAssetForTrip(trip),
+      'assets/img/HomeCliente/figma_pickup.png',
+    );
+  });
+
+  test('muestra VAN con su asset en el historial de envíos', () {
+    final trip = _trip(transport: 'VAN');
+
+    expect(vehicleLabelForTrip(trip), 'VAN');
+    expect(vehicleAssetForTrip(trip), 'assets/img/HomeCliente/figma_van.png');
   });
 }

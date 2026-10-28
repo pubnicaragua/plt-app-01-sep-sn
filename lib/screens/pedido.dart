@@ -39,157 +39,160 @@ class _LegacyMisEnviosState extends State<_LegacyMisEnvios> {
   Future<List<Trip>> _loadTrips() {
     final user = apiClient.currentUser;
     final clientName = user?.companyName?.trim();
-    final client = user != null && (user.role == 'corporate' || user.role == 'company')
-        ? (clientName?.isNotEmpty == true ? clientName : user.displayName.trim())
-        : null;
+    final client =
+        user != null && (user.role == 'corporate' || user.role == 'company')
+            ? (clientName?.isNotEmpty == true
+                ? clientName
+                : user.displayName.trim())
+            : null;
     return apiClient.getTrips(client: client);
   }
 
   @override
   Widget build(BuildContext context) {
     final content = SafeArea(
-        bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 14, 22, 20),
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Envíos',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
+      bottom: false,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 20),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Envíos',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              const SizedBox.shrink(),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Todos los envíos en un solo lugar',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontFamily: 'Figtree',
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              for (final option in ['Activos', 'Enviados']) ...[
+                Expanded(
+                  child: _OrderFilter(
+                    label: option,
+                    selected: filter == option,
+                    onTap: () => setState(() => filter = option),
                   ),
                 ),
-                const SizedBox.shrink(),
+                if (option != 'Enviados') const SizedBox(width: 8),
               ],
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Todos los envíos en un solo lugar',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontFamily: 'Figtree',
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                for (final option in ['Activos', 'Enviados']) ...[
-                  Expanded(
-                    child: _OrderFilter(
-                      label: option,
-                      selected: filter == option,
-                      onTap: () => setState(() => filter = option),
-                    ),
-                  ),
-                  if (option != 'Enviados') const SizedBox(width: 8),
-                ],
-              ],
-            ),
-            const SizedBox(height: 14),
-            FutureBuilder<List<Trip>>(
-              future: trips,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const GlassCard(
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          height: 19,
-                          width: 19,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          FutureBuilder<List<Trip>>(
+            future: trips,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const GlassCard(
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        height: 19,
+                        width: 19,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
                         ),
-                        SizedBox(width: 12),
-                        Text(
-                          'Consultando tus pedidos…',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                            fontFamily: 'Figtree',
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return GlassCard(
-                    child: Column(
-                      children: [
-                        const Icon(Icons.cloud_off_outlined,
-                            color: Color(0xFFFFB4B4)),
-                        const SizedBox(height: 8),
-                        Text(
-                          'No pudimos cargar tus pedidos:\n${t(snapshot.error.toString())}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontFamily: 'Figtree',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextButton(
-                          onPressed: _reload,
-                          child: const Text('Reintentar'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                final items = snapshot.data ?? const <Trip>[];
-                final visibleItems = switch (filter) {
-                  'Activos' => items.where((trip) => trip.isActive).toList(),
-                  'Enviados' => items.where((trip) => !trip.isActive).toList(),
-                  _ => items,
-                };
-                if (visibleItems.isEmpty) {
-                  return GlassCard(
-                    child: Center(
-                      child: Text(
-                        items.isEmpty
-                            ? 'Aún no tienes envíos.\nSolicita tu primer envío.'
-                            : 'No hay envíos en este filtro.',
-                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Consultando tus pedidos…',
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 13,
                           fontFamily: 'Figtree',
                         ),
                       ),
-                    ),
-                  );
-                }
-                return Column(
-                  children: [
-                    for (final trip in visibleItems) ...[
-                      _TripCard(trip: trip),
-                      const SizedBox(height: 12),
                     ],
-                    GlassButton(
-                      label: 'Ver resumen del periodo',
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ResumenCliente(),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return GlassCard(
+                  child: Column(
+                    children: [
+                      const Icon(Icons.cloud_off_outlined,
+                          color: Color(0xFFFFB4B4)),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No pudimos cargar tus pedidos:\n${t(snapshot.error.toString())}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontFamily: 'Figtree',
                         ),
                       ),
-                      height: 50,
-                    ),
-                  ],
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: _reload,
+                        child: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
                 );
-              },
-            ),
-          ],
-        ),
-      );
+              }
+              final items = snapshot.data ?? const <Trip>[];
+              final visibleItems = switch (filter) {
+                'Activos' => items.where((trip) => trip.isActive).toList(),
+                'Enviados' => items.where((trip) => !trip.isActive).toList(),
+                _ => items,
+              };
+              if (visibleItems.isEmpty) {
+                return GlassCard(
+                  child: Center(
+                    child: Text(
+                      items.isEmpty
+                          ? 'Aún no tienes envíos.\nSolicita tu primer envío.'
+                          : 'No hay envíos en este filtro.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ),
+                );
+              }
+              return Column(
+                children: [
+                  for (final trip in visibleItems) ...[
+                    _TripCard(trip: trip),
+                    const SizedBox(height: 12),
+                  ],
+                  GlassButton(
+                    label: 'Ver resumen del periodo',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ResumenCliente(),
+                      ),
+                    ),
+                    height: 50,
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
     return widget.embedded ? content : AppBackground(child: content);
   }
 }
@@ -203,17 +206,36 @@ class _TripCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final transport = trip.transport?.trim().toLowerCase() ?? '';
     final description = trip.description?.trim().toLowerCase() ?? '';
-    final vehicleAsset = switch (transport) {
-      'moto' || 'motocicleta' || 'motorcycle' =>
+    final vehicleKind =
+        '$transport ${(trip.vehicleVariant ?? '').trim().toLowerCase()}';
+    final vehicleAsset = switch (vehicleKind) {
+      'moto' ||
+      'motocicleta' ||
+      'motorcycle' =>
         'assets/img/HomeCliente/crear_moto.png',
-      'vehículo' || 'vehiculo' || 'auto' || 'automóvil' || 'automovil' ||
-      'carro' || 'car' || 'vehicle' =>
+      'vehículo' ||
+      'vehiculo' ||
+      'auto' ||
+      'automóvil' ||
+      'automovil' ||
+      'carro' ||
+      'car' ||
+      'vehicle' =>
         'assets/img/HomeCliente/crear_auto.png',
-      'camión' || 'camion' || 'carga' || 'camioneta' || 'truck' =>
+      'pickup' => 'assets/img/HomeCliente/figma_pickup.png',
+      'van' => 'assets/img/HomeCliente/figma_van.png',
+      _ when vehicleKind.contains('minibus') || vehicleKind.contains('minibús') =>
+        'assets/img/HomeCliente/figma_minibus.png',
+      'camión' ||
+      'camion' ||
+      'carga' ||
+      'camioneta' ||
+      'truck' =>
         'assets/img/HomeCliente/crear_carga.png',
-      _ when description.contains('tipo de camión') ||
-          description.contains('tipo de camion') ||
-          description.contains('carga') =>
+      _
+          when description.contains('tipo de camión') ||
+              description.contains('tipo de camion') ||
+              description.contains('carga') =>
         'assets/img/HomeCliente/crear_carga.png',
       _ when description.contains('moto') =>
         'assets/img/HomeCliente/crear_moto.png',
@@ -242,61 +264,63 @@ class _TripCard extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 9, 10, 9),
             child: Row(
-        children: [
-          SizedBox(
-            width: 48,
-            height: 36,
-            child: Image.asset(
-              vehicleAsset,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) =>
-                  const Icon(Icons.local_shipping_outlined, color: Colors.white),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Envío a $destination',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
+                SizedBox(
+                  width: 48,
+                  height: 36,
+                  child: Image.asset(
+                    vehicleAsset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                        Icons.local_shipping_outlined,
+                        color: Colors.white),
                   ),
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  tripId,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Envío a $destination',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        tripId,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                      Text(
+                        'Llegada estimada: $arrival',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xC7FFFFFF),
+                          fontSize: 9,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  'Llegada estimada: $arrival',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xC7FFFFFF),
-                    fontSize: 9,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Colors.white, size: 27),
               ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 27),
-        ],
             ),
           ),
         ),
@@ -397,7 +421,8 @@ class _TripMeta extends StatelessWidget {
 }
 
 class _OrderFilter extends StatelessWidget {
-  const _OrderFilter({required this.label, required this.selected, required this.onTap});
+  const _OrderFilter(
+      {required this.label, required this.selected, required this.onTap});
 
   final String label;
   final bool selected;
@@ -416,7 +441,8 @@ class _OrderFilter extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? figmaBlue : Colors.white.withValues(alpha: .08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: selected ? cyan.withValues(alpha: .75) : glassBorder),
+            border: Border.all(
+                color: selected ? cyan.withValues(alpha: .75) : glassBorder),
           ),
           child: Text(
             label,

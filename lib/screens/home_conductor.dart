@@ -12,6 +12,56 @@ import '../widgets/glass.dart';
 import '../widgets/fuel_sheet.dart';
 import 'inicio.dart';
 import 'viaje_asignado.dart';
+import 'viaje_en_curso.dart';
+
+String _driverVehicleLabel(Trip trip) {
+  final value = '${trip.vehicleVariant ?? ''} ${trip.truckType ?? ''} '
+          '${trip.transport ?? ''} ${trip.description ?? ''}'
+      .toLowerCase();
+  if (value.contains('minibus') || value.contains('minibús')) return 'MINIBUS';
+  if (value.contains('microbus') || value.contains('microbús')) {
+    return 'MICROBUS';
+  }
+  if (value.contains('suv')) return 'SUV';
+  if (value.contains('sedán') || value.contains('sedan')) return 'SEDÁN';
+  if (value.contains('moto')) return 'MOTO';
+  if (value.contains('pickup')) return 'PICKUP';
+  if (value.contains('van')) return 'VAN';
+  return 'AUTO';
+}
+
+String _driverVehicleAsset(Trip trip) {
+  switch (_driverVehicleLabel(trip)) {
+    case 'MINIBUS':
+      return 'assets/img/HomeCliente/figma_minibus.png';
+    case 'MICROBUS':
+      return 'assets/img/HomeCliente/taxi_microbus.png';
+    case 'SUV':
+      return 'assets/img/HomeCliente/taxi_suv.png';
+    case 'SEDÁN':
+      return 'assets/img/HomeCliente/taxi_sedan.png';
+    case 'MOTO':
+      return 'assets/img/HomeCliente/figma_moto.png';
+    case 'PICKUP':
+      return 'assets/img/HomeCliente/figma_pickup.png';
+    case 'VAN':
+      return 'assets/img/HomeCliente/figma_van.png';
+    default:
+      return 'assets/img/HomeCliente/figma_auto.png';
+  }
+}
+
+bool isDriverTripInProgress(Trip trip) =>
+    trip.status == 'En camino' || trip.status == 'En entrega';
+
+String driverHomeQuantityLabel(Trip trip) {
+  final mode = (trip.serviceMode ?? '').toLowerCase();
+  if (mode.contains('taxi') || mode.contains('viaje')) {
+    final passengers = trip.passengerCount ?? 0;
+    return '$passengers pasajero${passengers == 1 ? '' : 's'}';
+  }
+  return '${trip.packages} bulto${trip.packages == 1 ? '' : 's'}';
+}
 
 class HomeConductor extends StatefulWidget {
   const HomeConductor({super.key});
@@ -160,6 +210,19 @@ class _HomeConductorState extends State<HomeConductor> {
       _checkScheduledReturns(data);
     } catch (_) {}
     await _refreshIncidentNotifications();
+  }
+
+  Future<void> _openFuelSheet() async {
+    final saved = await showFuelSheet(
+      context,
+      driverName: _driverName,
+      initialPlate: apiClient.currentUser?.plate,
+    );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recarga enviada para validación.')),
+      );
+    }
   }
 
   void _checkScheduledReturns(List<Trip> assignedTrips) {
@@ -436,58 +499,47 @@ class _HomeConductorState extends State<HomeConductor> {
                     fontFamily: 'Figtree',
                   ),
                 ),
-                const SizedBox(height: 24),
-                InkWell(
-                  onTap: () async {
-                    final saved = await showFuelSheet(
-                      context,
-                      driverName: _driverName,
-                      initialPlate: apiClient.currentUser?.plate,
-                    );
-                    if (saved == true && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Recarga enviada para validación.')),
-                      );
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(18),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .11),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: glassBorder),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.local_gas_station_rounded,
-                            color: cyan, size: 24),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Registrar combustible',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontFamily: 'Figtree')),
-                              SizedBox(height: 3),
-                              Text('Toma foto del odómetro y de la factura',
-                                  style: TextStyle(
-                                      color: Color(0xFFB9D4FF),
-                                      fontSize: 12,
-                                      fontFamily: 'Figtree')),
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.chevron_right_rounded, color: Colors.white),
-                      ],
-                    ),
-                  ),
+                const SizedBox(height: 22),
+                _DriverStatusCard(
+                  location: location,
+                  hasActiveWork: assigned.isNotEmpty || upcoming.isNotEmpty,
+                  onRefresh: _load,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
+                _OperationalSummary(
+                  assigned: assigned.length,
+                  active: upcoming.length,
+                  completed: history.length,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _QuickAction(
+                        icon: Icons.local_gas_station_rounded,
+                        label: 'Combustible',
+                        onTap: _openFuelSheet,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: _QuickAction(
+                        icon: Icons.notifications_none_rounded,
+                        label: 'Actividad',
+                        onTap: _openNotifications,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: _QuickAction(
+                        icon: Icons.refresh_rounded,
+                        label: 'Actualizar',
+                        onTap: _load,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 25),
                 Row(
                   children: [
                     const Expanded(
@@ -536,7 +588,7 @@ class _HomeConductorState extends State<HomeConductor> {
                   _EmptyState(onRetry: _load)
                 else ...[
                   if (assigned.isNotEmpty) ...[
-                    _NextTripCard(
+                    _ClientStyleNextTripCard(
                       trip: assigned.first,
                       onView: () => _openTrip(assigned.first),
                     ),
@@ -571,12 +623,17 @@ class _HomeConductorState extends State<HomeConductor> {
                     const SizedBox(height: 12),
                     if (upcoming.isEmpty)
                       const _NoTripsCard()
-                    else
-                      for (final trip in upcoming) ...[
+                    else ...[
+                      _ClientStyleNextTripCard(
+                        trip: upcoming.first,
+                        onView: () => _openTrip(upcoming.first),
+                      ),
+                      for (final trip in upcoming.skip(1)) ...[
+                        const SizedBox(height: 10),
                         _UpcomingTile(
                             trip: trip, onView: () => _openTrip(trip)),
-                        const SizedBox(height: 10),
                       ],
+                    ],
                   ],
                   if (history.isNotEmpty) ...[
                     const SizedBox(height: 24),
@@ -603,8 +660,282 @@ class _HomeConductorState extends State<HomeConductor> {
 
   void _openTrip(Trip trip) {
     if (!trip.isActive) return;
+    if (isDriverTripInProgress(trip)) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ViajeEnCurso(trip: trip)),
+      );
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => ViajeAsignado(tripId: trip.id)),
+    );
+  }
+}
+
+class _DriverStatusCard extends StatelessWidget {
+  const _DriverStatusCard({
+    required this.location,
+    required this.hasActiveWork,
+    required this.onRefresh,
+  });
+
+  final CurrentLocation? location;
+  final bool hasActiveWork;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final gpsActive = location != null;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(15, 14, 12, 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xCC1454D8), Color(0x991A3D99)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(19),
+        border: Border.all(color: cyan.withValues(alpha: .72)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D47D9).withValues(alpha: .25),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .14),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: .35)),
+            ),
+            child: Icon(
+              gpsActive ? Icons.gps_fixed_rounded : Icons.gps_not_fixed_rounded,
+              color: gpsActive ? const Color(0xFF7DFFCE) : Colors.white70,
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasActiveWork
+                      ? 'Jornada en curso'
+                      : 'Listo para recibir viajes',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  gpsActive
+                      ? 'Tu ubicación se está compartiendo'
+                      : 'Activa el GPS para actualizar tu ubicación',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFD6E5FF),
+                    fontSize: 11.5,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: onRefresh,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .16),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withValues(alpha: .24)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color:
+                          gpsActive ? const Color(0xFF7DFFCE) : Colors.white54,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    gpsActive ? 'GPS activo' : 'Sin GPS',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OperationalSummary extends StatelessWidget {
+  const _OperationalSummary({
+    required this.assigned,
+    required this.active,
+    required this.completed,
+  });
+
+  final int assigned;
+  final int active;
+  final int completed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: glassBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _SummaryMetric(
+              value: assigned,
+              label: 'Asignados',
+              color: const Color(0xFF9EC2FF),
+            ),
+          ),
+          _summaryDivider(),
+          Expanded(
+            child: _SummaryMetric(
+              value: active,
+              label: 'En curso',
+              color: const Color(0xFF7DFFCE),
+            ),
+          ),
+          _summaryDivider(),
+          Expanded(
+            child: _SummaryMetric(
+              value: completed,
+              label: 'Completados',
+              color: const Color(0xFFFFD27D),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryDivider() {
+    return Container(
+      width: 1,
+      height: 28,
+      color: Colors.white.withValues(alpha: .16),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  final int value;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          '$value',
+          style: TextStyle(
+            color: color,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Figtree',
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFFB9D4FF),
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            fontFamily: 'Figtree',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 72,
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .09),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: glassBorder),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: cyan, size: 21),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -654,6 +985,326 @@ class _BellButton extends StatelessWidget {
   }
 }
 
+class _ClientStyleNextTripCard extends StatelessWidget {
+  const _ClientStyleNextTripCard({required this.trip, required this.onView});
+
+  final Trip trip;
+  final VoidCallback onView;
+
+  @override
+  Widget build(BuildContext context) {
+    final isTrip = (trip.serviceMode ?? '').toLowerCase().contains('taxi');
+    final vehicle = _driverVehicleLabel(trip);
+    final quantity = driverHomeQuantityLabel(trip);
+    final payment = conductorPaymentLabel(trip);
+    final price = trip.estimatedCostCs == null
+        ? null
+        : 'Precio: ${formatFareCs(trip.estimatedCostCs!)}';
+
+    return InkWell(
+      onTap: onView,
+      borderRadius: BorderRadius.circular(17),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
+        decoration: BoxDecoration(
+          color: const Color(0xA8143474),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: const Color(0x6687B7FF)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .16),
+              blurRadius: 16,
+              offset: const Offset(0, 7),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'PRÓXIMO VIAJE',
+              style: TextStyle(
+                color: Color(0xFFB9D4FF),
+                fontSize: 9,
+                letterSpacing: 1.05,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Figtree',
+              ),
+            ),
+            const SizedBox(height: 7),
+            Row(
+              children: [
+                _DriverChip(
+                  label: isTrip ? 'Viaje' : 'Envío',
+                  color: const Color(0xFF0D5BFF),
+                ),
+                const SizedBox(width: 6),
+                _DriverChip(
+                  label: vehicle,
+                  color: Colors.white.withValues(alpha: .18),
+                  borderColor: Colors.white.withValues(alpha: .34),
+                ),
+                const SizedBox(width: 6),
+                _DriverChip(
+                  label: trip.statusLabel,
+                  color: Colors.white.withValues(alpha: .10),
+                  borderColor: Colors.white.withValues(alpha: .28),
+                ),
+                const Spacer(),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Colors.white, size: 24),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 70,
+                  height: 48,
+                  child: Image.asset(
+                    _driverVehicleAsset(trip),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.local_shipping_rounded,
+                      color: Colors.white70,
+                      size: 34,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined,
+                              color: Color(0xFFD7E7FF), size: 18),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              trip.origin,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Figtree',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '#${trip.id.replaceFirst('#', '')} · $quantity',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFB9D4FF),
+                          fontSize: 10.5,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF16C784),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  payment,
+                  style: const TextStyle(
+                    color: Color(0xFF61E5B5),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                const Spacer(),
+                Flexible(
+                  child: Text(
+                    trip.destination,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 10,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Divider(color: Colors.white.withValues(alpha: .18), height: 1),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _DriverMetaItem(
+                  icon: Icons.calendar_today_rounded,
+                  text: trip.scheduledDate ?? trip.date,
+                ),
+                const SizedBox(width: 14),
+                _DriverMetaItem(
+                  icon: Icons.schedule_rounded,
+                  text: trip.scheduledTime ?? trip.pickupTime ?? '—',
+                ),
+                const Spacer(),
+                _DriverMetaItem(
+                  icon: isTrip
+                      ? Icons.people_alt_rounded
+                      : Icons.inventory_2_rounded,
+                  text: quantity,
+                  alignRight: true,
+                ),
+              ],
+            ),
+            if (price != null) ...[
+              const SizedBox(height: 7),
+              Row(
+                children: [
+                  const Icon(Icons.payments_outlined, color: cyan, size: 15),
+                  const SizedBox(width: 6),
+                  Text(
+                    price,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 11),
+            SizedBox(
+              width: double.infinity,
+              height: 42,
+              child: Material(
+                color: const Color(0xFF0D5BFF),
+                borderRadius: BorderRadius.circular(24),
+                child: InkWell(
+                  onTap: onView,
+                  borderRadius: BorderRadius.circular(24),
+                  child: const Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Ver viaje',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree',
+                          ),
+                        ),
+                        SizedBox(width: 7),
+                        Icon(Icons.arrow_forward_rounded,
+                            color: Colors.white, size: 17),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DriverMetaItem extends StatelessWidget {
+  const _DriverMetaItem({
+    required this.icon,
+    required this.text,
+    this.alignRight = false,
+  });
+
+  final IconData icon;
+  final String text;
+  final bool alignRight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Flexible(
+      child: Align(
+        alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: const Color(0xFFD7E7FF), size: 13),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFFD7E7FF),
+                  fontSize: 10,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DriverChip extends StatelessWidget {
+  const _DriverChip({
+    required this.label,
+    required this.color,
+    this.borderColor,
+  });
+
+  final String label;
+  final Color color;
+  final Color? borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor ?? color),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Figtree',
+        ),
+      ),
+    );
+  }
+}
+
+// ignore: unused_element
 class _NextTripCard extends StatelessWidget {
   const _NextTripCard({required this.trip, required this.onView});
 
@@ -741,8 +1392,8 @@ class _NextTripCard extends StatelessWidget {
               const SizedBox(width: 16),
               _MiniIcon(Icons.schedule_rounded, trip.pickupTime ?? '—'),
               const Spacer(),
-              _MiniIcon(Icons.inventory_2_rounded,
-                  '${trip.packages} paquete${trip.packages == 1 ? '' : 's'}'),
+              _MiniIcon(
+                  Icons.inventory_2_rounded, driverHomeQuantityLabel(trip)),
             ],
           ),
           if (trip.estimatedCostCs != null) ...[
@@ -1023,7 +1674,7 @@ class _UpcomingTile extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 trip.estimatedCostCs == null
-                    ? '${trip.packages} paquete${trip.packages == 1 ? '' : 's'}'
+                    ? driverHomeQuantityLabel(trip)
                     : formatFareCs(trip.estimatedCostCs!),
                 style: const TextStyle(
                   color: Color(0xFFCBD9F5),
@@ -1105,7 +1756,7 @@ class _HistoryCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '${trip.date} · ${trip.packages} paquete${trip.packages == 1 ? '' : 's'}',
+                          '${trip.date} · ${driverHomeQuantityLabel(trip)}',
                           style: const TextStyle(
                             color: Color(0xFF8FA0C4),
                             fontSize: 10.5,

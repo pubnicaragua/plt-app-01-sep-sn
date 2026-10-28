@@ -212,6 +212,24 @@ class ApiClient {
     return CompanyProfile.fromJson(json);
   }
 
+  Future<void> changeOwnPassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final session = currentUser;
+    if (session == null) {
+      throw const ApiException('No se encontró el perfil activo.');
+    }
+    await _send(
+      'POST',
+      '/auth/change-password',
+      body: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      },
+    );
+  }
+
   Future<Trip> getTrip(String id) async {
     final json = (await _send(
       'GET',
@@ -309,17 +327,19 @@ class ApiClient {
         'truckType': truckType,
         'passengerCount': passengerCount,
         'returnTrip': returnTrip,
-        'stops': stops.map((stop) => {
-              'id': stop.id,
-              'label': stop.label,
-              'address': stop.address,
-              'latitude': stop.latitude,
-              'longitude': stop.longitude,
-              'refs': stop.refs,
-              'order': stop.order,
-              'recipientName': stop.recipientName,
-              'recipientPhone': stop.recipientPhone,
-            }).toList(),
+        'stops': stops
+            .map((stop) => {
+                  'id': stop.id,
+                  'label': stop.label,
+                  'address': stop.address,
+                  'latitude': stop.latitude,
+                  'longitude': stop.longitude,
+                  'refs': stop.refs,
+                  'order': stop.order,
+                  'recipientName': stop.recipientName,
+                  'recipientPhone': stop.recipientPhone,
+                })
+            .toList(),
         'options': options.map((option) => option.toJson()).toList(),
         'quotedBaseCs': quotedBaseCs,
         'quotedAdditionalCs': quotedAdditionalCs,
@@ -502,9 +522,8 @@ class ApiClient {
     }
     final streamed = await request.send().timeout(const Duration(seconds: 75));
     final response = await http.Response.fromStream(streamed);
-    final decoded = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(response.body);
+    final decoded =
+        response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
         decoded is Map

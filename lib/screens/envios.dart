@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import '../core/trip_routing.dart';
 import '../core/theme.dart';
+import '../core/truck_capacity.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'resumen_cliente.dart';
@@ -21,12 +22,20 @@ bool _looksLikeTaxi(Trip trip, String value) =>
 
 String vehicleLabelForTrip(Trip trip) {
   final value = _vehicleData(trip);
+  if (value.contains('minibus') || value.contains('minibús')) {
+    return 'MINIBUS';
+  }
   if (value.contains('microbus') || value.contains('microbús')) {
     return 'MICROBUS';
   }
   if (value.contains('suv')) return 'SUV';
   if (value.contains('sedán') || value.contains('sedan')) return 'SEDÁN';
   if (value.contains('moto')) return 'MOTO';
+  if (value.contains('pickup')) return 'PICKUP';
+  if (value.contains('van')) return 'VAN';
+  for (final truckLabel in truckCapacityLabels) {
+    if (value.contains(truckLabel.toLowerCase())) return truckLabel;
+  }
   if (value.contains('grande')) return 'Camión grande';
   if (value.contains('mediano')) return 'Camión mediano';
   if (value.contains('pequeño') || value.contains('pequeno')) {
@@ -38,7 +47,12 @@ String vehicleLabelForTrip(Trip trip) {
 String vehicleAssetForTrip(Trip trip) {
   final value = _vehicleData(trip);
   final label = vehicleLabelForTrip(trip);
+  if (truckMaxWeightKgForLabel(label) != null) {
+    return truckAssetForLabel(label);
+  }
   switch (label) {
+    case 'MINIBUS':
+      return 'assets/img/HomeCliente/figma_minibus.png';
     case 'MICROBUS':
       return 'assets/img/HomeCliente/taxi_microbus.png';
     case 'SUV':
@@ -47,6 +61,10 @@ String vehicleAssetForTrip(Trip trip) {
       return 'assets/img/HomeCliente/taxi_sedan.png';
     case 'MOTO':
       return 'assets/img/HomeCliente/figma_moto.png';
+    case 'PICKUP':
+      return 'assets/img/HomeCliente/figma_pickup.png';
+    case 'VAN':
+      return 'assets/img/HomeCliente/figma_van.png';
     case 'Camión grande':
       return 'assets/img/HomeCliente/carga_grande.png';
     case 'Camión mediano':
@@ -56,23 +74,20 @@ String vehicleAssetForTrip(Trip trip) {
     case 'AUTO':
       return 'assets/img/HomeCliente/figma_auto.png';
     default:
-      return value.contains('camión') || value.contains('camion') ||
+      return value.contains('camión') ||
+              value.contains('camion') ||
               value.contains('carga')
           ? 'assets/img/HomeCliente/figma_carga.png'
           : 'assets/img/HomeCliente/figma_auto.png';
   }
 }
 
-const tripLocationIconAsset =
-    'assets/img/HomeCliente/akar-icons_location.png';
-const tripScheduleIconAsset =
-    'assets/img/HomeCliente/akar-icons_schedule.png';
+const tripLocationIconAsset = 'assets/img/HomeCliente/akar-icons_location.png';
+const tripScheduleIconAsset = 'assets/img/HomeCliente/akar-icons_schedule.png';
 const tripProfileIconAsset = 'assets/img/HomeCliente/bi_people-fill.png';
 
 bool shouldShowTripSchedule(Trip trip) {
-  return trip.isScheduled ||
-      trip.serviceType == 'Programado' ||
-      !trip.isActive;
+  return trip.isScheduled || trip.serviceType == 'Programado' || !trip.isActive;
 }
 
 String tripIdLabel(Trip trip) {
@@ -195,9 +210,10 @@ class _MisEnviosState extends State<MisEnvios> {
     return switch (historyStatus) {
       'Finalizados' =>
         _isTrip(trip) && (status == 'completado' || status == 'finalizado'),
-      'Entregados' =>
-        !_isTrip(trip) &&
-            (status == 'entregado' || status == 'entregada' || status == 'completado'),
+      'Entregados' => !_isTrip(trip) &&
+          (status == 'entregado' ||
+              status == 'entregada' ||
+              status == 'completado'),
       'Cancelados' => status == 'cancelado' || status == 'anulado',
       _ => true,
     };
@@ -251,8 +267,10 @@ class _MisEnviosState extends State<MisEnvios> {
   List<Trip> _visible(List<Trip> source) {
     return source.where((trip) {
       final inTab = switch (tab) {
-        'Activos' => trip.isActive && !_isCancelled(trip) && !_isScheduled(trip),
-        'Programados' => trip.isActive && !_isCancelled(trip) && _isScheduled(trip),
+        'Activos' =>
+          trip.isActive && !_isCancelled(trip) && !_isScheduled(trip),
+        'Programados' =>
+          trip.isActive && !_isCancelled(trip) && _isScheduled(trip),
         'Historial' => !trip.isActive,
         _ => true,
       };
@@ -327,8 +345,7 @@ class _MisEnviosState extends State<MisEnvios> {
       );
       return;
     }
-    if (_isScheduled(trip) &&
-        isScheduledBeforeStart(trip, DateTime.now())) {
+    if (_isScheduled(trip) && isScheduledBeforeStart(trip, DateTime.now())) {
       Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => EnvioAsignadoScreen(trip: trip),
       ));
@@ -397,33 +414,36 @@ class _MisEnviosState extends State<MisEnvios> {
                 final width = ((MediaQuery.sizeOf(context).width - 36) * .40)
                     .clamp(120.0, 145.0)
                     .toDouble();
-                return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                SizedBox(
-                    width: width,
-                    child: _FilterButton(
-                        label: tab == 'Activos'
-                            ? (activeDate == null
-                                ? 'Hoy'
-                                : _formatDate(activeDate!))
-                            : dateFilter,
-                        icon: Icons.calendar_today_outlined,
-                        compact: true,
-                        onTap: tab == 'Activos'
-                            ? _pickActiveDate
-                            : () => _showDateMenu())),
-                const SizedBox(width: 8),
-                SizedBox(
-                    width: width,
-                    child: _FilterButton(
-                        label: tab == 'Historial' && historyStatus != 'Todos'
-                            ? historyStatus
-                            : vehicleFilter == 'Todos'
-                                ? 'Filtros'
-                                : vehicleFilter,
-                        icon: Icons.filter_alt_outlined,
-                        compact: true,
-                        onTap: _showVehicleMenu)),
-                ]);
+                return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      SizedBox(
+                          width: width,
+                          child: _FilterButton(
+                              label: tab == 'Activos'
+                                  ? (activeDate == null
+                                      ? 'Hoy'
+                                      : _formatDate(activeDate!))
+                                  : dateFilter,
+                              icon: Icons.calendar_today_outlined,
+                              compact: true,
+                              onTap: tab == 'Activos'
+                                  ? _pickActiveDate
+                                  : () => _showDateMenu())),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                          width: width,
+                          child: _FilterButton(
+                              label:
+                                  tab == 'Historial' && historyStatus != 'Todos'
+                                      ? historyStatus
+                                      : vehicleFilter == 'Todos'
+                                          ? 'Filtros'
+                                          : vehicleFilter,
+                              icon: Icons.filter_alt_outlined,
+                              compact: true,
+                              onTap: _showVehicleMenu)),
+                    ]);
               }),
               const SizedBox(height: 14),
               if (snapshot.connectionState == ConnectionState.waiting &&
@@ -456,7 +476,8 @@ class _MisEnviosState extends State<MisEnvios> {
                                 ? 'Aún no tienes envíos.'
                                 : activeDate != null
                                     ? 'No hay envíos activos para el ${_formatDate(activeDate!)}.'
-                                    : tab == 'Programados' && dateFilter != 'Todas las fechas'
+                                    : tab == 'Programados' &&
+                                            dateFilter != 'Todas las fechas'
                                         ? 'No hay envíos programados para esta fecha.'
                                         : 'No hay resultados para estos filtros.',
                             textAlign: TextAlign.center,
@@ -464,31 +485,30 @@ class _MisEnviosState extends State<MisEnvios> {
                                 color: Colors.white70,
                                 fontSize: 12,
                                 fontFamily: 'Figtree'))))
+              else if (tab == 'Programados')
+                _ScheduledGroups(
+                    trips: visible,
+                    vehicle: _vehicle,
+                    isTrip: _isTrip,
+                    profileNames: profileNames,
+                    dateOf: _dateOf,
+                    onTap: _openTrip,
+                    showServiceStatusTag: false,
+                    darkServiceStatusText: false)
               else
-                if (tab == 'Programados')
-                  _ScheduledGroups(
-                      trips: visible,
-                      vehicle: _vehicle,
-                      isTrip: _isTrip,
-                      profileNames: profileNames,
-                      dateOf: _dateOf,
-                      onTap: _openTrip,
-                      showServiceStatusTag: false,
-                      darkServiceStatusText: false)
-                else
-                  ...visible.map((trip) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _FigmaTripCard(
-                          trip: trip,
-                          vehicle: _vehicle(trip),
-                          isTrip: _isTrip(trip),
-                          profileLabel: trip.profileId == null
-                              ? null
-                              : profileNames[trip.profileId!],
-                          showServiceStatusTag:
-                              _isTrip(trip) || tab == 'Historial',
-                          darkServiceStatusText: tab == 'Historial',
-                          onTap: () => _openTrip(trip)))),
+                ...visible.map((trip) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _FigmaTripCard(
+                        trip: trip,
+                        vehicle: _vehicle(trip),
+                        isTrip: _isTrip(trip),
+                        profileLabel: trip.profileId == null
+                            ? null
+                            : profileNames[trip.profileId!],
+                        showServiceStatusTag:
+                            _isTrip(trip) || tab == 'Historial',
+                        darkServiceStatusText: tab == 'Historial',
+                        onTap: () => _openTrip(trip)))),
               const SizedBox(height: 6),
               GlassButton(
                   label: 'Ver resumen del periodo',
@@ -576,9 +596,7 @@ class _MisEnviosState extends State<MisEnvios> {
                       'SEDÁN',
                       'MOTO',
                       'AUTO',
-                      'Camión pequeño',
-                      'Camión mediano',
-                      'Camión grande'
+                      ...truckCapacityLabels,
                     ])
                       ListTile(
                           title: Text(value,
@@ -683,9 +701,8 @@ class _ScheduledGroups extends StatelessWidget {
     final dates = <String, DateTime?>{};
     for (final trip in trips) {
       final date = dateOf(trip);
-      final key = date == null
-          ? 'pending'
-          : DateUtils.dateOnly(date).toIso8601String();
+      final key =
+          date == null ? 'pending' : DateUtils.dateOnly(date).toIso8601String();
       grouped.putIfAbsent(key, () => []).add(trip);
       dates[key] = date;
     }
@@ -984,7 +1001,7 @@ class _FigmaTripCard extends StatelessWidget {
                             child: Text(kind,
                                 style: const TextStyle(
                                     color: Colors.white,
-                                                    fontSize: 11,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w800,
                                     fontFamily: 'Figtree'))),
                         if (scheduled) ...[

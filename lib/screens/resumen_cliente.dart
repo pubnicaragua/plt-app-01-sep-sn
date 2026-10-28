@@ -4,6 +4,7 @@ import '../core/api_client.dart';
 import '../core/invoice_selection.dart';
 import '../core/theme.dart';
 import '../core/trip_routing.dart';
+import '../core/truck_capacity.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'finalizar_viaje.dart';
@@ -145,9 +146,10 @@ String invoicePaymentStatusForTrip(Trip trip) {
       .trim()
       .toLowerCase();
   if (raw.isEmpty) {
-    final method = (trip.invoicePaymentMethod ?? trip.servicePaymentMethod ?? '')
-        .trim()
-        .toLowerCase();
+    final method =
+        (trip.invoicePaymentMethod ?? trip.servicePaymentMethod ?? '')
+            .trim()
+            .toLowerCase();
     if ({'efectivo', 'cash', 'contado', 'tarjeta', 'card'}.contains(method)) {
       return 'Pagada';
     }
@@ -185,6 +187,9 @@ String invoiceHistoryVehicleLabel(Trip trip, {required bool isTrip}) {
       '${trip.vehicleVariant ?? ''} ${trip.truckType ?? ''} ${trip.transport ?? ''}'
           .toLowerCase();
   if (text.contains('moto')) return 'MOTO';
+  if (text.contains('minibus') || text.contains('minibús')) return 'MINIBUS';
+  if (text.contains('pickup')) return 'PICKUP';
+  if (text.contains('van')) return 'VAN';
   if (text.contains('suv')) return 'SUV';
   if (text.contains('micro')) return 'MICROBUS';
   if (text.contains('sedan') || text.contains('sedán')) return 'SEDÁN';
@@ -193,6 +198,9 @@ String invoiceHistoryVehicleLabel(Trip trip, {required bool isTrip}) {
       text.contains('vehiculo') ||
       text.contains('vehículo')) {
     return 'AUTO';
+  }
+  for (final truckLabel in truckCapacityLabels) {
+    if (text.contains(truckLabel.toLowerCase())) return truckLabel;
   }
   if (text.contains('grande')) return 'Camión grande';
   if (text.contains('mediano')) return 'Camión mediano';
@@ -949,7 +957,7 @@ class _ResumenClienteState extends State<ResumenCliente> {
       return trips.where((trip) {
         final date = _tripDate(trip);
         return date != null &&
-        isScheduledPendingForChart(trip) &&
+            isScheduledPendingForChart(trip) &&
             _sameDay(date, day);
       }).length;
     });
@@ -1527,15 +1535,24 @@ class _InvoiceHistoryCard extends StatelessWidget {
   }
 
   String _asset() {
+    if (truckMaxWeightKgForLabel(_vehicle()) != null) {
+      return truckAssetForLabel(_vehicle());
+    }
     switch (_vehicle()) {
       case 'MOTO':
         return 'assets/img/HomeCliente/figma_moto.png';
+      case 'MINIBUS':
+        return 'assets/img/HomeCliente/figma_minibus.png';
       case 'SUV':
         return 'assets/img/HomeCliente/taxi_suv.png';
       case 'MICROBUS':
         return 'assets/img/HomeCliente/taxi_microbus.png';
       case 'SEDÁN':
         return 'assets/img/HomeCliente/taxi_sedan.png';
+      case 'PICKUP':
+        return 'assets/img/HomeCliente/figma_pickup.png';
+      case 'VAN':
+        return 'assets/img/HomeCliente/figma_van.png';
       case 'Camión grande':
         return 'assets/img/HomeCliente/carga_grande.png';
       case 'Camión mediano':
@@ -1884,12 +1901,11 @@ class _WeeklyChartState extends State<_WeeklyChart> {
   }
 
   int _scheduledCount(int index) {
-    return widget.scheduledCounts[index]
-        .clamp(0, widget.counts[index])
-        .toInt();
+    return widget.scheduledCounts[index].clamp(0, widget.counts[index]).toInt();
   }
 
-  int _completedCount(int index) => widget.counts[index] - _scheduledCount(index);
+  int _completedCount(int index) =>
+      widget.counts[index] - _scheduledCount(index);
 
   double _segmentHeight(int count, int highest) {
     if (highest == 0) return 0;

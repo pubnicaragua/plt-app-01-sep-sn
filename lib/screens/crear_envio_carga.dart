@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/theme.dart';
+import '../core/truck_capacity.dart';
+import '../core/vehicle_capacity.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'crear_envio2.dart';
@@ -28,6 +30,9 @@ class CrearEnvioCarga extends StatefulWidget {
     required this.destinationPlace,
     required this.transport,
     this.estimatedShipping,
+    this.distanceKm,
+    this.vehicleRates = const {},
+    this.fareRoundingCs = 5,
     this.originRefs = '',
     this.destinationRefs = '',
     this.recipientName = '',
@@ -37,6 +42,7 @@ class CrearEnvioCarga extends StatefulWidget {
     this.startTime,
     this.truckType,
     this.truckAsset,
+    this.truckCapacityKg,
     this.bodyType,
     this.equipment,
   });
@@ -47,6 +53,9 @@ class CrearEnvioCarga extends StatefulWidget {
   final PlaceSuggestion? destinationPlace;
   final String transport;
   final double? estimatedShipping;
+  final double? distanceKm;
+  final Map<String, VehicleRate> vehicleRates;
+  final double fareRoundingCs;
   final String originRefs;
   final String destinationRefs;
   final String recipientName;
@@ -56,6 +65,7 @@ class CrearEnvioCarga extends StatefulWidget {
   final String? startTime;
   final String? truckType;
   final String? truckAsset;
+  final double? truckCapacityKg;
   final String? bodyType;
   final String? equipment;
 
@@ -78,6 +88,11 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
   String productPaymentStatus = 'Pendiente';
   String productPaymentMethod = 'Efectivo';
   bool isForSale = true;
+  late String transport;
+  late String? truckType;
+  late String? truckAsset;
+  late double? truckCapacityKg;
+  String weightUnit = 'kg';
 
   @override
   void initState() {
@@ -87,6 +102,11 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
     invoicePriceController = TextEditingController();
     invoiceNumberController = TextEditingController();
     bundlesController = TextEditingController(text: '1');
+    transport = widget.transport;
+    truckType = widget.truckType;
+    truckAsset = widget.truckAsset;
+    truckCapacityKg = widget.truckCapacityKg ??
+        truckMaxWeightKgForLabel(widget.truckType ?? '');
   }
 
   @override
@@ -99,19 +119,72 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
     super.dispose();
   }
 
-  bool get isTruck => widget.transport == 'Camión';
+  bool get isTruck => transport == 'Camión';
+  bool get isPickup => transport == 'Pickup';
+  bool get isVan => transport == 'VAN';
 
   String get vehicleLabel => isTruck
-      ? 'Camión'
-      : widget.transport == 'Moto'
+      ? truckType ?? 'Camión'
+      : transport == 'Moto'
           ? 'Moto'
-          : 'Auto';
+          : isPickup
+              ? 'Pickup'
+              : isVan
+                  ? 'VAN'
+                  : 'Vehículo';
 
-  String get vehicleAsset => isTruck
-      ? 'assets/img/HomeCliente/figma_carga.png'
-      : widget.transport == 'Moto'
-          ? 'assets/img/HomeCliente/figma_moto.png'
-          : 'assets/img/HomeCliente/figma_auto.png';
+  String _assetForTransport(String value) {
+    switch (value) {
+      case 'Camión':
+        return 'assets/img/HomeCliente/figma_carga.png';
+      case 'Moto':
+        return 'assets/img/HomeCliente/figma_moto.png';
+      case 'Pickup':
+        return 'assets/img/HomeCliente/figma_pickup.png';
+      case 'VAN':
+        return 'assets/img/HomeCliente/figma_van.png';
+      default:
+        return 'assets/img/HomeCliente/figma_auto.png';
+    }
+  }
+
+  String get vehicleAsset => isTruck && truckType != null
+      ? (truckAsset ?? truckAssetForLabel(truckType!))
+      : _assetForTransport(transport);
+
+  void _setWeightUnit(String nextUnit) {
+    if (nextUnit == weightUnit) return;
+    final current = double.tryParse(weightController.text.trim());
+    if (current != null && current > 0) {
+      final currentKg = weightToKg(current, weightUnit);
+      final converted = nextUnit == 'lb' ? currentKg * 2.20462 : currentKg;
+      final rounded = converted.round().clamp(1, 3307).toInt();
+      weightController.value = TextEditingValue(
+        text: '$rounded',
+        selection: TextSelection.collapsed(offset: '$rounded'.length),
+      );
+      weight = rounded;
+    }
+    setState(() => weightUnit = nextUnit);
+  }
+
+  double? get _distanceForPricing =>
+      widget.distanceKm ??
+      distanceKm(widget.originPlace, widget.destinationPlace);
+
+  Map<String, double?> _estimatedFaresFor(List<String> vehicles) {
+    final distance = _distanceForPricing;
+    if (distance == null) return const {};
+    return {
+      for (final vehicle in vehicles)
+        vehicle: estimatedShippingForVehicle(
+          vehicle: vehicle,
+          distanceKm: distance,
+          configuredRates: widget.vehicleRates,
+          fareRoundingCs: widget.fareRoundingCs,
+        ),
+    };
+  }
 
   Future<void> _pickPhotos() async {
     final selected =
@@ -125,7 +198,88 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
     if (mounted) setState(() => photos.addAll(bytes));
   }
 
-  void _continue() {
+  Future<bool> _validateWeightCapacity() async {
+    final value = double.tryParse(weightController.text.trim());
+    if (value == null || value <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa un peso válido.')),
+      );
+      return false;
+    }
+    weight = value.round();
+    final weightKg = weightToKg(value, weightUnit);
+    final maximum = isTruck
+        ? (truckCapacityKg ?? double.infinity)
+        : maxWeightKgForVehicle(transport);
+    if (weightKg <= maximum) return true;
+
+    final vehicleRecommendation = recommendedVehicleForWeight(weightKg);
+    final truckRecommendation = recommendedTruckForWeight(weightKg);
+    final recommendation = isTruck
+        ? truckRecommendation
+        : vehicleRecommendation ?? truckRecommendation;
+    final recommendationIsTruck = isTruck ||
+        (vehicleRecommendation == null && truckRecommendation != null);
+    if (!mounted) return false;
+    final currentVehicleLabel = isTruck ? (truckType ?? 'Camión') : transport;
+    final compatibleVehicles = recommendationIsTruck
+        ? compatibleTrucksForWeight(weightKg)
+        : compatibleVehiclesForWeight(weightKg);
+    final estimatedFares = recommendationIsTruck
+        ? const <String, double?>{}
+        : _estimatedFaresFor(compatibleVehicles);
+    if (recommendation == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => _WeightLimitDialog(
+          vehicle: currentVehicleLabel,
+          enteredWeight: value,
+          weightUnit: weightUnit,
+          recommendation: null,
+          recommendedAsset: null,
+          compatibleVehicles: compatibleVehicles,
+          assetForVehicle:
+              recommendationIsTruck ? truckAssetForLabel : _assetForTransport,
+          estimatedFares: estimatedFares,
+        ),
+      );
+      return false;
+    }
+    final selectedVehicle = await showDialog<String>(
+      context: context,
+      builder: (context) => _WeightLimitDialog(
+        vehicle: currentVehicleLabel,
+        enteredWeight: value,
+        weightUnit: weightUnit,
+        recommendation: recommendation,
+        recommendedAsset: recommendationIsTruck
+            ? truckAssetForLabel(recommendation)
+            : _assetForTransport(recommendation),
+        compatibleVehicles: compatibleVehicles,
+        assetForVehicle:
+            recommendationIsTruck ? truckAssetForLabel : _assetForTransport,
+        estimatedFares: estimatedFares,
+        recommendationActionLabel:
+            recommendationIsTruck ? 'Programar $recommendation' : null,
+      ),
+    );
+    if (selectedVehicle == null || !mounted) return false;
+    if (recommendationIsTruck) {
+      setState(() {
+        transport = 'Camión';
+        truckType = selectedVehicle;
+        truckAsset = truckAssetForLabel(selectedVehicle);
+        truckCapacityKg = truckMaxWeightKgForLabel(selectedVehicle);
+      });
+    } else {
+      setState(() => transport = selectedVehicle);
+    }
+    return false;
+  }
+
+  Future<void> _continue() async {
+    if (!await _validateWeightCapacity()) return;
+    if (!mounted) return;
     final bundles = parseBundleCount(bundlesController.text);
     if (bundles == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -150,9 +304,11 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           destination: widget.destination,
           originPlace: widget.originPlace,
           destinationPlace: widget.destinationPlace,
-          transport: widget.transport,
-          estimatedShipping: widget.estimatedShipping,
+          transport: transport,
+          estimatedShipping:
+              transport == widget.transport ? widget.estimatedShipping : null,
           weight: weight,
+          weightUnit: weightUnit,
           bundles: bundles,
           packageType: packageTypeController.text.trim(),
           initialProductPhotos: List<Uint8List>.of(photos),
@@ -170,7 +326,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           startScheduled: widget.startScheduled,
           startDate: widget.startDate,
           startTime: widget.startTime,
-          initialTruckType: widget.truckType,
+          initialTruckType: truckType,
           initialTruckBodyType: widget.bodyType,
           initialTruckEquipment: widget.equipment,
         ),
@@ -207,8 +363,8 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
                     ),
                     const SizedBox(height: 12),
                     _ShippingVehicleCard(
-                      label: widget.truckType ?? vehicleLabel,
-                      asset: widget.truckAsset ?? vehicleAsset,
+                      label: vehicleLabel,
+                      asset: vehicleAsset,
                     ),
                     const SizedBox(height: 16),
                     const _CargaSectionTitle(
@@ -420,14 +576,499 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
           controller: invoicePriceController,
           bundlesController: bundlesController,
           title: isForSale
-              ? 'Cantidad y valor del producto'
-              : 'Cantidad y valor aproximado del producto',
+              ? 'Ingrese el total de factura'
+              : 'Valor aproximado del producto',
           currency: currency,
           onCurrencyChanged: (value) => setState(() => currency = value),
           onDecreaseBundles: () => _changeBundles(-1),
           onIncreaseBundles: () => _changeBundles(1),
         ),
+        const SizedBox(height: 9),
+        _WeightInputCard(
+          controller: weightController,
+          unit: weightUnit,
+          onUnitChanged: _setWeightUnit,
+          onChanged: (value) {
+            final parsed = double.tryParse(value.trim());
+            if (parsed != null && parsed > 0) weight = parsed.round();
+          },
+        ),
       ],
+    );
+  }
+}
+
+class _WeightInputCard extends StatelessWidget {
+  const _WeightInputCard({
+    required this.controller,
+    required this.unit,
+    required this.onChanged,
+    required this.onUnitChanged,
+  });
+
+  final TextEditingController controller;
+  final String unit;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onUnitChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGlassSurface(
+      borderRadius: 14,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+        child: Row(
+          children: [
+            const Icon(Icons.scale_outlined, color: Colors.white, size: 18),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Peso del producto',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Ingresa el peso aproximado en ${unit == 'lb' ? 'libras' : 'kilogramos'}',
+                    style: const TextStyle(
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 9,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 72,
+                  height: 32,
+                  child: TextField(
+                    controller: controller,
+                    onChanged: onChanged,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                    decoration: InputDecoration(
+                      suffixText: unit,
+                      suffixStyle: const TextStyle(
+                        color: Color(0xFFB9D4FF),
+                        fontSize: 10,
+                        fontFamily: 'Figtree',
+                      ),
+                      filled: true,
+                      fillColor: Colors.black.withValues(alpha: .12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: glassBorder),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: glassBorder),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: accentBlue),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 5),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                _WeightUnitToggle(unit: unit, onChanged: onUnitChanged),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WeightUnitToggle extends StatelessWidget {
+  const _WeightUnitToggle({required this.unit, required this.onChanged});
+
+  final String unit;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: glassBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _WeightUnitOption(
+            label: 'kg',
+            selected: unit == 'kg',
+            onTap: () => onChanged('kg'),
+          ),
+          _WeightUnitOption(
+            label: 'lb',
+            selected: unit == 'lb',
+            onTap: () => onChanged('lb'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeightUnitOption extends StatelessWidget {
+  const _WeightUnitOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? accentBlue : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : const Color(0xFFB9D4FF),
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Figtree',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WeightLimitDialog extends StatelessWidget {
+  const _WeightLimitDialog({
+    required this.vehicle,
+    required this.enteredWeight,
+    required this.weightUnit,
+    required this.recommendation,
+    required this.recommendedAsset,
+    required this.compatibleVehicles,
+    required this.assetForVehicle,
+    required this.estimatedFares,
+    this.recommendationActionLabel,
+  });
+
+  final String vehicle;
+  final double enteredWeight;
+  final String weightUnit;
+  final String? recommendation;
+  final String? recommendedAsset;
+  final List<String> compatibleVehicles;
+  final String Function(String) assetForVehicle;
+  final Map<String, double?> estimatedFares;
+  final String? recommendationActionLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasRecommendation = recommendation != null;
+    final enteredWeightLabel =
+        '${enteredWeight.toStringAsFixed(0)} ${weightUnit == 'lb' ? 'lb' : 'kg'}';
+    return AlertDialog(
+      backgroundColor: const Color(0xFF10285D),
+      title: const Text(
+        'Peso no compatible',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Figtree',
+        ),
+      ),
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * .58,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (hasRecommendation && recommendedAsset != null)
+                _RecommendedVehicleOption(
+                  vehicle: recommendation!,
+                  asset: recommendedAsset!,
+                  estimatedFare: estimatedFares[recommendation],
+                  onTap: () => Navigator.pop(context, recommendation),
+                ),
+              const SizedBox(height: 10),
+              Text(
+                hasRecommendation
+                    ? 'El producto pesa $enteredWeightLabel y no se puede llevar en $vehicle.'
+                    : 'El producto pesa $enteredWeightLabel y supera la capacidad de las opciones disponibles. Contacta con Incoex para programar una unidad que soporte esta carga.',
+                style: const TextStyle(
+                  color: Color(0xFFE5EDFF),
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              if (compatibleVehicles.length > 1) ...[
+                const SizedBox(height: 14),
+                const Text(
+                  'También compatibles',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...compatibleVehicles.skip(1).map(
+                      (compatibleVehicle) => _CompatibleVehicleOption(
+                        vehicle: compatibleVehicle,
+                        asset: assetForVehicle(compatibleVehicle),
+                        estimatedFare: estimatedFares[compatibleVehicle],
+                        onTap: () => Navigator.pop(context, compatibleVehicle),
+                      ),
+                    ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        if (hasRecommendation)
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFFF727C),
+            ),
+            onPressed: () => Navigator.pop<String>(context),
+            child: const Text('Rechazar'),
+          ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            hasRecommendation ? recommendation : null,
+          ),
+          child: Text(hasRecommendation
+              ? (recommendationActionLabel ?? 'Cambiar a $recommendation')
+              : 'Entendido'),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecommendedVehicleOption extends StatelessWidget {
+  const _RecommendedVehicleOption({
+    required this.vehicle,
+    required this.asset,
+    required this.estimatedFare,
+    required this.onTap,
+  });
+
+  final String vehicle;
+  final String asset;
+  final double? estimatedFare;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1D4FC5).withValues(alpha: .72),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF4E8BFF)),
+        ),
+        child: Column(
+          children: [
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Recomendado',
+                style: TextStyle(
+                  color: Color(0xFFB8D7FF),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ),
+            SizedBox(
+              height: 84,
+              width: double.infinity,
+              child: Image.asset(
+                asset,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        vehicle,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                      _FareText(value: estimatedFare),
+                    ],
+                  ),
+                ),
+                const Text(
+                  'Elegir',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right, color: Colors.white, size: 18),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompatibleVehicleOption extends StatelessWidget {
+  const _CompatibleVehicleOption({
+    required this.vehicle,
+    required this.asset,
+    required this.estimatedFare,
+    required this.onTap,
+  });
+
+  final String vehicle;
+  final String asset;
+  final double? estimatedFare;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 58,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .09),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: .16)),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 74,
+                height: 52,
+                child: Image.asset(
+                  asset,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      vehicle,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                    _FareText(value: estimatedFare),
+                  ],
+                ),
+              ),
+              const Text(
+                'Elegir',
+                style: TextStyle(
+                  color: Color(0xFFB8D7FF),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              const SizedBox(width: 2),
+              const Icon(
+                Icons.chevron_right,
+                color: Color(0xFFB8D7FF),
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FareText extends StatelessWidget {
+  const _FareText({required this.value});
+
+  final double? value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      value == null
+          ? 'Tarifa según distancia'
+          : 'Tarifa estimada: C\$ ${value!.toStringAsFixed(0)}',
+      style: const TextStyle(
+        color: Color(0xFFB8D7FF),
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+        fontFamily: 'Figtree',
+      ),
     );
   }
 }

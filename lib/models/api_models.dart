@@ -6,6 +6,7 @@ class SessionUser {
     required this.email,
     required this.role,
     required this.displayName,
+    this.username,
     this.accountId,
     this.profileId,
     this.profileRole,
@@ -19,6 +20,7 @@ class SessionUser {
   final String email;
   final String role;
   final String displayName;
+  final String? username;
   final String? accountId;
   final String? profileId;
   final String? profileRole;
@@ -35,6 +37,7 @@ class SessionUser {
       email: json['email']?.toString() ?? '',
       role: json['role']?.toString() ?? '',
       displayName: json['displayName']?.toString() ?? 'Usuario INCOEX',
+      username: json['username']?.toString(),
       accountId: json['accountId']?.toString(),
       profileId: json['profileId']?.toString(),
       profileRole: json['profileRole']?.toString(),
@@ -58,12 +61,18 @@ class LoginResponse {
   final Map<String, dynamic> profile;
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
+    final user = (json['user'] as Map?)?.cast<String, dynamic>() ?? {};
+    final profile = (json['profile'] as Map?)?.cast<String, dynamic>() ?? {};
+    final userWithProfileUsername = <String, dynamic>{
+      ...user,
+      if ((user['username']?.toString().trim().isEmpty ?? true) &&
+          profile['username']?.toString().trim().isNotEmpty == true)
+        'username': profile['username'],
+    };
     return LoginResponse(
       accessToken: json['accessToken']?.toString() ?? '',
-      user: SessionUser.fromJson(
-        (json['user'] as Map?)?.cast<String, dynamic>() ?? const {},
-      ),
-      profile: (json['profile'] as Map?)?.cast<String, dynamic>() ?? const {},
+      user: SessionUser.fromJson(userWithProfileUsername),
+      profile: profile,
     );
   }
 }
@@ -157,18 +166,26 @@ class Trip {
     this.recipientName,
     this.recipientPhone,
     this.fragile = false,
-      this.distanceKm,
-      this.estimatedCostCs,
-      this.invoiceAmountCs,
+    this.distanceKm,
+    this.estimatedCostCs,
+    this.invoiceAmountCs,
     this.invoiceStatus,
     this.invoiceNumber,
     this.invoicePaymentMethod,
     this.servicePaymentStatus,
     this.servicePaymentMethod,
+    this.paymentMethod,
+    this.paymentAmount,
+    this.paymentStatus,
+    this.paymentRef,
+    this.paymentDate,
+    this.dueDate,
+    this.originRefs,
+    this.destinationRefs,
     this.serviceInvoiceNumber,
     this.serviceInvoiceUrl,
     this.completedAt,
-      this.serviceType,
+    this.serviceType,
     this.transport,
     this.contactName,
     this.contactPhone,
@@ -217,6 +234,14 @@ class Trip {
   final String? invoicePaymentMethod;
   final String? servicePaymentStatus;
   final String? servicePaymentMethod;
+  final String? paymentMethod;
+  final double? paymentAmount;
+  final String? paymentStatus;
+  final String? paymentRef;
+  final String? paymentDate;
+  final String? dueDate;
+  final String? originRefs;
+  final String? destinationRefs;
   final String? serviceInvoiceNumber;
   final String? serviceInvoiceUrl;
   final String? completedAt;
@@ -325,6 +350,14 @@ class Trip {
               json['shipmentPaymentMethod'] ??
               json['paymentMethod'])
           ?.toString(),
+      paymentMethod: json['paymentMethod']?.toString(),
+      paymentAmount: (json['paymentAmount'] as num?)?.toDouble(),
+      paymentStatus: json['paymentStatus']?.toString(),
+      paymentRef: json['paymentRef']?.toString(),
+      paymentDate: json['paymentDate']?.toString(),
+      dueDate: json['dueDate']?.toString(),
+      originRefs: json['originRefs']?.toString(),
+      destinationRefs: json['destinationRefs']?.toString(),
       serviceInvoiceNumber: (json['serviceInvoiceNumber'] ??
               json['serviceInvoiceCode'] ??
               json['serviceInvoiceId'])
@@ -342,7 +375,9 @@ class Trip {
       transport: json['transport']?.toString(),
       contactName: json['contactName']?.toString(),
       contactPhone: json['contactPhone']?.toString(),
-      driverPhoto: (json['driverPhoto'] ?? json['driverAvatar'] ?? json['photo'])?.toString(),
+      driverPhoto:
+          (json['driverPhoto'] ?? json['driverAvatar'] ?? json['photo'])
+              ?.toString(),
       pickupTime: json['pickupTime']?.toString(),
       originLat: (json['originLat'] as num?)?.toDouble(),
       originLng: (json['originLng'] as num?)?.toDouble(),
@@ -354,20 +389,21 @@ class Trip {
       weight: (json['weight'] as num?)?.toDouble(),
       weightUnit: json['weightUnit']?.toString(),
       serviceMode: json['serviceMode']?.toString(),
-      vehicleVariant: (json['vehicleVariant'] ??
-              json['vehicleType'] ??
-              json['vehicle'])
-          ?.toString(),
+      vehicleVariant:
+          (json['vehicleVariant'] ?? json['vehicleType'] ?? json['vehicle'])
+              ?.toString(),
       truckType: json['truckType']?.toString(),
       passengerCount: (json['passengerCount'] as num?)?.toInt(),
-      returnTrip: json['returnTrip'] == true || json['returnTrip']?.toString() == 'true',
+      returnTrip: json['returnTrip'] == true ||
+          json['returnTrip']?.toString() == 'true',
       stops: (json['stops'] as List? ?? const [])
           .whereType<Map>()
           .map((item) => TripStop.fromJson(item.cast<String, dynamic>()))
           .toList(),
       options: (json['options'] as List? ?? const [])
           .whereType<Map>()
-          .map((item) => TripOptionSelection.fromJson(item.cast<String, dynamic>()))
+          .map((item) =>
+              TripOptionSelection.fromJson(item.cast<String, dynamic>()))
           .toList(),
       optionsTotalCs: (json['optionsTotalCs'] as num?)?.toDouble() ?? 0,
       quotedBaseCs: (json['quotedBaseCs'] as num?)?.toDouble(),
@@ -378,7 +414,16 @@ class Trip {
 }
 
 class TripStop {
-  const TripStop({required this.label, required this.address, required this.order, this.id, this.latitude, this.longitude, this.refs, this.recipientName, this.recipientPhone});
+  const TripStop(
+      {required this.label,
+      required this.address,
+      required this.order,
+      this.id,
+      this.latitude,
+      this.longitude,
+      this.refs,
+      this.recipientName,
+      this.recipientPhone});
 
   final String? id;
   final String label;
@@ -404,7 +449,13 @@ class TripStop {
 }
 
 class TripOptionSelection {
-  const TripOptionSelection({required this.code, required this.title, required this.priceCs, this.description, this.currency = 'NIO', this.quantity = 1});
+  const TripOptionSelection(
+      {required this.code,
+      required this.title,
+      required this.priceCs,
+      this.description,
+      this.currency = 'NIO',
+      this.quantity = 1});
 
   final String code;
   final String title;
@@ -413,7 +464,8 @@ class TripOptionSelection {
   final String currency;
   final int quantity;
 
-  factory TripOptionSelection.fromJson(Map<String, dynamic> json) => TripOptionSelection(
+  factory TripOptionSelection.fromJson(Map<String, dynamic> json) =>
+      TripOptionSelection(
         code: json['code']?.toString() ?? '',
         title: json['title']?.toString() ?? '',
         description: json['description']?.toString(),
@@ -433,7 +485,21 @@ class TripOptionSelection {
 }
 
 class ServiceCatalogItem {
-  const ServiceCatalogItem({required this.id, required this.code, required this.kind, required this.service, required this.transport, required this.title, required this.description, required this.priceCs, required this.currency, required this.pricingMode, required this.enabled, required this.sortOrder, this.maxWeightKg, this.maxPassengers});
+  const ServiceCatalogItem(
+      {required this.id,
+      required this.code,
+      required this.kind,
+      required this.service,
+      required this.transport,
+      required this.title,
+      required this.description,
+      required this.priceCs,
+      required this.currency,
+      required this.pricingMode,
+      required this.enabled,
+      required this.sortOrder,
+      this.maxWeightKg,
+      this.maxPassengers});
 
   final String id;
   final String code;
@@ -450,7 +516,8 @@ class ServiceCatalogItem {
   final bool enabled;
   final int sortOrder;
 
-  factory ServiceCatalogItem.fromJson(Map<String, dynamic> json) => ServiceCatalogItem(
+  factory ServiceCatalogItem.fromJson(Map<String, dynamic> json) =>
+      ServiceCatalogItem(
         id: json['id']?.toString() ?? '',
         code: json['code']?.toString() ?? '',
         kind: json['kind']?.toString() ?? 'option',
@@ -463,7 +530,8 @@ class ServiceCatalogItem {
         pricingMode: json['pricingMode']?.toString() ?? 'flat',
         maxWeightKg: (json['maxWeightKg'] as num?)?.toDouble(),
         maxPassengers: (json['maxPassengers'] as num?)?.toInt(),
-        enabled: json['enabled'] == true || json['enabled']?.toString() == 'true',
+        enabled:
+            json['enabled'] == true || json['enabled']?.toString() == 'true',
         sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
       );
 }
@@ -584,7 +652,9 @@ class TrackingData {
       driverVehicle: json['driverVehicle']?.toString(),
       driverPlate: json['driverPlate']?.toString(),
       driverPhone: json['driverPhone']?.toString(),
-      driverPhoto: (json['driverPhoto'] ?? json['driverAvatar'] ?? json['photo'])?.toString(),
+      driverPhoto:
+          (json['driverPhoto'] ?? json['driverAvatar'] ?? json['photo'])
+              ?.toString(),
       currentLocationLabel: json['currentLocationLabel']?.toString(),
       transport: json['transport']?.toString(),
       routeProvider: json['routeProvider']?.toString(),
@@ -703,7 +773,8 @@ class AppSettings {
           (json['scheduledSurchargePct'] as num?)?.toDouble() ?? 0,
       serviceCatalog: (json['serviceCatalog'] as List? ?? const [])
           .whereType<Map>()
-          .map((item) => ServiceCatalogItem.fromJson(item.cast<String, dynamic>()))
+          .map((item) =>
+              ServiceCatalogItem.fromJson(item.cast<String, dynamic>()))
           .where((item) => item.enabled)
           .toList(),
     );

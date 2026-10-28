@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   http: ^1.3.0
   geolocator: ^13.0.1
   image_picker: ^1.1.2
@@ -46,6 +48,12 @@ flutter:
     - assets/img/HomeCliente/crear_auto.png
     - assets/img/HomeCliente/crear_carga.png
     - assets/img/HomeCliente/carga_precio_cotizacion.png
+    - assets/img/HomeCliente/figma_van.png
+    - assets/img/HomeCliente/figma_minibus.png
+    - assets/img/HomeCliente/favorite_star_off.png
+    - assets/img/HomeCliente/favorite_star_on.png
+    - assets/img/HomeCliente/favorite_circle_off.png
+    - assets/img/HomeCliente/favorite_circle_on.png
     - assets/img/brand-x.png
     - assets/img/PantallaInicio/
     - assets/img/EstadosCrearEnvio/

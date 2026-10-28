@@ -10,6 +10,8 @@ import '../core/api_client.dart';
 import '../core/insurance_flow.dart';
 import '../core/theme.dart';
 import '../core/trip_routing.dart';
+import '../core/truck_capacity.dart';
+import '../core/vehicle_capacity.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import 'confirmar_pedido.dart';
@@ -360,12 +362,38 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     return _findOption(code)?.priceCs ?? 15;
   }
 
+  VehicleRate? _rateForCurrentVehicle() {
+    final configured = settings?.vehicleRates[widget.transport];
+    if (configured != null) return configured;
+    if (widget.transport == 'Pickup') {
+      return const VehicleRate(baseFeeCs: 120, farePerKmCs: 12, includedKm: 5);
+    }
+    if (widget.transport == 'VAN') {
+      return const VehicleRate(baseFeeCs: 160, farePerKmCs: 15, includedKm: 5);
+    }
+    return settings?.rateFor(widget.transport);
+  }
+
+  double get _shippingAmount {
+    final quoted = widget.estimatedShipping;
+    if (quoted != null) return quoted.clamp(0, double.infinity).toDouble();
+    final distance = distanceKm(_routeOriginPlace, _routeDestinationPlace);
+    final rate = _rateForCurrentVehicle();
+    if (distance == null || rate == null) return 0;
+    final chargeableKm =
+        (distance - rate.includedKm).clamp(0, double.infinity).toDouble();
+    return roundFareCs(
+      rate.baseFeeCs + chargeableKm * rate.farePerKmCs,
+      settings?.fareRoundingCs ?? 5,
+    );
+  }
+
   double get _baseTotalBeforeInsurance {
     final productAmount = !widget.initialIsProductSale ||
             productPaymentStatus.trim().toLowerCase() == 'pagado'
         ? 0
         : invoiceAmountCs;
-    final shippingAmount = widget.estimatedShipping ?? 0;
+    final shippingAmount = _shippingAmount;
     final optionsTotal = _selectedTripOptions.fold<double>(
       0,
       (total, option) => total + _optionAmountCs(option),
@@ -445,6 +473,22 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
 
   Future<void> _continue() async {
     final isShipping = widget.serviceMode == 'Envíos';
+    if (isShipping) {
+      final weightKg = weightToKg(weight.toDouble(), weightUnit);
+      final maximum = widget.transport == 'Camión'
+          ? (truckMaxWeightKgForLabel(truckType) ?? double.infinity)
+          : maxWeightKgForVehicle(widget.transport);
+      if (weightKg > maximum) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'El peso supera la capacidad de ${widget.transport == 'Camión' ? truckType : widget.transport}. Regresa y selecciona otro servicio.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
     final missingShippingContact = isShipping &&
         (pickupName.text.trim().isEmpty ||
             pickupPhone.text.trim().isEmpty ||
@@ -508,7 +552,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             originPlace: _routeOriginPlace,
             destinationPlace: _routeDestinationPlace,
             transport: widget.transport,
-            estimatedShipping: widget.estimatedShipping,
+            estimatedShipping: _shippingAmount,
             description: [
               if (description.text.trim().isNotEmpty) description.text.trim(),
               if (extraDescription.isNotEmpty) extraDescription,
@@ -567,7 +611,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           originPlace: _routeOriginPlace,
           destinationPlace: _routeDestinationPlace,
           transport: widget.transport,
-          estimatedShipping: widget.estimatedShipping,
+          estimatedShipping: _shippingAmount,
           description: [
             if (description.text.trim().isNotEmpty) description.text.trim(),
             if (extraDescription.isNotEmpty) extraDescription,
@@ -805,7 +849,7 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     for (final item in _truckCatalog) {
       if (item.title == truckType) return item.code;
     }
-    return null;
+    return widget.transport == 'Camión' ? truckType : null;
   }
 
   String _priceLabel(ServiceCatalogItem? item, String fallback) {
@@ -865,7 +909,13 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             vehicleType: widget.transport == 'Camión'
                 ? truckType
                 : widget.serviceMode == 'Envíos'
-                    ? (widget.transport == 'Moto' ? 'Moto' : 'Auto')
+                    ? widget.transport == 'Moto'
+                        ? 'Moto'
+                        : widget.transport == 'Pickup'
+                            ? 'Pickup'
+                            : widget.transport == 'VAN'
+                                ? 'VAN'
+                                : 'Auto'
                     : widget.taxiVariant,
             initialCount: additionalVehicleCount,
           ),
@@ -1937,11 +1987,10 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   Widget _dimensionBlock() {
     final weightShortcuts =
         weightUnit == 'lb' ? const [5, 15, 45, 200] : const [5, 15, 45, 405];
-    final maxWeight = weightUnit == 'lb' ? '3,307 lb' : '1,500 kg';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _labelRow('Peso aproximado de la carga', 'Límite hasta $maxWeight'),
+        _labelRow('Peso aproximado de la carga', ''),
         const SizedBox(height: 9),
         _CounterField(
           value: '$weight ${weightUnit == 'lb' ? 'lbs' : 'kg'}',
@@ -1986,13 +2035,6 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           ),
         ),
         const SizedBox(height: 8),
-        _labelRow(
-          'Peso aproximado de la carga',
-          weightUnit == 'lb'
-              ? 'Límite hasta 1,000 lbs'
-              : 'Límite hasta 1,000 kg',
-        ),
-        const SizedBox(height: 9),
         _CounterField(
           value: '$bundles Bulto${bundles == 1 ? '' : 's'}',
           onMinus:
@@ -2435,24 +2477,29 @@ class _TruckTypeData {
 
 const _truckTypes = [
   _TruckTypeData(
-    label: 'Camión extra pequeño',
+    label: 'Camión de 2 toneladas',
     asset: 'assets/img/HomeCliente/carga_extra_pequeno.png',
-    description: 'Ideal para cuando transportas múltiples cajas. Máx. 300 kg',
+    description: 'Ideal para cargas pequeñas. Máx. 2000 kg',
   ),
   _TruckTypeData(
-    label: 'Minivan/pickup',
-    asset: 'assets/img/HomeCliente/carga_minivan.png',
-    description: 'Para muebles pequeños y cargas medianas.',
+    label: 'Camión de 4 toneladas',
+    asset: 'assets/img/HomeCliente/carga_extra_pequeno.png',
+    description: 'Para cargas medianas. Máx. 4000 kg',
   ),
   _TruckTypeData(
-    label: 'Camión mediano',
+    label: 'Camión de 5.5 toneladas',
     asset: 'assets/img/HomeCliente/carga_mediano.png',
-    description: 'Más espacio para electrodomésticos y mobiliario.',
+    description: 'Para cargas grandes. Máx. 5500 kg',
   ),
   _TruckTypeData(
-    label: 'Camión grande',
+    label: 'Camión de 7 toneladas',
     asset: 'assets/img/HomeCliente/carga_grande.png',
-    description: 'Para cargas voluminosas y pesadas.',
+    description: 'Para mercancía pesada. Máx. 7000 kg',
+  ),
+  _TruckTypeData(
+    label: 'Camión de 8 toneladas',
+    asset: 'assets/img/HomeCliente/carga_grande.png',
+    description: 'Para máxima capacidad. Máx. 8000 kg',
   ),
 ];
 
@@ -3030,6 +3077,8 @@ class _ShippingVehiclePreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMoto = transport == 'Moto';
+    final isPickup = transport == 'Pickup';
+    final isVan = transport == 'VAN';
     return AppGlassSurface(
       borderRadius: 18,
       selected: true,
@@ -3042,7 +3091,13 @@ class _ShippingVehiclePreview extends StatelessWidget {
               top: 12,
               left: 14,
               child: Text(
-                isMoto ? 'Moto' : 'Auto',
+                isMoto
+                    ? 'Moto'
+                    : isPickup
+                        ? 'Pickup'
+                        : isVan
+                            ? 'VAN'
+                            : 'Vehículo',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -3084,7 +3139,11 @@ class _ShippingVehiclePreview extends StatelessWidget {
               child: Image.asset(
                 isMoto
                     ? 'assets/img/HomeCliente/figma_moto.png'
-                    : 'assets/img/HomeCliente/figma_auto.png',
+                    : isPickup
+                        ? 'assets/img/HomeCliente/figma_pickup.png'
+                        : isVan
+                            ? 'assets/img/HomeCliente/figma_van.png'
+                            : 'assets/img/HomeCliente/figma_auto.png',
                 fit: BoxFit.contain,
               ),
             ),
@@ -3108,6 +3167,8 @@ class _TaxiVehiclePreview extends StatelessWidget {
         return 'assets/img/HomeCliente/taxi_suv.png';
       case 'Microbus':
         return 'assets/img/HomeCliente/taxi_microbus.png';
+      case 'Minibus':
+        return 'assets/img/HomeCliente/figma_minibus.png';
       default:
         return 'assets/img/HomeCliente/taxi_sedan.png';
     }
@@ -3121,6 +3182,8 @@ class _TaxiVehiclePreview extends StatelessWidget {
         return '6 pasajeros';
       case 'Microbus':
         return '12 pasajeros';
+      case 'Minibus':
+        return '36 pasajeros';
       default:
         return '4 pasajeros';
     }

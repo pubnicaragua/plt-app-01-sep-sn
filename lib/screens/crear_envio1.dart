@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -16,6 +17,7 @@ import '../core/location_service.dart';
 import '../core/map_tap_place.dart';
 import '../core/place_history.dart';
 import '../core/theme.dart';
+import '../core/vehicle_capacity.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/place_field.dart';
@@ -33,18 +35,78 @@ int maxPassengersForTripVehicle(String vehicle) {
       return 6;
     case 'Microbus':
       return 12;
+    case 'Minibus':
+      return 36;
     default:
       return 4;
   }
 }
 
-const tripVehicleOptions = ['Moto', 'Sedán', 'SUV', 'Microbus'];
+const tripVehicleOptions = ['Moto', 'Sedán', 'SUV', 'Microbus', 'Minibus'];
+const shippingVehicleOptions = ['Moto', 'Vehículo', 'Pickup', 'VAN'];
+
+String shippingVehicleAsset(String vehicle) {
+  switch (vehicle) {
+    case 'VAN':
+      return 'assets/img/HomeCliente/figma_van.png';
+    case 'Pickup':
+      return 'assets/img/HomeCliente/figma_pickup.png';
+    case 'Auto':
+    case 'Vehículo':
+      return 'assets/img/HomeCliente/figma_auto.png';
+    default:
+      return 'assets/img/HomeCliente/figma_moto.png';
+  }
+}
+
+VehicleRate temporaryShippingRate(String vehicle) {
+  if (vehicle == 'VAN') {
+    return const VehicleRate(baseFeeCs: 160, farePerKmCs: 15, includedKm: 5);
+  }
+  if (vehicle == 'Pickup') {
+    return const VehicleRate(baseFeeCs: 120, farePerKmCs: 12, includedKm: 5);
+  }
+  return const VehicleRate(baseFeeCs: 80, farePerKmCs: 8.5, includedKm: 4);
+}
+
+const favoriteStarOffAsset = 'assets/img/HomeCliente/favorite_star_off.png';
+const favoriteStarOnAsset = 'assets/img/HomeCliente/favorite_star_on.png';
+const favoriteCircleOffAsset = 'assets/img/HomeCliente/favorite_circle_off.png';
+const favoriteCircleOnAsset = 'assets/img/HomeCliente/favorite_circle_on.png';
+
+String favoriteStarAsset(bool active) =>
+    active ? favoriteStarOnAsset : favoriteStarOffAsset;
+
+String favoriteCircleAsset(bool active) =>
+    active ? favoriteCircleOnAsset : favoriteCircleOffAsset;
 
 TextEditingValue destinationEditingValueForSavedPlace(SavedPlace place) {
   return TextEditingValue(
     text: place.address,
     selection: TextSelection.collapsed(offset: place.address.length),
   );
+}
+
+bool historyPanelBlocksMapTap({
+  required bool historyVisible,
+  required bool pointerInsidePanel,
+}) {
+  return historyVisible && pointerInsidePanel;
+}
+
+VoidCallback routeFavoriteTapHandler({
+  required bool enabled,
+  required VoidCallback onPressed,
+}) {
+  return enabled ? onPressed : () {};
+}
+
+bool placeHistoryPanelVisible({
+  required bool panelOpen,
+  required String query,
+  required bool hasHistory,
+}) {
+  return panelOpen && query.trim().isEmpty && hasHistory;
 }
 
 /// Primera vista del flujo de creación de envío.
@@ -114,6 +176,11 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   TimeOfDay? _scheduledTime;
   PlaceHistory _placeHistory = PlaceHistory();
   late final String _profileKey;
+  final _historyPanelKey = GlobalKey();
+  final _routeEditorKey = GlobalKey();
+  bool _protectedOverlayPointerDown = false;
+  bool _showHistoryPanel = false;
+  bool _pickerOpen = false;
 
   @override
   void initState() {
@@ -123,9 +190,12 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     destination = TextEditingController(text: widget.startDestination);
     origin.addListener(_clearOriginWhenEmpty);
     destination.addListener(_clearDestinationWhenEmpty);
+    destination.addListener(_syncHistoryPanel);
     _originFocusNode = FocusNode()..addListener(_updateMapSelectionFromFocus);
     _destinationFocusNode = FocusNode();
     _destinationFocusNode.addListener(_updateMapSelectionFromFocus);
+    _destinationFocusNode.addListener(_syncHistoryPanel);
+    _originFocusNode.addListener(_syncHistoryPanel);
     _autoFocusDestinationOnEntry = widget.startOrigin.trim().isEmpty &&
         widget.startDestination.trim().isEmpty &&
         widget.startOriginPlace == null &&
@@ -182,7 +252,9 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   Future<void> _loadPlaceHistory() async {
     final history = await PlaceHistoryStore.load(_profileKey);
     if (!mounted) return;
-    setState(() => _placeHistory = history);
+    _placeHistory = history;
+    _syncHistoryPanel();
+    if (mounted) setState(() {});
   }
 
   DateTime? _parseScheduleDate(String? value) {
@@ -215,40 +287,155 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
 
   Future<void> _chooseCustomDate() async {
     final today = DateUtils.dateOnly(DateTime.now());
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: _scheduledDate ?? today.add(const Duration(days: 1)),
-      firstDate: today,
-      lastDate: today.add(const Duration(days: 365)),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: accentBlue,
-            surface: Color(0xFF102850),
+    setState(() => _pickerOpen = true);
+    DateTime? selected;
+    try {
+      selected = await showDatePicker(
+        context: context,
+        initialDate: _scheduledDate ?? today.add(const Duration(days: 1)),
+        firstDate: today,
+        lastDate: today.add(const Duration(days: 365)),
+        builder: (context, child) => Localizations.override(
+          context: context,
+          locale: const Locale('es', 'ES'),
+          delegates: GlobalMaterialLocalizations.delegates,
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.dark(
+                primary: accentBlue,
+                surface: Color(0xFF102850),
+              ),
+              datePickerTheme: const DatePickerThemeData(
+                headerHeadlineStyle: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+                dayStyle: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontFamily: 'Figtree',
+                ),
+                weekdayStyle: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Figtree',
+                ),
+                yearStyle: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+            ),
+            child: child!,
           ),
         ),
-        child: child!,
-      ),
-    );
-    if (selected != null && mounted) {
-      setState(() => _scheduledDate = DateUtils.dateOnly(selected));
+      );
+    } finally {
+      if (mounted) setState(() => _pickerOpen = false);
+    }
+    final selectedDate = selected;
+    if (selectedDate != null && mounted) {
+      setState(() => _scheduledDate = DateUtils.dateOnly(selectedDate));
     }
   }
 
   Future<void> _chooseCustomTime() async {
-    final selected = await showTimePicker(
-      context: context,
-      initialTime: _scheduledTime ?? const TimeOfDay(hour: 9, minute: 0),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: accentBlue,
-            surface: Color(0xFF102850),
+    setState(() => _pickerOpen = true);
+    TimeOfDay? selected;
+    try {
+      selected = await showTimePicker(
+        context: context,
+        initialTime: _scheduledTime ?? const TimeOfDay(hour: 9, minute: 0),
+        initialEntryMode: TimePickerEntryMode.inputOnly,
+        builder: (context, child) => Localizations.override(
+          context: context,
+          // Spanish (US) keeps the picker labels in Spanish while using the
+          // 12-hour layout so the AM/PM selector is available.
+          locale: const Locale('es', 'US'),
+          delegates: GlobalMaterialLocalizations.delegates,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              alwaysUse24HourFormat: false,
+            ),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: const ColorScheme.dark(
+                  primary: accentBlue,
+                  surface: Color(0xFF102850),
+                ),
+                timePickerTheme: const TimePickerThemeData(
+                  backgroundColor: Color(0xFF102850),
+                  hourMinuteColor: Color(0xFF1555E8),
+                  hourMinuteTextColor: Colors.white,
+                  hourMinuteTextStyle: TextStyle(
+                    color: Colors.white,
+                    fontSize: 46,
+                    fontWeight: FontWeight.w500,
+                    fontFamily: 'Figtree',
+                  ),
+                  dayPeriodColor: Color(0xFF1555E8),
+                  dayPeriodTextColor: Colors.white,
+                  dayPeriodTextStyle: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                  inputDecorationTheme: InputDecorationThemeData(
+                    labelStyle: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
+                    ),
+                    floatingLabelStyle: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                  helpTextStyle: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                  entryModeIconColor: Colors.white,
+                ),
+                textButtonTheme: TextButtonThemeData(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ),
+              ),
+              child: child!,
+            ),
           ),
         ),
-        child: child!,
-      ),
-    );
+      );
+    } finally {
+      if (mounted) setState(() => _pickerOpen = false);
+    }
     if (selected != null && mounted) {
       setState(() => _scheduledTime = selected);
     }
@@ -257,7 +444,12 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
   String _normalizeTransport(String value) {
     if (value == 'Auto') return 'Vehículo';
     if (value == 'Carga') return 'Camión';
-    return value == 'Vehículo' || value == 'Camión' ? value : 'Moto';
+    return value == 'Vehículo' ||
+            value == 'Camión' ||
+            value == 'Pickup' ||
+            value == 'VAN'
+        ? value
+        : 'Moto';
   }
 
   Future<void> _refreshSettings() async {
@@ -296,9 +488,14 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
 
   double? get _distanceKm => _routeDistanceKm ?? _straightDistanceKm;
 
-  VehicleRate _rateFor(String vehicle) =>
-      settings?.rateFor(vehicle) ??
-      const VehicleRate(baseFeeCs: 80, farePerKmCs: 8.5, includedKm: 4);
+  VehicleRate _rateFor(String vehicle) {
+    final configured = settings?.vehicleRates[vehicle];
+    if (configured != null) return configured;
+    if (vehicle == 'Pickup' || vehicle == 'VAN') {
+      return temporaryShippingRate(vehicle);
+    }
+    return settings?.rateFor(vehicle) ?? temporaryShippingRate(vehicle);
+  }
 
   double? _priceFor(String vehicle) {
     final distance = _distanceKm;
@@ -349,6 +546,7 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     _roadRoute = const [];
     _routeDistanceKm = null;
     _routeDurationSeconds = null;
+    _showHistoryPanel = false;
     FocusScope.of(context).unfocus();
     setState(() {});
     unawaited(_loadRoadRoute());
@@ -394,7 +592,29 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     }
   }
 
+  void _syncHistoryPanel() {
+    final query = destination.text.trim();
+    final shouldOpen = _destinationFocusNode.hasFocus &&
+        query.isEmpty &&
+        _placeHistory.recent.isNotEmpty;
+    final shouldClose = query.isNotEmpty || _originFocusNode.hasFocus;
+    final next = shouldClose ? false : (_showHistoryPanel || shouldOpen);
+    if (next != _showHistoryPanel && mounted) {
+      setState(() => _showHistoryPanel = next);
+    }
+  }
+
   Future<void> _handleMapTap(LatLng point) async {
+    if (historyPanelBlocksMapTap(
+      historyVisible: _routeEditorKey.currentContext != null ||
+          _historyPanelKey.currentContext != null,
+      pointerInsidePanel: _protectedOverlayPointerDown,
+    )) {
+      return;
+    }
+    if (_showHistoryPanel && mounted) {
+      setState(() => _showHistoryPanel = false);
+    }
     final isOrigin = _mapSelectionIsOrigin;
     final place = await _reverseGeocodeMapPoint(point);
     if (!mounted) return;
@@ -726,6 +946,8 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
             distanceKm: _distanceKm,
             routeDistanceKm: _routeDistanceKm,
             rate: _rateFor(transport),
+            vehicleRates: settings?.vehicleRates ?? const {},
+            fareRoundingCs: settings?.fareRoundingCs ?? 5,
             originRefs: widget.startOriginRefs,
             destinationRefs: widget.startDestinationRefs,
             recipientName: widget.startRecipientName,
@@ -751,6 +973,9 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
           destinationPlace: destinationPlace,
           transport: transport,
           estimatedShipping: _priceFor(transport),
+          distanceKm: _distanceKm,
+          vehicleRates: settings?.vehicleRates ?? const {},
+          fareRoundingCs: settings?.fareRoundingCs ?? 5,
           originRefs: widget.startOriginRefs,
           destinationRefs: widget.startDestinationRefs,
           recipientName: widget.startRecipientName,
@@ -782,96 +1007,123 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
     return Scaffold(
       backgroundColor: const Color(0xFF082B66),
       resizeToAvoidBottomInset: false,
-      body: Stack(
-        children: [
-          GoogleMap(
-            initialCameraPosition:
-                CameraPosition(target: _mapCenter, zoom: 12.5),
-            padding: EdgeInsets.only(bottom: sheetHeight * .72),
-            markers: _markers,
-            polylines: _polylines,
-            mapType: MapType.normal,
-            zoomControlsEnabled: false,
-            myLocationButtonEnabled: false,
-            compassEnabled: false,
-            mapToolbarEnabled: false,
-            rotateGesturesEnabled: false,
-            tiltGesturesEnabled: false,
-            onTap: _handleMapTap,
-            onMapCreated: (controller) {
-              _mapController = controller;
-              _fitRoute(_roadRoute);
-            },
-          ),
-          Positioned(
-            top: MediaQuery.paddingOf(context).top + 12,
-            left: 12,
-            child: _MapBackButton(onTap: _handleMapBack),
-          ),
-          Positioned(
-            top: MediaQuery.paddingOf(context).top + 62,
-            left: 14,
-            right: 14,
-            child: PointerInterceptor(
-              intercepting: true,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _RouteEditor(
-                    origin: origin,
-                    destination: destination,
-                    originFocusNode: _originFocusNode,
-                    destinationFocusNode: _destinationFocusNode,
-                    placeHistory: _placeHistory,
-                    destinationPlace: destinationPlace,
-                    onToggleDestinationFavorite: _toggleDestinationFavorite,
-                    onOriginSelected: (place) =>
-                        _selectPlace(isOrigin: true, place: place),
-                    onDestinationSelected: (place) =>
-                        _selectPlace(isOrigin: false, place: place),
-                    loading: _routeLoading,
-                    durationSeconds: _routeDurationSeconds,
-                  ),
-                  AnimatedBuilder(
-                    animation:
-                        Listenable.merge([_destinationFocusNode, destination]),
-                    builder: (context, _) {
-                      if (!shouldShowPlaceHistory(
-                            hasFocus: _destinationFocusNode.hasFocus,
-                            query: destination.text,
-                          ) ||
-                          _placeHistory.recent.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
-                      return _RouteHistoryPanel(
-                        history: _placeHistory,
-                        onSelect: _selectSavedDestination,
-                        onToggleFavorite: _toggleSavedFavorite,
-                      );
-                    },
-                  ),
-                ],
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (event) {
+          _protectedOverlayPointerDown = false;
+          for (final key in [_routeEditorKey, _historyPanelKey]) {
+            final renderObject = key.currentContext?.findRenderObject();
+            if (renderObject is RenderBox && renderObject.hasSize) {
+              final local = renderObject.globalToLocal(event.position);
+              if (renderObject.size.contains(local)) {
+                _protectedOverlayPointerDown = true;
+                break;
+              }
+            }
+          }
+        },
+        child: Stack(
+          children: [
+            GoogleMap(
+              initialCameraPosition:
+                  CameraPosition(target: _mapCenter, zoom: 12.5),
+              padding: EdgeInsets.only(bottom: sheetHeight * .72),
+              markers: _markers,
+              polylines: _polylines,
+              mapType: MapType.normal,
+              zoomControlsEnabled: false,
+              myLocationButtonEnabled: false,
+              compassEnabled: false,
+              mapToolbarEnabled: false,
+              scrollGesturesEnabled: !_pickerOpen,
+              zoomGesturesEnabled: !_pickerOpen,
+              tiltGesturesEnabled: !_pickerOpen,
+              rotateGesturesEnabled: false,
+              onTap: _pickerOpen ? null : _handleMapTap,
+              onMapCreated: (controller) {
+                _mapController = controller;
+                _fitRoute(_roadRoute);
+              },
+            ),
+            if (_pickerOpen)
+              Positioned.fill(
+                child: PointerInterceptor(
+                  intercepting: true,
+                  child: const ColoredBox(color: Colors.transparent),
+                ),
+              ),
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 12,
+              left: 12,
+              child: _MapBackButton(onTap: _handleMapBack),
+            ),
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 62,
+              left: 14,
+              right: 14,
+              child: PointerInterceptor(
+                intercepting: true,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _RouteEditor(
+                      key: _routeEditorKey,
+                      origin: origin,
+                      destination: destination,
+                      originFocusNode: _originFocusNode,
+                      destinationFocusNode: _destinationFocusNode,
+                      placeHistory: _placeHistory,
+                      destinationPlace: destinationPlace,
+                      onToggleDestinationFavorite: _toggleDestinationFavorite,
+                      onOriginSelected: (place) =>
+                          _selectPlace(isOrigin: true, place: place),
+                      onDestinationSelected: (place) =>
+                          _selectPlace(isOrigin: false, place: place),
+                      loading: _routeLoading,
+                      durationSeconds: _routeDurationSeconds,
+                    ),
+                    AnimatedBuilder(
+                      animation: Listenable.merge(
+                          [_destinationFocusNode, destination]),
+                      builder: (context, _) {
+                        if (!placeHistoryPanelVisible(
+                          panelOpen: _showHistoryPanel,
+                          query: destination.text,
+                          hasHistory: _placeHistory.recent.isNotEmpty,
+                        )) {
+                          return const SizedBox.shrink();
+                        }
+                        return _RouteHistoryPanel(
+                          key: _historyPanelKey,
+                          history: _placeHistory,
+                          onSelect: _selectSavedDestination,
+                          onToggleFavorite: _toggleSavedFavorite,
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            // Extend through the system/map bottom inset so the sheet remains
-            // attached to the physical bottom edge instead of exposing the
-            // map attribution strip below it.
-            bottom: -bottomInset,
-            height: sheetHeight + bottomInset,
-            child: PointerInterceptor(
-              intercepting: true,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {},
-                child: _buildBottomSheet(context),
+            Positioned(
+              left: 0,
+              right: 0,
+              // Extend through the system/map bottom inset so the sheet remains
+              // attached to the physical bottom edge instead of exposing the
+              // map attribution strip below it.
+              bottom: -bottomInset,
+              height: sheetHeight + bottomInset,
+              child: PointerInterceptor(
+                intercepting: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {},
+                  child: _buildBottomSheet(context),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1035,34 +1287,73 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                                     transport = 'Vehículo';
                                   }),
                                 ),
+                                const SizedBox(width: 7),
+                                _ImageVehicleCard(
+                                  width: 136,
+                                  label: 'Minibus',
+                                  subtitle: '36 pasajeros',
+                                  asset:
+                                      'assets/img/HomeCliente/figma_minibus.png',
+                                  selected: taxiVariant == 'Minibus',
+                                  onTap: () => setState(() {
+                                    taxiVariant = 'Minibus';
+                                    transport = 'Vehículo';
+                                  }),
+                                ),
                               ],
                             ),
                           ),
                         )
                       else
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _ImageVehicleCard(
-                                label: 'Moto',
-                                subtitle: 'Envíos en moto',
-                                asset: 'assets/img/HomeCliente/figma_moto.png',
-                                selected: transport == 'Moto',
-                                onTap: () => setState(() => transport = 'Moto'),
-                              ),
+                        SizedBox(
+                          height: 104,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            padding: EdgeInsets.zero,
+                            child: Row(
+                              children: [
+                                _ImageVehicleCard(
+                                  width: 136,
+                                  label: 'Moto',
+                                  subtitle: 'Envíos en moto',
+                                  asset: shippingVehicleAsset('Moto'),
+                                  selected: transport == 'Moto',
+                                  onTap: () =>
+                                      setState(() => transport = 'Moto'),
+                                ),
+                                const SizedBox(width: 7),
+                                _ImageVehicleCard(
+                                  width: 136,
+                                  label: 'Vehículo',
+                                  subtitle: 'Envíos en vehículo',
+                                  asset: shippingVehicleAsset('Vehículo'),
+                                  selected: transport == 'Vehículo',
+                                  onTap: () =>
+                                      setState(() => transport = 'Vehículo'),
+                                ),
+                                const SizedBox(width: 7),
+                                _ImageVehicleCard(
+                                  width: 136,
+                                  label: 'Pickup',
+                                  subtitle: 'Envíos en pickup',
+                                  asset: shippingVehicleAsset('Pickup'),
+                                  selected: transport == 'Pickup',
+                                  onTap: () =>
+                                      setState(() => transport = 'Pickup'),
+                                ),
+                                const SizedBox(width: 7),
+                                _ImageVehicleCard(
+                                  width: 136,
+                                  label: 'VAN',
+                                  subtitle: 'Envíos en VAN',
+                                  asset: shippingVehicleAsset('VAN'),
+                                  selected: transport == 'VAN',
+                                  onTap: () =>
+                                      setState(() => transport = 'VAN'),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 7),
-                            Expanded(
-                              child: _ImageVehicleCard(
-                                label: 'Auto',
-                                subtitle: 'Envíos en auto',
-                                asset: 'assets/img/HomeCliente/figma_auto.png',
-                                selected: transport == 'Vehículo',
-                                onTap: () =>
-                                    setState(() => transport = 'Vehículo'),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       if (_distanceKm != null) ...[
                         const SizedBox(height: 8),
@@ -1070,8 +1361,12 @@ class _CrearEnvio1State extends State<CrearEnvio1> {
                           vehicle: transport == 'Moto'
                               ? 'Moto'
                               : transport == 'Vehículo'
-                                  ? 'Auto'
-                                  : 'Carga',
+                                  ? 'Vehículo'
+                                  : transport == 'Pickup'
+                                      ? 'Pickup'
+                                      : transport == 'VAN'
+                                          ? 'VAN'
+                                          : 'Carga',
                           distanceKm: _distanceKm!,
                           routeDistanceKm: _routeDistanceKm,
                           price: _priceFor(transport)!,
@@ -1440,6 +1735,7 @@ class _MapBackButton extends StatelessWidget {
 
 class _RouteEditor extends StatelessWidget {
   const _RouteEditor({
+    super.key,
     required this.origin,
     required this.destination,
     required this.originFocusNode,
@@ -1517,7 +1813,7 @@ class _RouteEditor extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(top: 7),
+                  padding: const EdgeInsets.only(top: 16),
                   child: _RouteFavoriteButton(
                     active: destinationPlace != null &&
                         placeHistory.favorites.any(
@@ -1556,6 +1852,7 @@ class _RouteEditor extends StatelessWidget {
 
 class _RouteHistoryPanel extends StatefulWidget {
   const _RouteHistoryPanel({
+    super.key,
     required this.history,
     required this.onSelect,
     required this.onToggleFavorite,
@@ -1579,59 +1876,70 @@ class _RouteHistoryPanelState extends State<_RouteHistoryPanel> {
     }
     final visible = widget.history.itemsForTab(favorites: _showFavorites);
     return Padding(
-      padding: const EdgeInsets.only(left: 30, top: 7),
-      child: Container(
-        constraints: const BoxConstraints(maxHeight: 185),
-        padding: const EdgeInsets.fromLTRB(10, 8, 4, 7),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0B2D6C).withValues(alpha: .92),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: .22)),
-        ),
-        child: ListView(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          children: [
-            Row(
-              children: [
-                _RouteHistoryTitle(
-                  icon: Icons.history_rounded,
-                  label: 'Recientes',
-                  selected: !_showFavorites,
-                  onTap: () => setState(() => _showFavorites = false),
-                ),
-                const SizedBox(width: 5),
-                _RouteHistoryTitle(
-                  icon: Icons.star_rounded,
-                  label: 'Favoritos',
-                  selected: _showFavorites,
-                  onTap: () => setState(() => _showFavorites = true),
-                ),
-              ],
-            ),
-            if (visible.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 9, 4, 4),
-                child: Text(
-                  _showFavorites
-                      ? 'Aún no tienes favoritos'
-                      : 'Aún no hay lugares recientes',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: .64),
-                    fontSize: 10,
-                    fontFamily: 'Figtree',
+      padding: const EdgeInsets.only(top: 7),
+      child: SizedBox(
+        width: double.infinity,
+        child: Material(
+          type: MaterialType.transparency,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {},
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 185),
+              padding: const EdgeInsets.fromLTRB(10, 8, 4, 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B2D6C).withValues(alpha: .92),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: .22)),
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                children: [
+                  Row(
+                    children: [
+                      _RouteHistoryTitle(
+                        icon: Icons.history_rounded,
+                        label: 'Recientes',
+                        selected: !_showFavorites,
+                        onTap: () => setState(() => _showFavorites = false),
+                      ),
+                      const SizedBox(width: 5),
+                      _RouteHistoryTitle(
+                        icon: Icons.star_rounded,
+                        label: 'Favoritos',
+                        selected: _showFavorites,
+                        onTap: () => setState(() => _showFavorites = true),
+                      ),
+                    ],
                   ),
-                ),
+                  if (visible.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 9, 4, 4),
+                      child: Text(
+                        _showFavorites
+                            ? 'Aún no tienes favoritos'
+                            : 'Aún no hay lugares recientes',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .64),
+                          fontSize: 10,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                    ),
+                  for (final place in visible)
+                    _RouteHistoryRow(
+                      place: place,
+                      leading: _showFavorites
+                          ? Icons.star_rounded
+                          : Icons.history_rounded,
+                      onSelect: () => widget.onSelect(place),
+                      onToggleFavorite: () => widget.onToggleFavorite(place),
+                    ),
+                ],
               ),
-            for (final place in visible)
-              _RouteHistoryRow(
-                place: place,
-                leading:
-                    _showFavorites ? Icons.star_rounded : Icons.history_rounded,
-                onSelect: () => widget.onSelect(place),
-                onToggleFavorite: () => widget.onToggleFavorite(place),
-              ),
-          ],
+            ),
+          ),
         ),
       ),
     );
@@ -1654,9 +1962,9 @@ class _RouteHistoryTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -1703,9 +2011,9 @@ class _RouteHistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onSelect,
-      borderRadius: BorderRadius.circular(9),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
@@ -1767,7 +2075,10 @@ class _RouteFavoriteButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      onPressed: enabled ? onPressed : null,
+      onPressed: routeFavoriteTapHandler(
+        enabled: enabled,
+        onPressed: onPressed,
+      ),
       tooltip: active ? 'Quitar de favoritos' : 'Guardar en favoritos',
       splashRadius: 16,
       padding: EdgeInsets.zero,
@@ -1778,9 +2089,6 @@ class _RouteFavoriteButton extends StatelessWidget {
         height: 24,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: active
-              ? accentBlue.withValues(alpha: .23)
-              : Colors.white.withValues(alpha: .06),
           boxShadow: active
               ? [
                   BoxShadow(
@@ -1791,14 +2099,29 @@ class _RouteFavoriteButton extends StatelessWidget {
                 ]
               : null,
         ),
-        child: Icon(
-          active ? Icons.star_rounded : Icons.star_border_rounded,
-          color: enabled
-              ? (active
-                  ? const Color(0xFF58A6FF)
-                  : Colors.white.withValues(alpha: .82))
-              : Colors.white.withValues(alpha: .28),
-          size: 16,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: Opacity(
+            key: ValueKey(active),
+            opacity: enabled ? 1 : .28,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Image.asset(
+                  favoriteCircleAsset(active),
+                  width: 24,
+                  height: 24,
+                  fit: BoxFit.contain,
+                ),
+                Image.asset(
+                  favoriteStarAsset(active),
+                  width: 16,
+                  height: 16,
+                  fit: BoxFit.contain,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -2230,9 +2553,7 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
   }
 
   String get _recommended {
-    if (_weightKg <= 20) return 'Moto';
-    if (_weightKg <= 200) return 'Vehículo';
-    return 'Camión';
+    return recommendedVehicleForWeight(_weightKg) ?? 'Sin disponibilidad';
   }
 
   double? _priceFor(String vehicle) {
@@ -3040,18 +3361,23 @@ class _CargaDetailsState extends State<_CargaDetailsPage> {
                 Row(
                   children: [
                     for (final (label, cap, icon, maxKg) in [
-                      ('Moto', 'Hasta 20 kg', Icons.two_wheeler, 20),
+                      (
+                        'Moto',
+                        'Envíos en moto',
+                        Icons.two_wheeler,
+                        maxWeightKgForVehicle('Moto')
+                      ),
                       (
                         'Vehículo',
-                        'Hasta 300 kg',
+                        'Envíos en vehículo',
                         Icons.directions_car_filled,
-                        300
+                        maxWeightKgForVehicle('Vehículo')
                       ),
                       (
                         'Camión',
-                        'Hasta 1,500 kg',
+                        'Envíos de carga',
                         Icons.local_shipping_outlined,
-                        1500
+                        double.infinity
                       ),
                     ])
                       Expanded(

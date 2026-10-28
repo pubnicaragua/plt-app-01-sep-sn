@@ -17,6 +17,8 @@ class SeleccionarCamionScreen extends StatefulWidget {
     this.distanceKm,
     this.routeDistanceKm,
     this.rate,
+    this.vehicleRates = const {},
+    this.fareRoundingCs = 5,
     this.originRefs = '',
     this.destinationRefs = '',
     this.recipientName = '',
@@ -35,6 +37,8 @@ class SeleccionarCamionScreen extends StatefulWidget {
   final double? distanceKm;
   final double? routeDistanceKm;
   final VehicleRate? rate;
+  final Map<String, VehicleRate> vehicleRates;
+  final double fareRoundingCs;
   final String originRefs;
   final String destinationRefs;
   final String recipientName;
@@ -51,28 +55,49 @@ class SeleccionarCamionScreen extends StatefulWidget {
 class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
   static const truckTypes = [
     _TruckOption(
-      label: 'Camión pequeño',
-      badge: 'Ideal para mudanzas',
+      label: 'Camión de 2 toneladas',
+      badge: 'Ideal para cargas pequeñas',
       asset: 'assets/img/HomeCliente/carga_extra_pequeno.png',
       capacity: 'Hasta 2000 kg',
+      maxWeightKg: 2000,
       volume: '18 m³ de capacidad',
-      description: 'Ideal para mudanzas y cargas pequeñas.',
+      description: 'Ideal para mudanzas y cargas de hasta 2 toneladas.',
     ),
     _TruckOption(
-      label: 'Camión mediano',
-      badge: 'Ideal para productos grandes',
+      label: 'Camión de 4 toneladas',
+      badge: 'Ideal para cargas medianas',
+      asset: 'assets/img/HomeCliente/carga_extra_pequeno.png',
+      capacity: 'Hasta 4000 kg',
+      maxWeightKg: 4000,
+      volume: '18 m³ de capacidad',
+      description: 'Para muebles y productos de hasta 4 toneladas.',
+    ),
+    _TruckOption(
+      label: 'Camión de 5.5 toneladas',
+      badge: 'Ideal para cargas grandes',
       asset: 'assets/img/HomeCliente/carga_mediano.png',
       capacity: 'Hasta 5500 kg',
+      maxWeightKg: 5500,
       volume: '18 m³ de capacidad',
-      description: 'Para muebles, electrodomésticos y cargas medianas.',
+      description: 'Para cargas grandes de hasta 5.5 toneladas.',
     ),
     _TruckOption(
-      label: 'Camión grande',
-      badge: 'Ideal para transportar mercancía',
+      label: 'Camión de 7 toneladas',
+      badge: 'Ideal para mercancía pesada',
       asset: 'assets/img/HomeCliente/carga_grande.png',
-      capacity: 'Hasta 7500 kg',
+      capacity: 'Hasta 7000 kg',
+      maxWeightKg: 7000,
       volume: '18 m³ de capacidad',
-      description: 'Para mercancía voluminosa y cargas pesadas.',
+      description: 'Para mercancía voluminosa de hasta 7 toneladas.',
+    ),
+    _TruckOption(
+      label: 'Camión de 8 toneladas',
+      badge: 'Ideal para máxima capacidad',
+      asset: 'assets/img/HomeCliente/carga_grande.png',
+      capacity: 'Hasta 8000 kg',
+      maxWeightKg: 8000,
+      volume: '18 m³ de capacidad',
+      description: 'Para mercancía pesada de hasta 8 toneladas.',
     ),
   ];
 
@@ -122,6 +147,9 @@ class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
           destinationPlace: widget.destinationPlace,
           transport: widget.transport,
           estimatedShipping: widget.estimatedShipping,
+          distanceKm: widget.distanceKm,
+          vehicleRates: widget.vehicleRates,
+          fareRoundingCs: widget.fareRoundingCs,
           originRefs: widget.originRefs,
           destinationRefs: widget.destinationRefs,
           recipientName: widget.recipientName,
@@ -131,6 +159,7 @@ class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
           startTime: widget.startTime,
           truckType: currentTruck.label,
           truckAsset: currentTruck.asset,
+          truckCapacityKg: currentTruck.maxWeightKg,
           bodyType: selectedBody,
           equipment: selectedEquipment,
         ),
@@ -215,23 +244,19 @@ class _SeleccionarCamionScreenState extends State<SeleccionarCamionScreen> {
                     const SizedBox(height: 10),
                     SizedBox(
                       height: 180,
-                      child: Row(
-                        children: [
-                          for (var index = 0;
-                              index < truckTypes.length;
-                              index++) ...[
-                            Expanded(
-                              child: _TruckMiniCard(
-                                truck: truckTypes[index],
-                                selected: index == selectedTruck,
-                                onTap: () =>
-                                    setState(() => selectedTruck = index),
-                              ),
-                            ),
-                            if (index != truckTypes.length - 1)
-                              const SizedBox(width: 7),
-                          ],
-                        ],
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: EdgeInsets.zero,
+                        itemCount: truckTypes.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 7),
+                        itemBuilder: (context, index) => SizedBox(
+                          width: 136,
+                          child: _TruckMiniCard(
+                            truck: truckTypes[index],
+                            selected: index == selectedTruck,
+                            onTap: () => setState(() => selectedTruck = index),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -289,6 +314,7 @@ class _TruckOption {
     required this.badge,
     required this.asset,
     required this.capacity,
+    required this.maxWeightKg,
     required this.volume,
     required this.description,
   });
@@ -297,6 +323,7 @@ class _TruckOption {
   final String badge;
   final String asset;
   final String capacity;
+  final double maxWeightKg;
   final String volume;
   final String description;
 }
@@ -601,7 +628,8 @@ class _SelectedTruckCard extends StatelessWidget {
                                       Text(
                                           estimatedShipping == null
                                               ? 'El precio se confirmará según tu ruta, tipo de carga y disponibilidad.'
-                                              : formatFareCs(estimatedShipping!),
+                                              : formatFareCs(
+                                                  estimatedShipping!),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(

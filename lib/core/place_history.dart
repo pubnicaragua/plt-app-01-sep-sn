@@ -94,9 +94,7 @@ class PlaceHistory {
 
   List<SavedPlace> itemsForTab({required bool favorites}) {
     return List.unmodifiable(
-      favorites
-          ? _places.where((place) => place.isFavorite)
-          : _places.where((place) => !place.isFavorite),
+      favorites ? _places.where((place) => place.isFavorite) : _places,
     );
   }
 
