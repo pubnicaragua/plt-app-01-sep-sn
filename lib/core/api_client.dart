@@ -354,6 +354,7 @@ class ApiClient {
     required String method,
     required double amount,
     String? ref,
+    String? status,
   }) async {
     final json = (await _send(
       'PATCH',
@@ -363,6 +364,7 @@ class ApiClient {
         'amount': amount,
         'ref': ref,
         'date': DateTime.now().toIso8601String(),
+        if (status != null) 'status': status,
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);
@@ -507,6 +509,10 @@ class ApiClient {
   Future<Map<String, dynamic>> uploadEvidence(
     List<int> bytes,
     String filename,
+    {
+      String? tripId,
+      String? type,
+    }
   ) async {
     final uri = Uri.parse('$baseUrl/uploads/evidence');
     final request = http.MultipartRequest('POST', uri);
@@ -517,6 +523,8 @@ class ApiClient {
         filename: filename,
       ),
     );
+    if (tripId != null && tripId.isNotEmpty) request.fields['tripId'] = tripId;
+    if (type != null && type.isNotEmpty) request.fields['type'] = type;
     if (accessToken != null && accessToken!.isNotEmpty) {
       request.headers['Authorization'] = 'Bearer $accessToken';
     }

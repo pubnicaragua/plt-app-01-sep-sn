@@ -3,13 +3,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
 import '../core/location_service.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/incident_sheet.dart';
-import 'confirmar_entrega.dart';
+import 'pago_viaje.dart';
 
 List<LatLng> conductorTrackingPolylinePoints(TrackingData data) => data.route
     .map((point) => LatLng(point.latitude, point.longitude))
@@ -378,9 +379,7 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
           await apiClient.updateTripStatus(widget.trip.id, 'En entrega');
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => ConfirmarEntrega(trip: updated),
-        ),
+        MaterialPageRoute(builder: (_) => PagoViaje(trip: updated)),
       );
     } catch (error) {
       if (mounted) setState(() => updating = false);
@@ -815,6 +814,35 @@ class _DeliverySheet extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: Material(
+              color: Colors.white.withValues(alpha: .1),
+              borderRadius: BorderRadius.circular(25),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(25),
+                onTap: () => _openWaze(context),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.navigation_rounded, color: cyan, size: 19),
+                    SizedBox(width: 8),
+                    Text(
+                      'Abrir en Waze',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -936,6 +964,30 @@ class _DeliverySheet extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openWaze(BuildContext context) async {
+    final latitude = trip.destinationLat;
+    final longitude = trip.destinationLng;
+    final waze = latitude != null && longitude != null
+        ? Uri.parse('waze://?ll=$latitude,$longitude&navigate=yes')
+        : Uri.parse(
+            'waze://?q=${Uri.encodeComponent(trip.destination)}&navigate=yes',
+          );
+    final fallback = latitude != null && longitude != null
+        ? Uri.parse(
+            'https://waze.com/ul?ll=$latitude,$longitude&navigate=yes',
+          )
+        : Uri.parse(
+            'https://waze.com/ul?q=${Uri.encodeComponent(trip.destination)}&navigate=yes',
+          );
+    if (await launchUrl(waze, mode: LaunchMode.externalApplication)) return;
+    if (await launchUrl(fallback, mode: LaunchMode.externalApplication)) return;
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir Waze.')),
+      );
+    }
   }
 
   void _openIncidentSheet(BuildContext context) {

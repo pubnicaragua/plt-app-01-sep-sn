@@ -507,6 +507,8 @@ class _EvidenceDeliveryState extends State<_EvidenceDelivery> {
       final uploaded = await apiClient.uploadEvidence(
         photo!,
         photoName ?? 'entrega.jpg',
+        tripId: widget.tripId,
+        type: 'delivery',
       );
       if (!mounted) return;
       setState(() {
