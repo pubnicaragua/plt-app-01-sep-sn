@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
 import '../core/insurance_flow.dart';
+import '../core/shipment_form_rules.dart';
 import '../core/theme.dart';
 import '../core/trip_routing.dart';
 import '../core/truck_capacity.dart';
@@ -271,7 +272,14 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
     productPaymentStatus = widget.initialProductPaymentStatus;
     productPaymentMethod = widget.initialProductPaymentMethod;
     final savedPickup = _savedPickupByProfile[_profileScope];
-    pickupName = TextEditingController(text: savedPickup?.name ?? '');
+    final currentUser = apiClient.currentUser;
+    pickupName = TextEditingController(
+      text: initialPickupName(
+        isSupervisor: currentUser?.isSupervisor ?? false,
+        username: currentUser?.username,
+        savedName: savedPickup?.name,
+      ),
+    );
     pickupPhone = TextEditingController(text: savedPickup?.phone ?? '');
     pickupReferences = TextEditingController(
       text: widget.originRefs.trim().isNotEmpty
@@ -471,6 +479,17 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
   Future<void> _chooseInvoiceSource() =>
       _pickImage(invoice: true, source: ImageSource.gallery);
 
+  void _removeProductPhoto(int index) {
+    setState(() => productPhotos.removeAt(index));
+  }
+
+  void _removeInvoicePhoto() {
+    setState(() {
+      invoicePhoto = null;
+      invoiceFileName = 'factura.jpg';
+    });
+  }
+
   Future<void> _continue() async {
     final isShipping = widget.serviceMode == 'Envíos';
     if (isShipping) {
@@ -494,7 +513,15 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             pickupPhone.text.trim().isEmpty ||
             recipient.text.trim().isEmpty ||
             phone.text.trim().isEmpty);
+    final missingPickupReference = requiresFirstPickupReference(
+      isShipping: isShipping,
+      hasSavedReference:
+          _savedPickupByProfile[_profileScope]?.references.trim().isNotEmpty ==
+              true,
+      reference: pickupReferences.text,
+    );
     if (missingShippingContact ||
+        missingPickupReference ||
         (!isShipping &&
             (recipient.text.trim().isEmpty || phone.text.trim().isEmpty))) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -502,7 +529,9 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           behavior: SnackBarBehavior.floating,
           content: Text(
             isShipping
-                ? 'Completa nombre y teléfono de recojo y de envío.'
+                ? missingPickupReference
+                    ? 'Completa la referencia del lugar de recojo.'
+                    : 'Completa nombre y teléfono de recojo y de envío.'
                 : 'Completa el nombre del destinatario y el teléfono.',
             style: TextStyle(fontFamily: 'Figtree'),
           ),
@@ -1915,6 +1944,46 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           ],
         ),
         const SizedBox(height: 9),
+        if (cargoHelperCardMessage(widget.transport) case final message?)
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: const Color(0x263FA9F5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0x6659B9FF)),
+                ),
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Figtree',
+                    fontSize: 10,
+                    height: 1.2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: -8,
+                child: Align(
+                  alignment: const Alignment(-0.5, 0),
+                  child: CustomPaint(
+                    size: const Size(18, 9),
+                    painter: _HelperNoticeTailPainter(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        if (cargoHelperCardMessage(widget.transport) != null)
+          const SizedBox(height: 9),
         Row(
           children: [
             Expanded(
@@ -2193,11 +2262,26 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      for (final photo in productPhotos)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: Image.memory(photo,
-                              width: 66, height: 66, fit: BoxFit.cover),
+                      for (var index = 0; index < productPhotos.length; index++)
+                        SizedBox(
+                          width: 66,
+                          height: 66,
+                          child: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.memory(productPhotos[index],
+                                    width: 66, height: 66, fit: BoxFit.cover),
+                              ),
+                              Positioned(
+                                top: 3,
+                                right: 3,
+                                child: _PhotoRemoveButton(
+                                  onTap: () => _removeProductPhoto(index),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       if (productPhotos.length < 5)
                         _AddPhotoButton(onTap: _chooseProductSource),
@@ -2371,14 +2455,23 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
           const SizedBox(height: 10),
           Align(
             alignment: Alignment.center,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Image.memory(
-                invoicePhoto!,
-                width: 92,
-                height: 72,
-                fit: BoxFit.cover,
-              ),
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.memory(
+                    invoicePhoto!,
+                    width: 92,
+                    height: 72,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  top: 3,
+                  right: 3,
+                  child: _PhotoRemoveButton(onTap: _removeInvoicePhoto),
+                ),
+              ],
             ),
           ),
         ],
@@ -3834,6 +3927,29 @@ class _ActionUploadCard extends StatelessWidget {
   }
 }
 
+class _PhotoRemoveButton extends StatelessWidget {
+  const _PhotoRemoveButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xD900183D),
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: const SizedBox(
+          width: 20,
+          height: 20,
+          child: Icon(Icons.close_rounded, color: Colors.white, size: 13),
+        ),
+      ),
+    );
+  }
+}
+
 class _AddPhotoButton extends StatelessWidget {
   const _AddPhotoButton({required this.onTap});
 
@@ -3855,6 +3971,32 @@ class _AddPhotoButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HelperNoticeTailPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+
+    canvas.drawPath(
+      path,
+      Paint()..color = const Color(0x263FA9F5),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0x6659B9FF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _StatusToggle extends StatelessWidget {

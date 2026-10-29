@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -47,6 +48,7 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
   String? destinationRecipientName;
   String? destinationRecipientPhone;
   GoogleMapController? mapController;
+  List<LatLng> roadRoute = const [];
 
   @override
   void initState() {
@@ -58,6 +60,43 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
     destinationPlace = widget.destinationPlace;
     destinationRecipientName = widget.initialRecipientName;
     destinationRecipientPhone = widget.initialRecipientPhone;
+    _loadRoadRoute();
+  }
+
+  Future<void> _loadRoadRoute() async {
+    final coordinates = points
+        .map((point) => point.place)
+        .where((place) => place?.latitude != null && place?.longitude != null)
+        .map((place) => '${place!.longitude},${place.latitude}')
+        .toList();
+    if (coordinates.length < 2) return;
+    try {
+      final uri = Uri.https(
+        'router.project-osrm.org',
+        '/route/v1/driving/${coordinates.join(';')}',
+        {'overview': 'full', 'geometries': 'geojson', 'steps': 'false'},
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 12));
+      if (response.statusCode != 200) return;
+      final payload = jsonDecode(response.body);
+      final routes = payload is Map ? payload['routes'] : null;
+      final geometry = routes is List && routes.isNotEmpty
+          ? routes.first['geometry']
+          : null;
+      final routeCoordinates = geometry is Map ? geometry['coordinates'] : null;
+      if (routeCoordinates is! List) return;
+      final route = routeCoordinates
+          .whereType<List>()
+          .where((point) => point.length >= 2)
+          .map((point) => LatLng(
+                (point[1] as num).toDouble(),
+                (point[0] as num).toDouble(),
+              ))
+          .toList(growable: false);
+      if (mounted && route.length >= 2) setState(() => roadRoute = route);
+    } catch (_) {
+      // El mapa conserva la línea entre puntos si el proveedor no responde.
+    }
   }
 
   List<_RoutePoint> get points {
@@ -296,11 +335,12 @@ class _EstablecerDestinosState extends State<EstablecerDestinos> {
         .where((place) => place?.latitude != null && place?.longitude != null)
         .map((place) => LatLng(place!.latitude!, place.longitude!))
         .toList();
-    if (coordinates.length < 2) return const {};
+    final line = roadRoute.length >= 2 ? roadRoute : coordinates;
+    if (line.length < 2) return const {};
     return {
       Polyline(
         polylineId: const PolylineId('multi-route'),
-        points: coordinates,
+        points: line,
         color: accentBlue,
         width: 5,
         jointType: JointType.round,

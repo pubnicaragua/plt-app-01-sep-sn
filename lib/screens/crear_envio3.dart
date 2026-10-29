@@ -133,26 +133,45 @@ class _CrearEnvio3State extends State<CrearEnvio3>
     _create();
   }
 
-  Future<List<String>> _uploadShipmentEvidence() async {
+  Future<List<String>> _uploadShipmentEvidence({String? tripId}) async {
     final stored = <String>[];
     for (var index = 0; index < widget.productPhotos.length; index++) {
       final result = await apiClient.uploadEvidence(
         widget.productPhotos[index],
         'paquete-${index + 1}.jpg',
+        tripId: tripId,
+        type: 'package',
       );
-      stored.add(
-        result['evidence']?.toString() ?? result['url']?.toString() ?? '',
-      );
+      stored.add(_evidenceUrlFromResponse(result));
     }
     final invoice = widget.invoicePhoto;
     if (invoice != null) {
       final result =
-          await apiClient.uploadEvidence(invoice, widget.invoiceFileName);
-      stored.add(
-        result['evidence']?.toString() ?? result['url']?.toString() ?? '',
-      );
+          await apiClient.uploadEvidence(
+            invoice,
+            widget.invoiceFileName,
+            tripId: tripId,
+            type: 'invoice',
+          );
+      stored.add(_evidenceUrlFromResponse(result));
     }
     return stored.where((item) => item.isNotEmpty).toList();
+  }
+
+  String _evidenceUrlFromResponse(Map<String, dynamic> response) {
+    final value = response['url'] ??
+        response['path'] ??
+        response['evidence'] ??
+        response['file'];
+    if (value is Map) {
+      return (value['url'] ??
+                  value['path'] ??
+                  value['file'] ??
+                  value['id'])
+              ?.toString() ??
+          '';
+    }
+    return value?.toString() ?? '';
   }
 
   Future<void> _create() async {
@@ -161,6 +180,8 @@ class _CrearEnvio3State extends State<CrearEnvio3>
     try {
       late final Trip created;
       if (shouldCreateShipmentTrip(_createdTripId)) {
+        // Se sube antes de crear para guardar las URLs en el mismo pedido.
+        // Así también pueden leerlas clientes y conductores desde /trips.
         final evidence = await _uploadShipmentEvidence();
         final originPlace = widget.originPlace;
         final destinationPlace = widget.destinationPlace;
@@ -218,9 +239,10 @@ class _CrearEnvio3State extends State<CrearEnvio3>
           returnTrip: widget.returnTrip,
           stops: widget.stops,
           options: widget.options,
-        quotedBaseCs: widget.quotedBaseCs,
-        quotedAdditionalCs: widget.quotedAdditionalCs,
-        quotedServiceTotalCs: widget.quotedServiceTotalCs,
+          packagePhotos: evidence,
+          quotedBaseCs: widget.quotedBaseCs,
+          quotedAdditionalCs: widget.quotedAdditionalCs,
+          quotedServiceTotalCs: widget.quotedServiceTotalCs,
         );
         _createdTripId = created.id;
       } else {

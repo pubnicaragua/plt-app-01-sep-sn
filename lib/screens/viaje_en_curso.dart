@@ -12,6 +12,17 @@ import '../models/api_models.dart';
 import '../widgets/incident_sheet.dart';
 import 'pago_viaje.dart';
 
+String conductorDeliveryReference(Trip trip) {
+  final direct = trip.destinationRefs?.trim();
+  if (direct?.isNotEmpty == true) return direct!;
+  final match = RegExp(
+    r'Referencia de envío:\s*([^·]+)',
+    caseSensitive: false,
+  ).firstMatch(trip.description ?? '');
+  final parsed = match?.group(1)?.trim();
+  return parsed?.isNotEmpty == true ? parsed! : 'Sin referencia de entrega';
+}
+
 List<LatLng> conductorTrackingPolylinePoints(TrackingData data) => data.route
     .map((point) => LatLng(point.latitude, point.longitude))
     .toList(growable: false);
@@ -777,7 +788,7 @@ class _DeliverySheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          const Row(
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.info_outline_rounded,
@@ -785,8 +796,8 @@ class _DeliverySheet extends StatelessWidget {
               SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Entregar en recepción, piso 4',
-                  style: TextStyle(
+                  conductorDeliveryReference(trip),
+                  style: const TextStyle(
                     color: Color(0xFFB9D4FF),
                     fontSize: 12.5,
                     fontFamily: 'Figtree',

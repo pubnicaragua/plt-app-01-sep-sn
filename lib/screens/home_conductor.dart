@@ -30,8 +30,43 @@ String _driverVehicleLabel(Trip trip) {
   return 'AUTO';
 }
 
-String _driverVehicleAsset(Trip trip) {
-  switch (_driverVehicleLabel(trip)) {
+class DriverVehicleInfo {
+  const DriverVehicleInfo({
+    required this.label,
+    required this.asset,
+    required this.plate,
+  });
+
+  final String label;
+  final String asset;
+  final String plate;
+}
+
+String _driverVehicleLabelFromValue(String value) {
+  final normalized = value.toLowerCase();
+  if (normalized.contains('minibus') || normalized.contains('minibús')) {
+    return 'MINIBUS';
+  }
+  if (normalized.contains('microbus') || normalized.contains('microbús')) {
+    return 'MICROBUS';
+  }
+  if (normalized.contains('suv')) return 'SUV';
+  if (normalized.contains('sedán') || normalized.contains('sedan')) {
+    return 'SEDÁN';
+  }
+  if (normalized.contains('moto')) return 'MOTO';
+  if (normalized.contains('pickup')) return 'PICKUP';
+  if (normalized.contains('van')) return 'VAN';
+  if (normalized.contains('camion') ||
+      normalized.contains('camión') ||
+      normalized.contains('carga')) {
+    return 'CAMIÓN';
+  }
+  return 'AUTO';
+}
+
+String _driverVehicleAssetForLabel(String label) {
+  switch (label) {
     case 'MINIBUS':
       return 'assets/img/HomeCliente/figma_minibus.png';
     case 'MICROBUS':
@@ -46,9 +81,44 @@ String _driverVehicleAsset(Trip trip) {
       return 'assets/img/HomeCliente/figma_pickup.png';
     case 'VAN':
       return 'assets/img/HomeCliente/figma_van.png';
+    case 'CAMIÓN':
+      return 'assets/img/HomeCliente/figma_carga.png';
     default:
       return 'assets/img/HomeCliente/figma_auto.png';
   }
+}
+
+DriverVehicleInfo resolveDriverVehicleInfo(
+  SessionUser? profile,
+  Trip? fallbackTrip,
+) {
+  final profileVehicle = profile?.vehicle?.trim() ?? '';
+  final profilePlate = profile?.plate?.trim() ?? '';
+  if (profileVehicle.isNotEmpty) {
+    final label = _driverVehicleLabelFromValue(profileVehicle);
+    return DriverVehicleInfo(
+      label: label,
+      asset: _driverVehicleAssetForLabel(label),
+      plate: profilePlate.isEmpty ? 'Placa pendiente' : profilePlate,
+    );
+  }
+  if (fallbackTrip != null) {
+    final label = _driverVehicleLabel(fallbackTrip);
+    return DriverVehicleInfo(
+      label: label,
+      asset: _driverVehicleAssetForLabel(label),
+      plate: 'Placa pendiente',
+    );
+  }
+  return const DriverVehicleInfo(
+    label: 'Vehículo no asignado',
+    asset: 'assets/img/HomeCliente/figma_auto.png',
+    plate: 'Placa pendiente',
+  );
+}
+
+String _driverVehicleAsset(Trip trip) {
+  return _driverVehicleAssetForLabel(_driverVehicleLabel(trip));
 }
 
 bool isDriverTripInProgress(Trip trip) =>
@@ -415,6 +485,14 @@ class _HomeConductorState extends State<HomeConductor> {
     final assigned = _assigned;
     final upcoming = _upcoming;
     final history = _history;
+    final vehicleInfo = resolveDriverVehicleInfo(
+      apiClient.currentUser,
+      assigned.isNotEmpty
+          ? assigned.first
+          : upcoming.isNotEmpty
+              ? upcoming.first
+              : null,
+    );
     return Scaffold(
       backgroundColor: const Color(0xFF0D1F52),
       body: AppBackground(
@@ -506,6 +584,8 @@ class _HomeConductorState extends State<HomeConductor> {
                   onRefresh: _load,
                 ),
                 const SizedBox(height: 14),
+                _AssignedVehicleCard(info: vehicleInfo),
+                const SizedBox(height: 14),
                 _OperationalSummary(
                   assigned: assigned.length,
                   active: upcoming.length,
@@ -544,7 +624,7 @@ class _HomeConductorState extends State<HomeConductor> {
                   children: [
                     const Expanded(
                       child: Text(
-                        'Mis viajes asignados',
+                        'Mis envíos asignados',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18.5,
@@ -672,6 +752,89 @@ class _HomeConductorState extends State<HomeConductor> {
   }
 }
 
+class _AssignedVehicleCard extends StatelessWidget {
+  const _AssignedVehicleCard({required this.info});
+
+  final DriverVehicleInfo info;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 146,
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Image.asset(
+              info.asset,
+              height: 126,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.directions_car_filled_rounded,
+                color: Color(0xFFB9D4FF),
+                size: 72,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          SizedBox(
+            width: 132,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Vehículo asignado',
+                  style: TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 11,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  info.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .13),
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: glassBorder),
+                  ),
+                  child: Text(
+                    info.plate,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DriverStatusCard extends StatelessWidget {
   const _DriverStatusCard({
     required this.location,
@@ -776,8 +939,8 @@ class _DriverStatusCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 5),
-                  Text(
-                    gpsActive ? 'GPS activo' : 'Sin GPS',
+                  const Text(
+                    'Actualizar',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
@@ -1021,8 +1184,8 @@ class _ClientStyleNextTripCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'PRÓXIMO VIAJE',
+            Text(
+              isTrip ? 'PRÓXIMO VIAJE' : 'PRÓXIMO ENVÍO',
               style: TextStyle(
                 color: Color(0xFFB9D4FF),
                 fontSize: 9,
@@ -1074,41 +1237,11 @@ class _ClientStyleNextTripCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on_outlined,
-                              color: Color(0xFFD7E7FF), size: 18),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              trip.origin,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w800,
-                                fontFamily: 'Figtree',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '#${trip.id.replaceFirst('#', '')} · $quantity',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFFB9D4FF),
-                          fontSize: 10.5,
-                          fontFamily: 'Figtree',
-                        ),
-                      ),
-                    ],
+                  child: _DriverRouteSummary(
+                    origin: trip.origin,
+                    destination: trip.destination,
+                    tripId: trip.id,
+                    quantity: quantity,
                   ),
                 ),
               ],
@@ -1132,20 +1265,6 @@ class _ClientStyleNextTripCard extends StatelessWidget {
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     fontFamily: 'Figtree',
-                  ),
-                ),
-                const Spacer(),
-                Flexible(
-                  child: Text(
-                    trip.destination,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xFFB9D4FF),
-                      fontSize: 10,
-                      fontFamily: 'Figtree',
-                    ),
                   ),
                 ),
               ],
@@ -1449,6 +1568,137 @@ class _NextTripCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DriverRouteSummary extends StatelessWidget {
+  const _DriverRouteSummary({
+    required this.origin,
+    required this.destination,
+    required this.tripId,
+    required this.quantity,
+  });
+
+  final String origin;
+  final String destination;
+  final String tripId;
+  final String quantity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          left: 3,
+          top: 6,
+          child: Container(
+            width: 1,
+            height: 34,
+            color: Colors.white.withValues(alpha: .52),
+          ),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DriverRouteStop(
+              label: 'RECOGIDA',
+              value: origin,
+              color: const Color(0xFFD7E7FF),
+            ),
+            const SizedBox(height: 7),
+            _DriverRouteStop(
+              label: 'DESTINO',
+              value: destination,
+              color: const Color(0xFFE5484D),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 18, top: 3),
+              child: Text(
+                '#${tripId.replaceFirst('#', '')} · $quantity',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFFB9D4FF),
+                  fontSize: 9.5,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DriverRouteStop extends StatelessWidget {
+  const _DriverRouteStop({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: _RouteMarker(color: color),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFFB9D4FF),
+                  fontSize: 8,
+                  letterSpacing: 1.05,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RouteMarker extends StatelessWidget {
+  const _RouteMarker({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

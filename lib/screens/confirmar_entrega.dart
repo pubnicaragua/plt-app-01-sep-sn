@@ -85,6 +85,21 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
   @override
   Widget build(BuildContext context) {
     final trip = widget.trip;
+    final packageValue = trip.invoiceAmountCs ?? 0;
+    final productStatus = RegExp(
+      r'(?:Estado factura producto|Estado pago producto):\s*([^·]+)',
+      caseSensitive: false,
+    ).firstMatch(trip.description ?? '')?.group(1)?.trim().toLowerCase();
+    final productIsPaid = productStatus?.contains('pagad') == true;
+    final productIsApproximate = RegExp(
+      r'Tipo valor producto:\s*([^·]+)',
+      caseSensitive: false,
+    ).firstMatch(trip.description ?? '')?.group(1)?.toLowerCase().contains(
+          'aproximado',
+        ) ==
+        true;
+    final totalToCollect = (trip.estimatedCostCs ?? 0) +
+        (productIsPaid || productIsApproximate ? 0 : packageValue);
     return Scaffold(
       backgroundColor: const Color(0xFF0D1F52),
       body: AppBackground(
@@ -249,15 +264,15 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                             _DetailRow(
                               icon: Icons.shopping_bag_outlined,
                               label: 'Costo de los productos',
-                              value:
-                                  'C\$450.00 (valor del paquete)',
+                              value: packageValue > 0
+                                  ? '${formatFareCs(packageValue)} (valor del paquete)'
+                                  : 'Sin valor registrado',
                             ),
                             const SizedBox(height: 15),
                             _DetailRow(
                               icon: Icons.receipt_long_outlined,
                               label: 'Total a cobrar al destinatario',
-                              value:
-                                  formatFareCs(trip.estimatedCostCs! + 450),
+                              value: formatFareCs(totalToCollect),
                             ),
                           ],
                           const SizedBox(height: 12),

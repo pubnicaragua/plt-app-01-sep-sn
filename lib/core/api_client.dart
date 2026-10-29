@@ -51,6 +51,10 @@ class ApiClient {
         'GET',
         '/auth/session/$token',
       )) as Map<String, dynamic>;
+      final user = json['user'];
+      if (user is Map) {
+        currentUser = SessionUser.fromJson(user.cast<String, dynamic>());
+      }
       return json['valid'] == true;
     } catch (error) {
       return error is ApiException && error.statusCode == 401 ? false : true;
@@ -294,6 +298,7 @@ class ApiClient {
     double? quotedBaseCs,
     double? quotedAdditionalCs,
     double? quotedServiceTotalCs,
+    List<String> packagePhotos = const [],
   }) async {
     final json = (await _send(
       'POST',
@@ -344,6 +349,8 @@ class ApiClient {
         'quotedBaseCs': quotedBaseCs,
         'quotedAdditionalCs': quotedAdditionalCs,
         'quotedServiceTotalCs': quotedServiceTotalCs,
+        'packagePhotos': packagePhotos,
+        'evidence': packagePhotos,
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);

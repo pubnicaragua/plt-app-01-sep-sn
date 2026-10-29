@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:incoex_logistics_app/widgets/glass.dart';
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
@@ -51,10 +52,12 @@ class _PagoViajeState extends State<PagoViaje> {
 
   Trip get trip => widget.trip;
   String get method => _paymentMethodFor(trip);
-  String get status => trip.servicePaymentStatus ?? trip.paymentStatus ?? 'Sin pagar';
+  String get status =>
+      trip.servicePaymentStatus ?? trip.paymentStatus ?? 'Sin pagar';
   double get total => trip.estimatedCostCs ?? 0;
   bool get complete => _paymentIsComplete(status);
-  bool get bypassEnabled => kDebugMode ||
+  bool get bypassEnabled =>
+      kDebugMode ||
       const bool.fromEnvironment('INCOEX_PAYMENT_BYPASS', defaultValue: false);
 
   Future<void> _registerCash() async {
@@ -131,7 +134,8 @@ class _PagoViajeState extends State<PagoViaje> {
         status: status,
       );
       if (!mounted) return;
-      if (_paymentIsComplete(updated.paymentStatus ?? updated.servicePaymentStatus)) {
+      if (_paymentIsComplete(
+          updated.paymentStatus ?? updated.servicePaymentStatus)) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => ConfirmarEntrega(trip: updated)),
         );
@@ -183,11 +187,7 @@ class _PagoViajeState extends State<PagoViaje> {
                 padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                          color: Colors.white, size: 18),
-                    ),
+                    const SizedBox(width: 48),
                     const Expanded(
                       child: Text(
                         'Pago del servicio',
@@ -250,14 +250,16 @@ class _PagoViajeState extends State<PagoViaje> {
                         icon: Icons.verified_rounded,
                         color: _mint,
                         title: 'Pago verificado',
-                        text: 'Puedes continuar con la evidencia y el cierre de la entrega.',
+                        text:
+                            'Puedes continuar con la evidencia y el cierre de la entrega.',
                       )
                     else if (awaitingReview)
                       _InfoPanel(
                         icon: Icons.hourglass_top_rounded,
                         color: const Color(0xFFFFC928),
                         title: 'Comprobante pendiente de revisión',
-                        text: 'El panel administrativo debe validar el comprobante antes de cerrar el viaje.',
+                        text:
+                            'El panel administrativo debe validar el comprobante antes de cerrar el viaje.',
                       )
                     else
                       _InfoPanel(
@@ -278,14 +280,21 @@ class _PagoViajeState extends State<PagoViaje> {
                       const SizedBox(height: 16),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(18),
-                        child: Image.memory(evidencePreview!, height: 170, fit: BoxFit.cover),
+                        child: Image.memory(evidencePreview!,
+                            height: 170, fit: BoxFit.cover),
                       ),
                     ],
                     const SizedBox(height: 24),
                     if (complete)
-                      _PrimaryButton(label: 'Continuar a completar entrega', loading: false, onTap: _continueIfComplete)
+                      _PrimaryButton(
+                          label: 'Continuar a completar entrega',
+                          loading: false,
+                          onTap: _continueIfComplete)
                     else if (isCash)
-                      _PrimaryButton(label: 'Marcar efectivo recibido', loading: saving, onTap: _registerCash)
+                      _PrimaryButton(
+                          label: 'Marcar efectivo recibido',
+                          loading: saving,
+                          onTap: _registerCash)
                     else if (isTransfer)
                       _PrimaryButton(
                         label: uploading
@@ -300,20 +309,26 @@ class _PagoViajeState extends State<PagoViaje> {
                       _PrimaryButton(
                         label: 'Esperar confirmación del pago',
                         loading: false,
-                        onTap: () => _showMessage('El cliente debe completar el pago antes de continuar.'),
+                        onTap: () => _showMessage(
+                            'El cliente debe completar el pago antes de continuar.'),
                       ),
                     if (bypassEnabled && !complete) ...[
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
                         onPressed: saving || uploading ? null : _useLocalBypass,
                         icon: const Icon(Icons.science_outlined, size: 17),
-                        label: const Text('Bypass local: aprobar pago de prueba'),
+                        label:
+                            const Text('Bypass local: aprobar pago de prueba'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: _muted,
-                          side: BorderSide(color: Colors.white.withValues(alpha: .24)),
+                          side: BorderSide(
+                              color: Colors.white.withValues(alpha: .24)),
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                          textStyle: const TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w700),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28)),
+                          textStyle: const TextStyle(
+                              fontFamily: 'Figtree',
+                              fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],
@@ -322,7 +337,8 @@ class _PagoViajeState extends State<PagoViaje> {
                       child: Text(
                         'El estado queda guardado en el viaje y es visible para operaciones.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: _muted, fontSize: 11, fontFamily: 'Figtree'),
+                        style: const TextStyle(
+                            color: _muted, fontSize: 11, fontFamily: 'Figtree'),
                       ),
                     ),
                   ],
@@ -337,7 +353,8 @@ class _PagoViajeState extends State<PagoViaje> {
 }
 
 class _PaymentSummary extends StatelessWidget {
-  const _PaymentSummary({required this.method, required this.status, required this.total});
+  const _PaymentSummary(
+      {required this.method, required this.status, required this.total});
 
   final String method;
   final String status;
@@ -371,13 +388,23 @@ class _PaymentSummary extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Método indicado', style: TextStyle(color: _muted, fontSize: 11, fontFamily: 'Figtree')),
+                    const Text('Método indicado',
+                        style: TextStyle(
+                            color: _muted,
+                            fontSize: 11,
+                            fontFamily: 'Figtree')),
                     const SizedBox(height: 3),
-                    Text(method, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+                    Text(method,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Figtree')),
                   ],
                 ),
               ),
-              Icon(paid ? Icons.check_circle_rounded : Icons.schedule_rounded, color: paid ? _mint : const Color(0xFFFFC928)),
+              Icon(paid ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                  color: paid ? _mint : const Color(0xFFFFC928)),
             ],
           ),
           const SizedBox(height: 18),
@@ -386,16 +413,30 @@ class _PaymentSummary extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Total del servicio', style: TextStyle(color: _muted, fontSize: 12, fontFamily: 'Figtree')),
-              Text(formatFareCs(total), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+              const Text('Total del servicio',
+                  style: TextStyle(
+                      color: _muted, fontSize: 12, fontFamily: 'Figtree')),
+              Text(formatFareCs(total),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree')),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Estado actual', style: TextStyle(color: _muted, fontSize: 12, fontFamily: 'Figtree')),
-              Text(status, style: TextStyle(color: paid ? _mint : const Color(0xFFFFC928), fontSize: 12, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+              const Text('Estado actual',
+                  style: TextStyle(
+                      color: _muted, fontSize: 12, fontFamily: 'Figtree')),
+              Text(status,
+                  style: TextStyle(
+                      color: paid ? _mint : const Color(0xFFFFC928),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'Figtree')),
             ],
           ),
         ],
@@ -405,7 +446,11 @@ class _PaymentSummary extends StatelessWidget {
 }
 
 class _InfoPanel extends StatelessWidget {
-  const _InfoPanel({required this.icon, required this.color, required this.title, required this.text});
+  const _InfoPanel(
+      {required this.icon,
+      required this.color,
+      required this.title,
+      required this.text});
 
   final IconData icon;
   final Color color;
@@ -430,9 +475,19 @@ class _InfoPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+                Text(title,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree')),
                 const SizedBox(height: 4),
-                Text(text, style: const TextStyle(color: _muted, fontSize: 11.5, height: 1.35, fontFamily: 'Figtree')),
+                Text(text,
+                    style: const TextStyle(
+                        color: _muted,
+                        fontSize: 11.5,
+                        height: 1.35,
+                        fontFamily: 'Figtree')),
               ],
             ),
           ),
@@ -443,7 +498,8 @@ class _InfoPanel extends StatelessWidget {
 }
 
 class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({required this.label, required this.loading, required this.onTap});
+  const _PrimaryButton(
+      {required this.label, required this.loading, required this.onTap});
 
   final String label;
   final bool loading;
@@ -461,8 +517,17 @@ class _PrimaryButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(28),
           child: Center(
             child: loading
-                ? const SizedBox(width: 21, height: 21, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                : Text(label, style: const TextStyle(color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+                ? const SizedBox(
+                    width: 21,
+                    height: 21,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2.5))
+                : Text(label,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree')),
           ),
         ),
       ),

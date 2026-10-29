@@ -211,6 +211,7 @@ class Trip {
     this.quotedBaseCs,
     this.quotedAdditionalCs,
     this.quotedServiceTotalCs,
+    this.packagePhotos = const [],
   });
 
   final String id;
@@ -271,6 +272,7 @@ class Trip {
   final double? quotedBaseCs;
   final double? quotedAdditionalCs;
   final double? quotedServiceTotalCs;
+  final List<String> packagePhotos;
 
   bool get isPending => status == 'Pendiente';
   bool get isAssigned => status == 'Asignado';
@@ -409,8 +411,34 @@ class Trip {
       quotedBaseCs: (json['quotedBaseCs'] as num?)?.toDouble(),
       quotedAdditionalCs: (json['quotedAdditionalCs'] as num?)?.toDouble(),
       quotedServiceTotalCs: (json['quotedServiceTotalCs'] as num?)?.toDouble(),
+      packagePhotos: _stringListFromJson(
+        json['packagePhotos'] ??
+            json['productPhotos'] ??
+            json['evidence'] ??
+            json['evidences'] ??
+            json['attachments'],
+      ),
     );
   }
+}
+
+List<String> _stringListFromJson(dynamic value) {
+  if (value is Map) {
+    final item = value['url'] ?? value['path'] ?? value['file'] ?? value['id'];
+    final text = item?.toString().trim() ?? '';
+    return text.isEmpty ? const [] : [text];
+  }
+  if (value is List) {
+    return value
+        .map((item) => item is Map
+            ? (item['url'] ?? item['path'] ?? item['file'] ?? item['id'])
+            : item)
+        .map((item) => item?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+  final text = value?.toString().trim() ?? '';
+  return text.isEmpty ? const [] : [text];
 }
 
 class TripStop {

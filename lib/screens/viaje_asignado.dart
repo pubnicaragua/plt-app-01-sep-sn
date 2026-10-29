@@ -6,6 +6,7 @@ import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/wizard.dart';
 import 'viaje_en_curso.dart';
+import 'finalizar_viaje.dart';
 
 String conductorServiceLabel(Trip trip) {
   final mode = (trip.serviceMode ?? '').trim().toLowerCase();
@@ -57,6 +58,93 @@ String conductorPaymentLabel(Trip trip) {
 
 String conductorPaymentMethodLabel(Trip trip) =>
     _firstNonEmpty([trip.servicePaymentMethod, trip.paymentMethod]);
+
+/// Las fotos del paquete se guardan actualmente en la descripción como
+/// `Evidencias: url1, url2`. Se mantiene este lector para que los viajes
+/// existentes también puedan mostrar su foto sin cambiar el contrato de la API.
+List<String> conductorPackagePhotoUrls(Trip trip) {
+  if (trip.packagePhotos.isNotEmpty) {
+    return trip.packagePhotos.map(_resolveEvidenceUrl).toList();
+  }
+  final description = trip.description ?? '';
+  final match = RegExp(
+    r'Evidencias:\s*(.*?)(?:\s·\s|$)',
+    caseSensitive: false,
+  ).firstMatch(description);
+  if (match == null) return const [];
+  return match
+      .group(1)!
+      .split(',')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .map(_resolveEvidenceUrl)
+      .toList();
+}
+
+String _resolveEvidenceUrl(String value) {
+  final base = Uri.parse(apiClient.baseUrl);
+  final parsed = Uri.tryParse(value);
+  var rawPath = parsed?.path.isNotEmpty == true ? parsed!.path : value;
+  if (!rawPath.startsWith('/') && !rawPath.contains('/')) {
+    rawPath = '/uploads/evidence/$rawPath';
+  }
+  final basePath = base.path.replaceFirst(RegExp(r'/$'), '');
+  final path = rawPath.startsWith(basePath)
+      ? rawPath
+      : '$basePath${rawPath.startsWith('/') ? rawPath : '/$rawPath'}';
+  return base.replace(path: path, query: parsed?.query ?? '').toString();
+}
+
+String conductorPackageLabel(Trip trip) {
+  final description = trip.description ?? '';
+  final candidate =
+      description.split(' · ').map((value) => value.trim()).firstWhere(
+            (value) =>
+                value.isNotEmpty &&
+                !value.toLowerCase().startsWith('evidencias') &&
+                !value.toLowerCase().startsWith('peso ') &&
+                !value.toLowerCase().startsWith('valor de factura') &&
+                !value.toLowerCase().startsWith('factura ') &&
+                !value.toLowerCase().startsWith('estado ') &&
+                !value.toLowerCase().startsWith('método ') &&
+                !value.toLowerCase().startsWith('quién paga') &&
+                !value.toLowerCase().startsWith('tipo valor'),
+            orElse: () => '',
+          );
+  return candidate.isEmpty ? 'Paquete' : candidate;
+}
+
+String _shipmentDescriptionValue(Trip trip, String label) {
+  final match = RegExp(
+    '$label:\\s*([^·]+)',
+    caseSensitive: false,
+  ).firstMatch(trip.description ?? '');
+  return match?.group(1)?.trim() ?? '';
+}
+
+String conductorSenderName(Trip trip) =>
+    _shipmentDescriptionValue(trip, 'Recojo');
+
+String conductorSenderPhone(Trip trip) {
+  final match = RegExp(
+    r'Recojo:.*?Teléfono:\s*([^·]+)',
+    caseSensitive: false,
+  ).firstMatch(trip.description ?? '');
+  return match?.group(1)?.trim() ?? '';
+}
+
+String conductorRecipientName(Trip trip) {
+  final parsed = _shipmentDescriptionValue(trip, 'Envío');
+  return parsed.isNotEmpty ? parsed : (trip.recipientName ?? trip.client);
+}
+
+String conductorRecipientPhone(Trip trip) {
+  final match = RegExp(
+    r'Envío:.*?Teléfono:\s*([^·]+)',
+    caseSensitive: false,
+  ).firstMatch(trip.description ?? '');
+  return match?.group(1)?.trim() ?? trip.recipientPhone ?? '';
+}
 
 String conductorInstructionText(Trip trip) {
   final raw = (trip.description ?? '')
@@ -121,10 +209,27 @@ String conductorScheduleLabel(Trip trip) {
   return time.isEmpty ? label : '$label · $time';
 }
 
+String conductorTodayLabel() {
+  final now = DateTime.now();
+  const months = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ];
+  return '${now.day} ${months[now.month - 1]} ${now.year}';
+}
+
 double conductorTotalAmount(Trip trip) =>
     trip.quotedServiceTotalCs ?? trip.estimatedCostCs ?? 0;
-
-double conductorPaidAmount(Trip trip) => trip.paymentAmount ?? 0;
 
 class ViajeAsignado extends StatefulWidget {
   const ViajeAsignado({super.key, required this.tripId});
@@ -643,7 +748,9 @@ class _DetailBody extends StatelessWidget {
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
-                      'Entregar en recepción, piso 4',
+                      trip.destinationRefs?.trim().isNotEmpty == true
+                          ? trip.destinationRefs!.trim()
+                          : 'Sin referencia de entrega',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12.5,
@@ -735,7 +842,6 @@ class _DetailBodyV2 extends StatelessWidget {
     final distance = trip.distanceKm ?? 12.4;
     final minutes = (distance * 2.8).round();
     final isTrip = (trip.serviceMode ?? '').toLowerCase().contains('taxi');
-    final instructions = conductorInstructionText(trip);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
@@ -761,35 +867,36 @@ class _DetailBodyV2 extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _LabeledDot(
-                color: Colors.white,
-                label: 'RECOGIDA',
-                value: trip.origin,
-                detail: trip.originRefs,
-              ),
-              const SizedBox(height: 7),
-              Padding(
-                padding: const EdgeInsets.only(left: 7),
-                child: Container(
-                  width: 2,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(2),
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.white.withValues(alpha: .55),
-                        Colors.white.withValues(alpha: .12),
-                      ],
+              Stack(
+                children: [
+                  Positioned(
+                    left: 5,
+                    top: 8,
+                    child: Container(
+                      width: 2,
+                      height: 72,
+                      color: Colors.white.withValues(alpha: .45),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 7),
-              _LabeledDot(
-                color: const Color(0xFFE5484D),
-                label: 'DESTINO',
-                value: trip.destination,
-                detail: trip.destinationRefs,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _LabeledDot(
+                        color: Colors.white,
+                        label: 'RECOGIDA',
+                        value: trip.origin,
+                        detail: trip.originRefs,
+                      ),
+                      const SizedBox(height: 14),
+                      _LabeledDot(
+                        color: const Color(0xFFE5484D),
+                        label: 'DESTINO',
+                        value: trip.destination,
+                        detail: trip.destinationRefs,
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
@@ -826,6 +933,10 @@ class _DetailBodyV2 extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 17),
+        const _SectionTitle2('PAQUETE'),
+        const SizedBox(height: 9),
+        _PackagePhotoCard(trip: trip),
+        const SizedBox(height: 17),
         const _SectionTitle2('INFORMACIÓN DEL SERVICIO'),
         const SizedBox(height: 9),
         _ServiceCard2(trip: trip),
@@ -843,10 +954,6 @@ class _DetailBodyV2 extends StatelessWidget {
         const _SectionTitle2('CLIENTE Y ENTREGA'),
         const SizedBox(height: 9),
         _ContactCard2(trip: trip, onCall: () => _dial(context)),
-        if (instructions.isNotEmpty) ...[
-          const SizedBox(height: 13),
-          _NoteCard2(title: 'Instrucciones', text: instructions),
-        ],
         if (trip.returnTrip) ...[
           const SizedBox(height: 13),
           _NoteCard2(
@@ -1041,7 +1148,12 @@ class _ScheduleCard2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = (trip.scheduledTime ?? trip.pickupTime ?? '').trim();
+    final isScheduled = trip.isScheduled ||
+        (trip.serviceType ?? '').trim().toLowerCase() == 'programado';
+    final time = (trip.scheduledTime ?? '').trim();
+    final date = isScheduled
+        ? conductorScheduleLabel(trip).split(' · ').first
+        : conductorTodayLabel();
     return _BlueCard2(
       padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
       child: Column(
@@ -1052,7 +1164,7 @@ class _ScheduleCard2 extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  conductorScheduleLabel(trip).split(' · ').first,
+                  date,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
@@ -1063,24 +1175,26 @@ class _ScheduleCard2 extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Divider(color: glassBorder, height: 1),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.schedule_rounded, color: cyan, size: 16),
-              const SizedBox(width: 10),
-              Text(
-                time.isEmpty ? 'Hora pendiente' : '$time (Hora de recogida)',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Figtree',
+          if (isScheduled) ...[
+            const SizedBox(height: 12),
+            Divider(color: glassBorder, height: 1),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.schedule_rounded, color: cyan, size: 16),
+                const SizedBox(width: 10),
+                Text(
+                  time.isEmpty ? 'Hora pendiente' : '$time (Hora de recogida)',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Figtree',
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1094,18 +1208,25 @@ class _ServiceCard2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vehicle = conductorVehicleLabel(trip);
+    final reference = _firstNonEmpty([trip.destinationRefs, trip.originRefs]);
     return _BlueCard2(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
       child: Column(
         children: [
-          DetailRow(label: 'Servicio', value: conductorServiceLabel(trip)),
-          if (vehicle.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            DetailRow(label: 'Vehículo', value: vehicle),
-          ],
+          DetailRow(
+            label: 'Servicio',
+            value: (trip.serviceMode ?? '').toLowerCase().contains('taxi')
+                ? 'Taxi privado'
+                : 'Envíos',
+          ),
           const SizedBox(height: 4),
-          DetailRow(label: 'Cantidad', value: conductorQuantityLabel(trip)),
+          DetailRow(label: 'Cliente', value: trip.client),
+          const SizedBox(height: 4),
+          DetailRow(label: 'Paquete', value: conductorPackageLabel(trip)),
+          if (reference.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            DetailRow(label: 'Referencia', value: reference),
+          ],
           if (trip.weight != null) ...[
             const SizedBox(height: 4),
             DetailRow(
@@ -1230,45 +1351,295 @@ class _PaymentCard2 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = conductorTotalAmount(trip);
-    final paid = conductorPaidAmount(trip);
-    final pending = total > paid ? total - paid : 0.0;
-    final invoice = trip.serviceInvoiceNumber ?? trip.invoiceNumber;
+    final paymentMethod = invoiceServicePaymentMethodForTrip(trip);
+    final productAmount = trip.invoiceAmountCs ?? 0;
+    final productIsSale = invoiceProductIsSaleForTrip(trip);
+    final optionsTotal = trip.optionsTotalCs > 0
+        ? trip.optionsTotalCs
+        : trip.options.fold<double>(
+            0,
+            (sum, option) =>
+                sum +
+                option.priceCs *
+                    (option.currency.toUpperCase() == 'USD' ? 36.5 : 1) *
+                    (option.quantity < 1 ? 1 : option.quantity),
+          );
+    final base = trip.quotedBaseCs ??
+        (total - optionsTotal - (trip.quotedAdditionalCs ?? 0))
+            .clamp(0, double.infinity)
+            .toDouble();
+    final additional = trip.quotedAdditionalCs ??
+        (total - base - optionsTotal).clamp(0, double.infinity).toDouble();
+    final shippingRate = base + additional;
+    final payer = invoiceServicePayerForTrip(trip);
+    // La distancia adicional es parte del cálculo normal de la tarifa.
+    // Solo mostramos el desglose extendido si existe producto o un adicional
+    // seleccionado explícitamente por el cliente.
+    final hasAdditionalConcepts = productAmount > 0 || trip.options.isNotEmpty;
     return _BlueCard2(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
       child: Column(
         children: [
-          DetailRow(label: 'Estado', value: conductorPaymentLabel(trip)),
-          if (conductorPaymentMethodLabel(trip).isNotEmpty) ...[
+          if (!hasAdditionalConcepts) ...[
+            if (total > 0)
+              DetailRow(
+                label: 'Tarifa de envío',
+                value: formatFareCs(total),
+              ),
             const SizedBox(height: 4),
             DetailRow(
-              label: 'Método',
-              value: conductorPaymentMethodLabel(trip),
+              label: 'Subtotal del envío',
+              value: formatFareCs(total),
             ),
-          ],
-          if (total > 0) ...[
+          ] else ...[
+            DetailRow(label: 'Quién paga', value: payer),
+            if (paymentMethod.isNotEmpty && paymentMethod != 'No definido') ...[
+              const SizedBox(height: 4),
+              DetailRow(
+                label: 'Método de pago',
+                value: paymentMethod,
+              ),
+            ],
             const SizedBox(height: 11),
             Divider(color: glassBorder, height: 1),
             const SizedBox(height: 11),
-            DetailRow(label: 'Total del servicio', value: formatFareCs(total)),
-            if (paid > 0) ...[
+            if (productAmount > 0) ...[
+              DetailRow(
+                label: productIsSale
+                    ? 'Factura del producto'
+                    : 'Valor aproximado del producto',
+                value: formatFareCs(productAmount),
+              ),
               const SizedBox(height: 4),
-              DetailRow(label: 'Pagado', value: formatFareCs(paid)),
             ],
-            if (pending > 0) ...[
+            DetailRow(
+              label: 'Tarifa de envío',
+              value: formatFareCs(shippingRate),
+            ),
+            for (final option in trip.options) ...[
               const SizedBox(height: 4),
-              DetailRow(label: 'Pendiente', value: formatFareCs(pending)),
+              DetailRow(
+                label: option.quantity == 1
+                    ? option.title
+                    : '${option.title} (x${option.quantity})',
+                value: formatFareCs(
+                  option.priceCs *
+                      (option.currency.toUpperCase() == 'USD' ? 36.5 : 1) *
+                      (option.quantity < 1 ? 1 : option.quantity),
+                ),
+              ),
             ],
-          ],
-          if (invoice?.isNotEmpty == true) ...[
-            const SizedBox(height: 11),
-            Divider(color: glassBorder, height: 1),
-            const SizedBox(height: 11),
-            DetailRow(label: 'Factura', value: invoice!),
+            const SizedBox(height: 4),
+            DetailRow(
+              label: 'Subtotal del envío',
+              value: formatFareCs(total),
+            ),
           ],
         ],
       ),
     );
   }
+}
+
+class _PackagePhotoCard extends StatelessWidget {
+  const _PackagePhotoCard({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final photos = conductorPackagePhotoUrls(trip);
+    return _BlueCard2(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${trip.packages} ${trip.packages == 1 ? 'paquete' : 'paquetes'}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  photos.isEmpty
+                      ? 'No se adjuntó foto'
+                      : 'Foto del paquete adjunta',
+                  style: const TextStyle(
+                    color: Color(0xFFB9D4FF),
+                    fontSize: 12,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          _PackagePhotoPreview(
+            url: photos.isEmpty ? null : photos.first,
+            photoCount: photos.length,
+            onTap: photos.isEmpty
+                ? null
+                : () => _showPackagePhotoCarousel(context, photos),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PackagePhotoPreview extends StatelessWidget {
+  const _PackagePhotoPreview({this.url, this.photoCount = 0, this.onTap});
+
+  final String? url;
+  final int photoCount;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = Container(
+      width: 78,
+      height: 68,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: glassBorder),
+      ),
+      child: const Icon(
+        Icons.photo_camera_back_outlined,
+        color: Color(0xFFB9D4FF),
+        size: 25,
+      ),
+    );
+    if (url == null) return placeholder;
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              url!,
+              width: 78,
+              height: 68,
+              fit: BoxFit.cover,
+              headers: apiClient.accessToken?.isNotEmpty == true
+                  ? {'Authorization': 'Bearer ${apiClient.accessToken}'}
+                  : null,
+              errorBuilder: (_, __, ___) => placeholder,
+            ),
+          ),
+          if (photoCount > 1)
+            Positioned(
+              right: 5,
+              bottom: 5,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: .65),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$photoCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+void _showPackagePhotoCarousel(BuildContext context, List<String> photos) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: .86),
+    builder: (_) {
+      var currentIndex = 0;
+      return StatefulBuilder(
+        builder: (context, setState) => SafeArea(
+          child: Material(
+            color: Colors.transparent,
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded,
+                        color: Colors.white, size: 28),
+                  ),
+                ),
+                Expanded(
+                  child: PageView.builder(
+                    itemCount: photos.length,
+                    onPageChanged: (index) =>
+                        setState(() => currentIndex = index),
+                    itemBuilder: (_, index) => InteractiveViewer(
+                      minScale: .8,
+                      maxScale: 4,
+                      child: Center(
+                        child: Image.network(
+                          photos[index],
+                          fit: BoxFit.contain,
+                          headers: apiClient.accessToken?.isNotEmpty == true
+                              ? {
+                                  'Authorization':
+                                      'Bearer ${apiClient.accessToken}'
+                                }
+                              : null,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.broken_image_outlined,
+                            color: Colors.white70,
+                            size: 64,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (photos.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 22, top: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        for (var index = 0; index < photos.length; index++)
+                          Container(
+                            width: index == currentIndex ? 18 : 7,
+                            height: 7,
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            decoration: BoxDecoration(
+                              color: index == currentIndex
+                                  ? Colors.white
+                                  : Colors.white38,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _ContactCard2 extends StatelessWidget {
@@ -1279,90 +1650,134 @@ class _ContactCard2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = trip.contactName ?? trip.recipientName ?? trip.client;
-    final recipient = trip.recipientName;
-    final phone = trip.contactPhone ?? trip.recipientPhone;
-    return _BlueCard2(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF0D47D9), Color(0xFF083EC0)],
-                  ),
-                ),
-                child: Text(
-                  initials(name),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
-                  ),
+    final sender = conductorSenderName(trip);
+    final senderPhone = conductorSenderPhone(trip);
+    final recipient = conductorRecipientName(trip);
+    final recipientPhone = conductorRecipientPhone(trip);
+    return Column(
+      children: [
+        _BlueCard2(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+          child: _PartyRow(
+            label: 'Remitente',
+            name: sender.isEmpty ? trip.client : sender,
+            phone: senderPhone,
+            onCall: onCall,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _BlueCard2(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+          child: _PartyRow(
+            label: 'Destinatario',
+            name: recipient,
+            phone: recipientPhone,
+            onCall: onCall,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PartyRow extends StatelessWidget {
+  const _PartyRow({
+    required this.label,
+    required this.name,
+    required this.phone,
+    required this.onCall,
+  });
+
+  final String label;
+  final String name;
+  final String phone;
+  final VoidCallback onCall;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: Color(0xFFB9D4FF),
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: .8,
+            fontFamily: 'Figtree',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0D47D9), Color(0xFF083EC0)],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Figtree',
-                      ),
+              child: Text(
+                initials(name),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
                     ),
+                  ),
+                  if (phone.isNotEmpty)
                     Text(
-                      recipient != null && recipient != name
-                          ? 'Recogida · Destinatario: $recipient'
-                          : 'Contacto de recogida',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      phone,
                       style: const TextStyle(
                         color: Color(0xFFB9D4FF),
                         fontSize: 11,
                         fontFamily: 'Figtree',
                       ),
                     ),
-                  ],
+                ],
+              ),
+            ),
+            if (phone.isNotEmpty)
+              InkWell(
+                onTap: onCall,
+                borderRadius: BorderRadius.circular(30),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: .10),
+                    border: Border.all(color: glassBorder),
+                  ),
+                  child: const Icon(Icons.call_rounded,
+                      color: Colors.white, size: 18),
                 ),
               ),
-              if (phone?.isNotEmpty == true)
-                InkWell(
-                  onTap: onCall,
-                  borderRadius: BorderRadius.circular(30),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: .10),
-                      border: Border.all(color: glassBorder),
-                    ),
-                    child: const Icon(Icons.call_rounded,
-                        color: Colors.white, size: 18),
-                  ),
-                ),
-            ],
-          ),
-          if (phone?.isNotEmpty == true) ...[
-            const SizedBox(height: 13),
-            Divider(color: glassBorder, height: 1),
-            const SizedBox(height: 13),
-            DetailRow(label: 'Teléfono', value: phone!),
           ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -1594,6 +2009,72 @@ class _LabeledDot extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _RouteDot extends StatelessWidget {
+  const _RouteDot({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 11,
+      height: 11,
+      margin: const EdgeInsets.only(top: 3),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class _RouteText extends StatelessWidget {
+  const _RouteText({required this.label, required this.value, this.detail});
+
+  final String label;
+  final String value;
+  final String? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF9FB2DC),
+            fontSize: 9,
+            letterSpacing: 1.1,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Figtree',
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'Figtree',
+          ),
+        ),
+        if (detail?.trim().isNotEmpty == true)
+          Text(
+            detail!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFFB9D4FF),
+              fontSize: 11,
+              fontFamily: 'Figtree',
+            ),
+          ),
       ],
     );
   }
