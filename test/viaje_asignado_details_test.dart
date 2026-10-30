@@ -44,6 +44,45 @@ void main() {
     expect(conductorQuantityLabel(trip), '36 pasajeros');
   });
 
+  test('usa etiquetas y secciones de viaje sin datos de envío', () {
+    const trip = Trip(
+      id: '4795',
+      client: 'Logística Nica SA',
+      driver: 'Juan',
+      origin: 'Managua',
+      destination: 'Masaya',
+      date: '2026-08-27',
+      packages: 0,
+      status: 'Asignado',
+      serviceMode: 'Taxi Privado',
+      passengerCount: 1,
+    );
+
+    expect(conductorBillingRateLabel(trip), 'Tarifa de viaje');
+    expect(conductorBillingSubtotalLabel(trip), 'Subtotal del viaje');
+    expect(shouldShowConductorShipmentDetails(trip), isFalse);
+    expect(conductorContactSectionTitle(trip), 'PASAJERO');
+  });
+
+  test('mantiene las etiquetas y secciones de envío', () {
+    const trip = Trip(
+      id: '4796',
+      client: 'Cliente',
+      driver: 'Juan',
+      origin: 'A',
+      destination: 'B',
+      date: '2026-08-27',
+      packages: 1,
+      status: 'Asignado',
+      serviceMode: 'Envíos',
+    );
+
+    expect(conductorBillingRateLabel(trip), 'Tarifa de envío');
+    expect(conductorBillingSubtotalLabel(trip), 'Subtotal del envío');
+    expect(shouldShowConductorShipmentDetails(trip), isTrue);
+    expect(conductorContactSectionTitle(trip), 'CLIENTE Y ENTREGA');
+  });
+
   test('muestra pago, método e instrucciones sin metadatos internos', () {
     const trip = Trip(
       id: '4792',

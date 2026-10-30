@@ -39,7 +39,7 @@ void main() {
 
   test('antes de recoger, la ruta incluye el punto de recogida', () {
     expect(shouldRouteThroughPickup('Asignado'), isTrue);
-    expect(shouldRouteThroughPickup('En camino'), isTrue);
+    expect(shouldRouteThroughPickup('En camino'), isFalse);
   });
 
   test('después de recoger, la ruta continúa hacia la entrega', () {

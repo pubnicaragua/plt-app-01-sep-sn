@@ -14,6 +14,10 @@ class SessionUser {
     this.plate,
     this.phone,
     this.companyName,
+    this.licenseNumber,
+    this.licenseExpiry,
+    this.vehicleType,
+    this.canPayInvoices = false,
   });
 
   final String id;
@@ -28,23 +32,74 @@ class SessionUser {
   final String? plate;
   final String? phone;
   final String? companyName;
+  final String? licenseNumber;
+  final String? licenseExpiry;
+  final String? vehicleType;
+  final bool canPayInvoices;
 
   bool get isSupervisor => profileRole == 'supervisor';
 
+  SessionUser copyWith({
+    String? displayName,
+    String? phone,
+    String? vehicle,
+    String? plate,
+    String? licenseNumber,
+    String? licenseExpiry,
+    String? vehicleType,
+  }) {
+    return SessionUser(
+      id: id,
+      email: email,
+      role: role,
+      displayName: displayName ?? this.displayName,
+      username: username,
+      accountId: accountId,
+      profileId: profileId,
+      profileRole: profileRole,
+      vehicle: vehicle ?? this.vehicle,
+      plate: plate ?? this.plate,
+      phone: phone ?? this.phone,
+      companyName: companyName,
+      licenseNumber: licenseNumber ?? this.licenseNumber,
+      licenseExpiry: licenseExpiry ?? this.licenseExpiry,
+      vehicleType: vehicleType ?? this.vehicleType,
+      canPayInvoices: canPayInvoices,
+    );
+  }
+
   factory SessionUser.fromJson(Map<String, dynamic> json) {
+    final profileRole = json['profileRole']?.toString();
+    final role = json['role']?.toString() ?? '';
     return SessionUser(
       id: json['id']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
-      role: json['role']?.toString() ?? '',
+      role: role,
       displayName: json['displayName']?.toString() ?? 'Usuario INCOEX',
       username: json['username']?.toString(),
       accountId: json['accountId']?.toString(),
       profileId: json['profileId']?.toString(),
-      profileRole: json['profileRole']?.toString(),
+      profileRole: profileRole,
       vehicle: json['vehicle']?.toString(),
       plate: json['plate']?.toString(),
       phone: json['phone']?.toString(),
       companyName: json['companyName']?.toString(),
+      licenseNumber: (json['licenseNumber'] ??
+              json['license'] ??
+              json['driverLicense'] ??
+              json['licenseNo'])
+          ?.toString(),
+      licenseExpiry: (json['licenseExpiry'] ??
+              json['licenseExpiration'] ??
+              json['licenseExp'])
+          ?.toString(),
+      vehicleType: (json['vehicleType'] ?? json['transport'] ?? json['vehicle'])
+          ?.toString(),
+      canPayInvoices: json['canPayInvoices'] == true ||
+          json['canPayInvoices'] == 1 ||
+          json['canPayInvoices']?.toString().toLowerCase() == 'true' ||
+          json['canPayInvoices']?.toString() == '1' ||
+          profileRole == 'supervisor',
     );
   }
 }
@@ -68,6 +123,9 @@ class LoginResponse {
       if ((user['username']?.toString().trim().isEmpty ?? true) &&
           profile['username']?.toString().trim().isNotEmpty == true)
         'username': profile['username'],
+      if (!user.containsKey('canPayInvoices') &&
+          profile.containsKey('canPayInvoices'))
+        'canPayInvoices': profile['canPayInvoices'],
     };
     return LoginResponse(
       accessToken: json['accessToken']?.toString() ?? '',
@@ -87,6 +145,7 @@ class CompanyProfile {
     required this.status,
     this.createdAt,
     this.updatedAt,
+    this.canPayInvoices = false,
   });
 
   final String id;
@@ -97,6 +156,7 @@ class CompanyProfile {
   final String status;
   final String? createdAt;
   final String? updatedAt;
+  final bool canPayInvoices;
 
   bool get isSupervisor => role == 'supervisor';
 
@@ -110,6 +170,11 @@ class CompanyProfile {
       status: json['status']?.toString() ?? 'Activo',
       createdAt: json['createdAt']?.toString(),
       updatedAt: json['updatedAt']?.toString(),
+      canPayInvoices: json['canPayInvoices'] == true ||
+          json['canPayInvoices'] == 1 ||
+          json['canPayInvoices']?.toString().toLowerCase() == 'true' ||
+          json['canPayInvoices']?.toString() == '1' ||
+          json['role']?.toString() == 'supervisor',
     );
   }
 }

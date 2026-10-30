@@ -85,4 +85,20 @@ void main() {
     expect(second.asset, 'assets/img/HomeCliente/taxi_suv.png');
     expect(second.plate, 'M 222222');
   });
+
+  test('keeps a saved vehicle model while selecting its van asset category', () {
+    final profile = SessionUser(
+      id: 'driver-4',
+      email: 'driver@example.com',
+      role: 'driver',
+      displayName: 'Juan',
+      vehicle: 'Ford Transit 2023',
+      plate: 'M 123456',
+    );
+
+    final result = resolveDriverVehicleInfo(profile, null);
+
+    expect(result.label, 'FORD TRANSIT 2023');
+    expect(result.asset, 'assets/img/HomeCliente/figma_van.png');
+  });
 }

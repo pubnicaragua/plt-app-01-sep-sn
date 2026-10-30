@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -8,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/api_client.dart';
 import '../core/location_service.dart';
 import '../core/theme.dart';
+import '../core/trip_routing.dart';
 import '../models/api_models.dart';
 import '../widgets/incident_sheet.dart';
 import 'pago_viaje.dart';
@@ -21,6 +23,40 @@ String conductorDeliveryReference(Trip trip) {
   ).firstMatch(trip.description ?? '');
   final parsed = match?.group(1)?.trim();
   return parsed?.isNotEmpty == true ? parsed! : 'Sin referencia de entrega';
+}
+
+String conductorPickupReference(Trip trip) {
+  final direct = trip.originRefs?.trim();
+  if (direct?.isNotEmpty == true) return direct!;
+  final match = RegExp(
+    r'Referencia de recogida:\s*([^·]+)',
+    caseSensitive: false,
+  ).firstMatch(trip.description ?? '');
+  final parsed = match?.group(1)?.trim();
+  return parsed?.isNotEmpty == true ? parsed! : 'Sin referencia de retiro';
+}
+
+String conductorPickupPersonLabel(Trip trip) {
+  if (!isTripServiceMode(trip.serviceMode)) {
+    return trip.contactName?.trim().isNotEmpty == true
+        ? trip.contactName!.trim()
+        : 'Remitente';
+  }
+
+  for (final value in [trip.recipientName, trip.contactName, trip.client]) {
+    final name = value?.trim();
+    if (name != null && name.isNotEmpty) return name;
+  }
+  return 'Pasajero';
+}
+
+String conductorPickupActionLabel(Trip trip) {
+  if (trip.status == 'Asignado') {
+    return isTripServiceMode(trip.serviceMode)
+        ? 'Pasajero recogido'
+        : 'Paquete recogido';
+  }
+  return 'Llegué al destino';
 }
 
 List<LatLng> conductorTrackingPolylinePoints(TrackingData data) => data.route
@@ -77,6 +113,7 @@ class ViajeEnCurso extends StatefulWidget {
 }
 
 class _ViajeEnCursoState extends State<ViajeEnCurso> {
+  late Trip activeTrip;
   bool updating = false;
   Timer? locationTimer;
   Timer? trackingTimer;
@@ -89,10 +126,14 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
   LatLng? previousNavigationPoint;
   double navigationBearing = 0;
   bool hasNavigationBearing = false;
+  BitmapDescriptor? driverMarkerIcon;
+  BitmapDescriptor? pickupMarkerIcon;
 
   @override
   void initState() {
     super.initState();
+    activeTrip = widget.trip;
+    unawaited(_loadMapMarkerIcons());
     _startLive();
     _loadTracking();
     trackingTimer = Timer.periodic(
@@ -101,11 +142,118 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
     );
   }
 
+  Future<void> _loadMapMarkerIcons() async {
+    try {
+      final driverIcon = await _buildDriverMarkerIcon();
+      final pickupIcon = await _buildRouteLabelMarker('A', cyan);
+      if (!mounted) return;
+      setState(() {
+        driverMarkerIcon = driverIcon;
+        pickupMarkerIcon = pickupIcon;
+      });
+    } catch (_) {
+      // Los marcadores estándar quedan como respaldo si no se puede crear el
+      // bitmap en la plataforma actual.
+    }
+  }
+
+  Future<BitmapDescriptor> _buildRouteLabelMarker(
+    String label,
+    Color color,
+  ) async {
+    const size = 80.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    const center = ui.Offset(size / 2, size / 2);
+    canvas.drawCircle(center, 28, Paint()..color = color);
+    canvas.drawCircle(
+      center,
+      28,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4,
+    );
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 21,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Figtree',
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(
+      canvas,
+      ui.Offset(
+        center.dx - painter.width / 2,
+        center.dy - painter.height / 2,
+      ),
+    );
+    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+  }
+
+  Future<BitmapDescriptor> _buildDriverMarkerIcon() async {
+    final normalized = (activeTrip.transport ?? '').toLowerCase();
+    final vehicleIcon = normalized.contains('moto')
+        ? Icons.two_wheeler_rounded
+        : normalized.contains('camion') ||
+                normalized.contains('camión') ||
+                normalized.contains('pickup') ||
+                normalized.contains('van')
+            ? Icons.local_shipping_rounded
+            : Icons.directions_car_filled_rounded;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    const center = ui.Offset(64, 64);
+    final outer = ui.Path()
+      ..addOval(ui.Rect.fromCircle(center: center, radius: 57));
+    canvas.drawShadow(outer, Colors.black.withValues(alpha: .45), 9, true);
+    canvas.drawCircle(center, 57, Paint()..color = const Color(0xF2082B79));
+    canvas.drawCircle(center, 48, Paint()..color = accentBlue);
+    final painter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(vehicleIcon.codePoint),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 39,
+          fontFamily: vehicleIcon.fontFamily,
+          package: vehicleIcon.fontPackage,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(
+      canvas,
+      ui.Offset(center.dx - painter.width / 2, center.dy - painter.height / 2),
+    );
+    canvas.drawCircle(
+      const ui.Offset(103, 22),
+      11,
+      Paint()..color = const Color(0xFF21C88A),
+    );
+    canvas.drawCircle(const ui.Offset(103, 22), 7, Paint()..color = Colors.white);
+    final image = await recorder.endRecording().toImage(128, 128);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (bytes == null) {
+      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+    }
+    return BitmapDescriptor.fromBytes(
+      bytes.buffer.asUint8List(),
+      size: const Size(56, 56),
+    );
+  }
+
   Future<void> _startLive() async {
     await requestAppPermissions();
     // Mientras el conductor está en esta pantalla reporta su GPS real a la API
     // y actualiza el pin según su posición real.
-    if (widget.trip.status == 'En camino') {
+    if (activeTrip.status == 'Asignado' || activeTrip.status == 'En camino') {
       Future<void> report() async {
         final loc = await requestCurrentLocation();
         if (!mounted || loc == null) return;
@@ -113,7 +261,7 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
         _followDriverAt(LatLng(loc.latitude, loc.longitude));
         try {
           await apiClient.reportDriverLocation(
-            driver: apiClient.currentUser?.displayName ?? widget.trip.driver,
+            driver: apiClient.currentUser?.displayName ?? activeTrip.driver,
             latitude: loc.latitude,
             longitude: loc.longitude,
           );
@@ -135,7 +283,7 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
 
   Future<void> _loadTracking() async {
     try {
-      final data = await apiClient.getTracking(widget.trip.id);
+      final data = await apiClient.getTracking(activeTrip.id);
       if (!mounted) return;
       final points = conductorTrackingPolylinePoints(data);
       setState(() {
@@ -210,20 +358,20 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
 
   List<LatLng> _tripCoordinatePoints() {
     final points = <LatLng>[];
-    if (widget.trip.originLat != null && widget.trip.originLng != null) {
-      points.add(LatLng(widget.trip.originLat!, widget.trip.originLng!));
+    if (activeTrip.originLat != null && activeTrip.originLng != null) {
+      points.add(LatLng(activeTrip.originLat!, activeTrip.originLng!));
     }
-    final stops = List<TripStop>.of(widget.trip.stops)
+    final stops = List<TripStop>.of(activeTrip.stops)
       ..sort((a, b) => a.order.compareTo(b.order));
     for (final stop in stops) {
       if (stop.latitude != null && stop.longitude != null) {
         points.add(LatLng(stop.latitude!, stop.longitude!));
       }
     }
-    if (widget.trip.destinationLat != null &&
-        widget.trip.destinationLng != null) {
+    if (activeTrip.destinationLat != null &&
+        activeTrip.destinationLng != null) {
       points.add(
-          LatLng(widget.trip.destinationLat!, widget.trip.destinationLng!));
+          LatLng(activeTrip.destinationLat!, activeTrip.destinationLng!));
     }
     return points;
   }
@@ -284,10 +432,11 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
       markers.add(Marker(
         markerId: const MarkerId('driver'),
         position: driver,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        icon: driverMarkerIcon ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
         flat: true,
         rotation: navigationBearing,
-        infoWindow: InfoWindow(title: widget.trip.driver),
+        infoWindow: InfoWindow(title: activeTrip.driver),
       ));
     }
     final tripPoints = _tripCoordinatePoints();
@@ -295,8 +444,9 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
       markers.add(Marker(
         markerId: const MarkerId('pickup'),
         position: tripPoints.first,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
-        infoWindow: InfoWindow(title: widget.trip.origin),
+        icon: pickupMarkerIcon ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+        infoWindow: InfoWindow(title: activeTrip.origin),
       ));
     }
     if (tripPoints.length > 1) {
@@ -304,14 +454,14 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
         markerId: const MarkerId('destination'),
         position: tripPoints.last,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        infoWindow: InfoWindow(title: widget.trip.destination),
+        infoWindow: InfoWindow(title: activeTrip.destination),
       ));
     } else if (routePoints.length > 1) {
       markers.add(Marker(
         markerId: const MarkerId('destination'),
         position: routePoints.last,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        infoWindow: InfoWindow(title: widget.trip.destination),
+        infoWindow: InfoWindow(title: activeTrip.destination),
       ));
     }
     return markers;
@@ -372,12 +522,12 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
 
   Future<void> _arrived() async {
     if (updating) return;
-    if (widget.trip.status != 'En camino') {
+    if (activeTrip.status != 'Asignado' && activeTrip.status != 'En camino') {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
           content: Text(
-            'Este viaje está en estado «${widget.trip.status}»; no se puede marcar en entrega. Refresca la pantalla.',
+            'Este viaje está en estado «${activeTrip.status}»; no se puede actualizar. Refresca la pantalla.',
             style: const TextStyle(fontFamily: 'Figtree'),
           ),
         ),
@@ -386,9 +536,25 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
     }
     setState(() => updating = true);
     try {
-      final updated =
-          await apiClient.updateTripStatus(widget.trip.id, 'En entrega');
+      final goingToPickup = activeTrip.status == 'Asignado';
+      final updated = await apiClient.updateTripStatus(
+        activeTrip.id,
+        goingToPickup ? 'En camino' : 'En entrega',
+      );
       if (!mounted) return;
+      if (goingToPickup) {
+        setState(() {
+          activeTrip = updated;
+          updating = false;
+          routePoints = const [];
+          trackingData = null;
+          mapHasCentered = false;
+          previousNavigationPoint = null;
+          hasNavigationBearing = false;
+        });
+        await _loadTracking();
+        return;
+      }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => PagoViaje(trip: updated)),
       );
@@ -413,7 +579,9 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
 
   @override
   Widget build(BuildContext context) {
-    final trip = widget.trip;
+    final trip = activeTrip;
+    final headingToPickup = trip.status == 'Asignado';
+    final target = headingToPickup ? trip.origin : trip.destination;
     final distance = trackingData?.routeDistanceKm ?? trip.distanceKm ?? 4.2;
     final eta = trackingData?.routeDurationSeconds != null &&
             trackingData!.routeDurationSeconds! > 0
@@ -497,7 +665,7 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
                   left: 16,
                   right: 16,
                   child: _NavigationBanner(
-                    destination: trip.destination,
+                    destination: target,
                     eta: eta,
                   ),
                 ),
@@ -663,6 +831,9 @@ class _DeliverySheet extends StatelessWidget {
   final bool updating;
   final ScrollController scrollController;
 
+  bool get headingToPickup => trip.status == 'Asignado';
+  String get targetAddress => headingToPickup ? trip.origin : trip.destination;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -704,8 +875,8 @@ class _DeliverySheet extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'DESTINO DE ENTREGA',
+                    Text(
+                      headingToPickup ? 'PUNTO DE RETIRO' : 'DESTINO DE ENTREGA',
                       style: TextStyle(
                         color: Color(0xFF9FB2DC),
                         fontSize: 9,
@@ -716,7 +887,7 @@ class _DeliverySheet extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      trip.destination,
+                      targetAddress,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 15,
@@ -758,7 +929,9 @@ class _DeliverySheet extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  trip.recipientName ?? trip.contactName ?? 'Cliente',
+                  headingToPickup
+                      ? conductorPickupPersonLabel(trip)
+                      : (trip.recipientName ?? trip.contactName ?? 'Cliente'),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -767,24 +940,25 @@ class _DeliverySheet extends StatelessWidget {
                   ),
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: glassBorder),
-                ),
-                child: Text(
-                  '${trip.packages} bulto${trip.packages == 1 ? '' : 's'}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Figtree',
+              if (!isTripServiceMode(trip.serviceMode))
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: glassBorder),
+                  ),
+                  child: Text(
+                    '${trip.packages} bulto${trip.packages == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Figtree',
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -796,7 +970,9 @@ class _DeliverySheet extends StatelessWidget {
               SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  conductorDeliveryReference(trip),
+                  headingToPickup
+                      ? conductorPickupReference(trip)
+                      : conductorDeliveryReference(trip),
                   style: const TextStyle(
                     color: Color(0xFFB9D4FF),
                     fontSize: 12.5,
@@ -833,7 +1009,7 @@ class _DeliverySheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(25),
               child: InkWell(
                 borderRadius: BorderRadius.circular(25),
-                onTap: () => _openWaze(context),
+              onTap: () => _openWaze(context),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -915,8 +1091,8 @@ class _DeliverySheet extends StatelessWidget {
                                   strokeWidth: 2.5,
                                 ),
                               )
-                            : const Text(
-                                'Llegué al destino',
+                            : Text(
+                                conductorPickupActionLabel(trip),
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 14.5,
@@ -978,19 +1154,20 @@ class _DeliverySheet extends StatelessWidget {
   }
 
   Future<void> _openWaze(BuildContext context) async {
-    final latitude = trip.destinationLat;
-    final longitude = trip.destinationLng;
+    final latitude = headingToPickup ? trip.originLat : trip.destinationLat;
+    final longitude = headingToPickup ? trip.originLng : trip.destinationLng;
+    final address = targetAddress;
     final waze = latitude != null && longitude != null
         ? Uri.parse('waze://?ll=$latitude,$longitude&navigate=yes')
         : Uri.parse(
-            'waze://?q=${Uri.encodeComponent(trip.destination)}&navigate=yes',
+            'waze://?q=${Uri.encodeComponent(address)}&navigate=yes',
           );
     final fallback = latitude != null && longitude != null
         ? Uri.parse(
             'https://waze.com/ul?ll=$latitude,$longitude&navigate=yes',
           )
         : Uri.parse(
-            'https://waze.com/ul?q=${Uri.encodeComponent(trip.destination)}&navigate=yes',
+            'https://waze.com/ul?q=${Uri.encodeComponent(address)}&navigate=yes',
           );
     if (await launchUrl(waze, mode: LaunchMode.externalApplication)) return;
     if (await launchUrl(fallback, mode: LaunchMode.externalApplication)) return;

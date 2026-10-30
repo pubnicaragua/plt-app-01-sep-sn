@@ -382,6 +382,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
       invoiceAmountCs: widget.productIsSale ? _invoiceAmountCs : 0,
       invoiceAlreadyPaid: !widget.productIsSale || _invoiceAlreadyPaid,
       options: options,
+      shipmentPayer: shipmentPayer,
       dollarRate: settings?.dollarRate ?? 36.5,
     );
   }

@@ -15,6 +15,7 @@ bool shouldShowBillingBeforeCreation(String? serviceMode) =>
 
 bool shouldRouteThroughPickup(String? status) {
   switch (_normalized(status)) {
+    case 'en camino':
     case 'recogio':
     case 'en viaje':
     case 'en entrega':
@@ -27,10 +28,15 @@ bool shouldRouteThroughPickup(String? status) {
   }
 }
 
+bool isScheduledTrip(Trip trip) {
+  final serviceType = _normalized(trip.serviceType);
+  return trip.isScheduled ||
+      serviceType == 'programado' ||
+      trip.scheduledDate?.trim().isNotEmpty == true;
+}
+
 DateTime? scheduledStartForTrip(Trip trip) {
-  final scheduled = trip.isScheduled ||
-      _normalized(trip.serviceType) == 'programado';
-  if (!scheduled) return null;
+  if (!isScheduledTrip(trip)) return null;
   final date = DateTime.tryParse(trip.scheduledDate ?? '');
   if (date == null) return null;
 
@@ -44,6 +50,18 @@ DateTime? scheduledStartForTrip(Trip trip) {
     hour != null && hour >= 0 && hour <= 23 ? hour : 0,
     minute != null && minute >= 0 && minute <= 59 ? minute : 0,
   );
+}
+
+bool isScheduledReminderDue(Trip trip, DateTime now) {
+  final start = scheduledStartForTrip(trip);
+  if (start == null || !start.isAfter(now)) return false;
+  final remaining = start.difference(now);
+  return remaining <= const Duration(hours: 2);
+}
+
+bool isScheduledStartDue(Trip trip, DateTime now) {
+  final start = scheduledStartForTrip(trip);
+  return start != null && !start.isAfter(now);
 }
 
 bool isScheduledBeforeStart(Trip trip, DateTime now) {

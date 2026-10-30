@@ -177,6 +177,67 @@ class AppGlassSurface extends StatelessWidget {
   }
 }
 
+/// Tarjeta con el mismo borde degradado y relleno transparente usado por las
+/// tarjetas de vehículos del home del cliente.
+class ShowcaseGlassCard extends StatelessWidget {
+  const ShowcaseGlassCard({
+    super.key,
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.borderRadius = 19,
+    this.selected = false,
+    this.onTap,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final double borderRadius;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: CustomPaint(
+        foregroundPainter: _AppGlassEdgePainter(
+          radius: borderRadius,
+          selected: selected,
+        ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: padding,
+          decoration: BoxDecoration(
+            color: selected ? const Color(0x4D1E5FD4) : Colors.transparent,
+            borderRadius: BorderRadius.circular(borderRadius),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x40000000),
+                offset: Offset(1, 5),
+                blurRadius: 4.7,
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+
+    if (onTap == null) return surface;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(borderRadius),
+        hoverColor: Colors.white.withValues(alpha: .08),
+        splashColor: cyan.withValues(alpha: .22),
+        highlightColor: Colors.white.withValues(alpha: .06),
+        child: surface,
+      ),
+    );
+  }
+}
+
 class _AppGlassEdgePainter extends CustomPainter {
   const _AppGlassEdgePainter({required this.radius, required this.selected});
 

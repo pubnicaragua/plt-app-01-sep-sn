@@ -11,6 +11,14 @@ import 'envio_asignado.dart';
 import 'seguimiento_pedido.dart';
 import 'finalizar_viaje.dart';
 
+Color clientServiceTagColor({required bool isTrip}) =>
+    isTrip ? const Color(0xFFFFC928) : accentBlue;
+
+Color clientServiceTagTextColor({required bool isTrip}) =>
+    isTrip ? Colors.black : Colors.white;
+
+double clientServiceTagFontSize({required bool isTrip}) => 12;
+
 String _vehicleData(Trip trip) =>
     '${trip.vehicleVariant ?? ''} ${trip.truckType ?? ''} '
             '${trip.transport ?? ''} ${trip.description ?? ''}'
@@ -994,14 +1002,14 @@ class _FigmaTripCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 9, vertical: 4),
                             decoration: BoxDecoration(
-                                color: isTrip
-                                    ? const Color(0xFFFFC928)
-                                    : accentBlue,
+                                color: clientServiceTagColor(isTrip: isTrip),
                                 borderRadius: BorderRadius.circular(10)),
                             child: Text(kind,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
+                                style: TextStyle(
+                                    color: clientServiceTagTextColor(
+                                        isTrip: isTrip),
+                                    fontSize: clientServiceTagFontSize(
+                                        isTrip: isTrip),
                                     fontWeight: FontWeight.w800,
                                     fontFamily: 'Figtree'))),
                         if (scheduled) ...[
@@ -1028,8 +1036,8 @@ class _FigmaTripCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Row(children: [
                         SizedBox(
-                            width: 58,
-                            height: 42,
+                            width: 70,
+                            height: 50,
                             child: Image.asset(vehicleAssetForTrip(trip),
                                 fit: BoxFit.contain,
                                 errorBuilder: (_, __, ___) => const Icon(
@@ -1234,13 +1242,16 @@ class _TripProgress extends StatelessWidget {
 
   int get done {
     switch (trip.status.toLowerCase()) {
-      case 'en camino':
+      case 'asignado':
         return 1;
+      case 'en camino':
+        return 2;
       case 'recogió':
       case 'recogio':
+        return 2;
       case 'en entrega':
       case 'entregando':
-        return 2;
+        return 3;
       case 'en viaje':
         return 3;
       case 'finalizado':
@@ -1308,11 +1319,13 @@ class _Tag extends StatelessWidget {
     required this.color,
     this.glass = false,
     this.darkText = false,
+    this.fontSize = 12,
   });
   final String label;
   final Color color;
   final bool glass;
   final bool darkText;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -1321,7 +1334,7 @@ class _Tag extends StatelessWidget {
       child: Text(label,
           style: TextStyle(
               color: darkText ? Colors.black : Colors.white,
-              fontSize: 8,
+              fontSize: fontSize,
               fontWeight: FontWeight.w800,
               fontFamily: 'Figtree')),
     );
@@ -1339,7 +1352,7 @@ class _Tag extends StatelessWidget {
       child: Text(label,
           style: TextStyle(
               color: darkText ? Colors.black : Colors.white,
-              fontSize: 8,
+              fontSize: fontSize,
               fontWeight: FontWeight.w800,
               fontFamily: 'Figtree')),
     );

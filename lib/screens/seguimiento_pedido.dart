@@ -49,57 +49,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   Map<String, BitmapDescriptor> _routeMarkerIcons = const {};
   bool _completionOpened = false;
   bool _finishingForTest = false;
-  Timer? _demoTaxiCompletion;
-
-  void _scheduleDemoTaxiCompletion() {
-    _demoTaxiCompletion = Timer(const Duration(seconds: 10), () async {
-      if (!mounted || _completionOpened) return;
-      _completionOpened = true;
-      final current = _latestTrip ?? widget.trip;
-      try {
-        const progression = [
-          'Asignado',
-          'En camino',
-          'En entrega',
-          'Completado',
-        ];
-        final normalizedStatus = current.status.trim().toLowerCase();
-        final startIndex = switch (normalizedStatus) {
-          'asignado' => 1,
-          'en camino' => 2,
-          'en entrega' => 3,
-          'completado' => progression.length,
-          _ => 0,
-        };
-        var updated = current;
-        for (var index = startIndex; index < progression.length; index++) {
-          updated = await apiClient.updateTripStatus(
-            updated.id,
-            progression[index],
-          );
-        }
-        if (!mounted) return;
-        poll?.cancel();
-        _latestTrip = updated;
-        _prevStatus = updated.status;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => FinalizarViaje(trip: updated)),
-        );
-      } catch (error) {
-        if (!mounted) return;
-        _completionOpened = false;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              error is ApiException
-                  ? error.message
-                  : 'No se pudo finalizar el viaje.',
-            ),
-          ),
-        );
-      }
-    });
-  }
+  bool _advancingTaxi = false;
 
   @override
   void initState() {
@@ -121,16 +71,86 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
     unawaited(_loadRouteMarkerIcons());
     _loadRoadRoute();
     poll = Timer.periodic(const Duration(seconds: 5), (_) => _refresh());
-    if (isTripServiceMode(widget.trip.serviceMode)) {
-      _scheduleDemoTaxiCompletion();
-    }
   }
 
   @override
   void dispose() {
     poll?.cancel();
-    _demoTaxiCompletion?.cancel();
     super.dispose();
+  }
+
+  String _nextTaxiStatus(String status) {
+    switch (status) {
+      case 'Asignado':
+        return 'En camino';
+      case 'En camino':
+        return 'En entrega';
+      case 'En entrega':
+        return 'Completado';
+      default:
+        return status;
+    }
+  }
+
+  String _taxiActionLabel(String status) {
+    switch (status) {
+      case 'Asignado':
+        return 'Iniciar viaje';
+      case 'En camino':
+        return 'Marcar recogida';
+      case 'En entrega':
+        return 'Completar viaje';
+      case 'Completado':
+        return 'Ver detalle del viaje';
+      default:
+        return 'Avanzar estado';
+    }
+  }
+
+  Future<void> _advanceTaxiStatus() async {
+    if (_advancingTaxi) return;
+    final current = _latestTrip ?? widget.trip;
+    if (current.status == 'Completado') {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => FinalizarViaje(trip: current)),
+      );
+      return;
+    }
+    final next = _nextTaxiStatus(current.status);
+    if (next == current.status) return;
+    setState(() => _advancingTaxi = true);
+    try {
+      final updated = await apiClient.updateTripStatus(current.id, next);
+      if (!mounted) return;
+      if (next == 'Completado') {
+        poll?.cancel();
+        _latestTrip = updated;
+        _prevStatus = updated.status;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => FinalizarViaje(trip: updated)),
+        );
+        return;
+      }
+      setState(() {
+        _latestTrip = updated;
+        _prevStatus = updated.status;
+        tracking = apiClient.getTracking(updated.id);
+        _advancingTaxi = false;
+      });
+      unawaited(_loadRoadRoute());
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _advancingTaxi = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is ApiException
+                ? error.message
+                : 'No se pudo cambiar el estado del viaje.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _refresh() async {
@@ -156,7 +176,6 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           !_completionOpened) {
         _completionOpened = true;
         poll?.cancel();
-        _demoTaxiCompletion?.cancel();
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => FinalizarViaje(trip: data)),
         );
@@ -169,6 +188,9 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
           _latestTrip = data;
           tracking = refreshedTracking;
         });
+        // Al cambiar de Asignado a En camino el objetivo pasa del retiro a
+        // la entrega; actualiza también la geometría local del mapa.
+        unawaited(_loadRoadRoute());
         pushNotification(
           title: 'Estado del envío ${data.id}',
           body: 'Ahora está: ${data.status}',
@@ -253,7 +275,6 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
       }
       if (!mounted) return;
       poll?.cancel();
-      _demoTaxiCompletion?.cancel();
       _latestTrip = updated;
       _prevStatus = updated.status;
       Navigator.of(context).pushReplacement(
@@ -396,6 +417,11 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
   List<LatLng> _orderedTripPoints() => _tripBoundsPoints();
 
   List<LatLng> _routeCoordinates(TrackingData? data) {
+    if (data != null && data.route.length >= 2) {
+      return data.route
+          .map((point) => LatLng(point.latitude, point.longitude))
+          .toList(growable: false);
+    }
     if (_roadRoute.length >= 2) return _roadRoute;
     return const [];
   }
@@ -532,11 +558,10 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
         );
         routePoints = [
           driverPoint,
-          ...(routeAfterPickup ? tripPoints.skip(1) : tripPoints),
+          ...(routeAfterPickup ? tripPoints.skip(1) : [tripPoints.first]),
         ];
       }
       if (!isTaxi &&
-          !shouldRouteThroughPickup(serverTracking.status) &&
           serverTracking.routeProvider == 'google' &&
           serverTracking.route.length >= 2) {
         final points = serverTracking.route
@@ -1051,7 +1076,7 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: _progressFor(currentStatus),
+                value: _progressFor(currentStatus, liveData, trip),
                 minHeight: 6,
                 backgroundColor: Colors.white.withValues(alpha: .16),
                 color: figmaBlue,
@@ -1476,19 +1501,61 @@ class _SeguimientoPedidoState extends State<SeguimientoPedido> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 46,
+          child: Material(
+            color: accentBlue,
+            borderRadius: BorderRadius.circular(24),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24),
+              onTap: _advancingTaxi ? null : _advanceTaxiStatus,
+              child: Center(
+                child: _advancingTaxi
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        _taxiActionLabel(currentStatus),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  double _progressFor(String status) {
+  double _progressFor(String status, TrackingData? data, Trip trip) {
+    if (status == 'En camino' &&
+        data?.routeDistanceKm != null &&
+        trip.distanceKm != null &&
+        trip.distanceKm! > 0) {
+      final travelled = (1 - data!.routeDistanceKm! / trip.distanceKm!)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      return (.33 + travelled * .33).clamp(.33, .66).toDouble();
+    }
     switch (status) {
       case 'Asignado':
         return 0;
       case 'En camino':
-        return 0;
-      case 'Recogió':
-      case 'En entrega':
         return .33;
+      case 'Recogió':
+        return .33;
+      case 'En entrega':
+        return .66;
       case 'En viaje':
         return .66;
       case 'Finalizado':
@@ -1787,11 +1854,14 @@ class _StepsRow extends StatelessWidget {
 
   int get _done {
     switch (status) {
-      case 'En camino':
+      case 'Asignado':
         return 1;
-      case 'Recogió':
-      case 'En entrega':
+      case 'En camino':
         return 2;
+      case 'Recogió':
+        return 2;
+      case 'En entrega':
+        return 3;
       case 'En viaje':
         return 3;
       case 'Finalizado':

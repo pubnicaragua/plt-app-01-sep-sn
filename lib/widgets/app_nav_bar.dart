@@ -34,19 +34,19 @@ class AppNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final navWidth = screenWidth > 384 ? 360.0 : screenWidth - 24;
+    final navWidth = screenWidth > 430 ? 430.0 : screenWidth - 16;
     return Center(
       child: SizedBox(
         width: navWidth,
-        height: 64,
+        height: 76,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(34),
+          borderRadius: BorderRadius.circular(38),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
             child: Container(
               decoration: BoxDecoration(
                 color: const Color(0x3D4B5563),
-                borderRadius: BorderRadius.circular(34),
+                borderRadius: BorderRadius.circular(38),
                 border: Border.all(color: Colors.white.withValues(alpha: .28)),
                 boxShadow: const [
                   BoxShadow(
@@ -57,7 +57,7 @@ class AppNavBar extends StatelessWidget {
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Row(
                   children: [
                     _item(0, items[0]),
@@ -83,12 +83,12 @@ class AppNavBar extends StatelessWidget {
         child: Center(
           child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
-              width: active ? 62 : 56,
-              height: 56,
+              width: active ? 84 : 62,
+              height: 66,
               decoration: active
                   ? BoxDecoration(
                       color: Colors.white.withValues(alpha: .14),
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(33),
                       border: Border.all(
                           color: Colors.white.withValues(alpha: .24)),
                     )

@@ -6,6 +6,7 @@ import '../core/api_client.dart';
 import '../core/location_service.dart';
 import '../core/notifications.dart';
 import '../core/theme.dart';
+import '../core/trip_routing.dart';
 import '../models/api_models.dart';
 import '../services/location_sync.dart';
 import '../widgets/glass.dart';
@@ -13,6 +14,8 @@ import '../widgets/fuel_sheet.dart';
 import 'inicio.dart';
 import 'viaje_asignado.dart';
 import 'viaje_en_curso.dart';
+import 'historial_conductor.dart';
+import 'perfil_conductor.dart';
 
 String _driverVehicleLabel(Trip trip) {
   final value = '${trip.vehicleVariant ?? ''} ${trip.truckType ?? ''} '
@@ -56,13 +59,26 @@ String _driverVehicleLabelFromValue(String value) {
   }
   if (normalized.contains('moto')) return 'MOTO';
   if (normalized.contains('pickup')) return 'PICKUP';
-  if (normalized.contains('van')) return 'VAN';
+  if (normalized.contains('van') ||
+      normalized.contains('transit') ||
+      normalized.contains('caddy')) {
+    return 'VAN';
+  }
   if (normalized.contains('camion') ||
       normalized.contains('camión') ||
       normalized.contains('carga')) {
     return 'CAMIÓN';
   }
   return 'AUTO';
+}
+
+String _driverVehicleDisplayLabel(String value, String category) {
+  final trimmed = value.trim();
+  final normalized = trimmed.toLowerCase();
+  final isGeneric = normalized == category.toLowerCase() ||
+      (category == 'CAMIÓN' && normalized == 'camion') ||
+      (category == 'SEDÁN' && normalized == 'sedan');
+  return isGeneric || trimmed.isEmpty ? category : trimmed.toUpperCase();
 }
 
 String _driverVehicleAssetForLabel(String label) {
@@ -95,10 +111,10 @@ DriverVehicleInfo resolveDriverVehicleInfo(
   final profileVehicle = profile?.vehicle?.trim() ?? '';
   final profilePlate = profile?.plate?.trim() ?? '';
   if (profileVehicle.isNotEmpty) {
-    final label = _driverVehicleLabelFromValue(profileVehicle);
+    final category = _driverVehicleLabelFromValue(profileVehicle);
     return DriverVehicleInfo(
-      label: label,
-      asset: _driverVehicleAssetForLabel(label),
+      label: _driverVehicleDisplayLabel(profileVehicle, category),
+      asset: _driverVehicleAssetForLabel(category),
       plate: profilePlate.isEmpty ? 'Placa pendiente' : profilePlate,
     );
   }
@@ -122,7 +138,8 @@ String _driverVehicleAsset(Trip trip) {
 }
 
 bool isDriverTripInProgress(Trip trip) =>
-    trip.status == 'En camino' || trip.status == 'En entrega';
+    trip.status == 'En camino' ||
+    trip.status == 'En entrega';
 
 String driverHomeQuantityLabel(Trip trip) {
   final mode = (trip.serviceMode ?? '').toLowerCase();
@@ -132,6 +149,16 @@ String driverHomeQuantityLabel(Trip trip) {
   }
   return '${trip.packages} bulto${trip.packages == 1 ? '' : 's'}';
 }
+
+String driverNewTripRouteLabel(Trip trip) =>
+    '${trip.origin.trim()} → ${trip.destination.trim()}';
+
+String driverNewTripNotificationTitle(Trip trip) =>
+    'Nuevo viaje #${trip.id.replaceFirst('#', '')}';
+
+String driverNewTripQuantityLabel(Trip trip) => driverHomeQuantityLabel(trip);
+
+String driverNewTripServiceLabel(Trip trip) => _driverVehicleLabel(trip);
 
 class HomeConductor extends StatefulWidget {
   const HomeConductor({super.key});
@@ -148,6 +175,9 @@ class _HomeConductorState extends State<HomeConductor> {
   final Set<String> knownIds = {};
   final Set<String> knownIncidentIds = {};
   final Set<String> notifiedReturnTrips = {};
+  final Set<String> notifiedScheduledReminders = {};
+  final Set<String> activatedScheduledTrips = {};
+  final List<Trip> newTripNotifications = [];
   final List<String> news = [];
   int unread = 0;
   String? incidentError;
@@ -214,8 +244,9 @@ class _HomeConductorState extends State<HomeConductor> {
     try {
       final data = await apiClient.getTrips(driver: _driverName);
       if (!mounted) return;
+      final processed = await _processScheduledTrips(data);
       knownIds.addAll(data.map((t) => t.id));
-      setState(() => trips = data);
+      setState(() => trips = processed);
     } catch (_) {
       if (mounted) setState(() => error = 'No se pudieron cargar tus viajes.');
     } finally {
@@ -240,11 +271,21 @@ class _HomeConductorState extends State<HomeConductor> {
       }
       final data = await apiClient.getTrips(driver: _driverName);
       if (!mounted) return;
-      final fresh = data.where((t) => !knownIds.contains(t.id)).toList();
+      final processed = await _processScheduledTrips(data);
+      final fresh = processed.where((t) => !knownIds.contains(t.id)).toList();
       if (fresh.isNotEmpty) {
+        final freshAssigned =
+            fresh.where((trip) => trip.status == 'Asignado').toList();
+        for (final trip in freshAssigned) {
+          if (!newTripNotifications.any((item) => item.id == trip.id)) {
+            newTripNotifications.insert(0, trip);
+          }
+        }
         for (final trip in fresh) {
-          news.insert(0,
-              'Nuevo viaje ${trip.id} asignado · ${trip.origin} → ${trip.destination}');
+          if (trip.status != 'Asignado') {
+            news.insert(0,
+                'Actualización ${trip.id} · ${trip.origin} → ${trip.destination}');
+          }
         }
         setState(() => unread += fresh.length);
         if (mounted && fresh.any((t) => t.status == 'Asignado')) {
@@ -276,10 +317,61 @@ class _HomeConductorState extends State<HomeConductor> {
         }
         knownIds.addAll(data.map((t) => t.id));
       }
-      setState(() => trips = data);
-      _checkScheduledReturns(data);
+      setState(() => trips = processed);
+      _checkScheduledReturns(processed);
     } catch (_) {}
     await _refreshIncidentNotifications();
+  }
+
+  Future<List<Trip>> _processScheduledTrips(List<Trip> source) async {
+    final now = DateTime.now();
+    final processed = <Trip>[];
+    for (final trip in source) {
+      var current = trip;
+      if (isScheduledReminderDue(current, now)) {
+        final key = '${current.id}:reminder';
+        if (notifiedScheduledReminders.add(key)) {
+          const title = 'Recordatorio de servicio programado';
+          final body = 'El viaje ${current.id} inicia en menos de dos horas: '
+              '${current.origin} → ${current.destination}.';
+          unawaited(pushNotification(
+            title: title,
+            body: body,
+            id: key.hashCode,
+          ));
+          news.insert(0, '$title · $body');
+          if (mounted) setState(() => unread++);
+        }
+      }
+
+      if (isScheduledStartDue(current, now) &&
+          current.isActive &&
+          current.status != 'En camino' &&
+          current.status != 'En entrega') {
+        if (current.status != 'Asignado') {
+          try {
+            current = await apiClient.updateTripStatus(current.id, 'Asignado');
+          } catch (_) {
+            // El viaje seguirá visible; se reintentará en el siguiente poll.
+          }
+        }
+        final key = '${current.id}:activated';
+        if (activatedScheduledTrips.add(key)) {
+          const title = 'Servicio programado activo';
+          final body =
+              'El viaje ${current.id} ya está activo. Puedes comenzar el servicio.';
+          unawaited(pushNotification(
+            title: title,
+            body: body,
+            id: key.hashCode,
+          ));
+          news.insert(0, '$title · $body');
+          if (mounted) setState(() => unread++);
+        }
+      }
+      processed.add(current);
+    }
+    return processed;
   }
 
   Future<void> _openFuelSheet() async {
@@ -396,68 +488,26 @@ class _HomeConductorState extends State<HomeConductor> {
   }
 
   void _openNotifications() {
+    final notificationTrips = <Trip>[...newTripNotifications];
+    for (final trip in _assigned) {
+      if (!notificationTrips.any((item) => item.id == trip.id)) {
+        notificationTrips.add(trip);
+      }
+    }
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0B1D4D),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Notificaciones',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-              ),
-              const SizedBox(height: 14),
-              if (news.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                    child: Text(
-                      'No tienes notificaciones nuevas.',
-                      style: TextStyle(
-                        color: Color(0xFFB9D4FF),
-                        fontFamily: 'Figtree',
-                      ),
-                    ),
-                  ),
-                )
-              else
-                for (final item in news)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.fiber_manual_record,
-                            color: cyan, size: 10),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            item,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontFamily: 'Figtree',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-            ],
-          ),
-        ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      barrierColor: Colors.black.withValues(alpha: .48),
+      builder: (sheetContext) => _DriverNotificationsSheet(
+        trips: notificationTrips,
+        news: news,
+        onTripTap: (trip) {
+          Navigator.of(sheetContext).pop();
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ViajeAsignado(tripId: trip.id)),
+          );
+        },
       ),
     ).then((_) {
       if (mounted) setState(() => unread = 0);
@@ -477,14 +527,10 @@ class _HomeConductorState extends State<HomeConductor> {
     return list;
   }
 
-  List<Trip> get _history =>
-      trips.where((t) => t.status == 'Completado').toList();
-
   @override
   Widget build(BuildContext context) {
     final assigned = _assigned;
     final upcoming = _upcoming;
-    final history = _history;
     final vehicleInfo = resolveDriverVehicleInfo(
       apiClient.currentUser,
       assigned.isNotEmpty
@@ -506,49 +552,55 @@ class _HomeConductorState extends State<HomeConductor> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(5, 5, 14, 5),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .14),
-                        borderRadius: BorderRadius.circular(40),
-                        border: Border.all(color: glassBorder),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF0B47D9), Color(0xFF083ED1)],
+                    GestureDetector(
+                      onTap: _openDriverMenu,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(5, 5, 14, 5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .14),
+                          borderRadius: BorderRadius.circular(40),
+                          border: Border.all(color: glassBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF0B47D9),
+                                    Color(0xFF083ED1)
+                                  ],
+                                ),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: .55),
+                                ),
                               ),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: .55),
+                              child: Text(
+                                initials(_driverName),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Figtree',
+                                ),
                               ),
                             ),
-                            child: Text(
-                              initials(_driverName),
+                            const SizedBox(width: 9),
+                            Text(
+                              _driverName.split(' ').first,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
                                 fontFamily: 'Figtree',
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 9),
-                          Text(
-                            _driverName.split(' ').first,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: 'Figtree',
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     const Spacer(),
@@ -578,18 +630,12 @@ class _HomeConductorState extends State<HomeConductor> {
                   ),
                 ),
                 const SizedBox(height: 22),
-                _DriverStatusCard(
-                  location: location,
-                  hasActiveWork: assigned.isNotEmpty || upcoming.isNotEmpty,
-                  onRefresh: _load,
-                ),
-                const SizedBox(height: 14),
                 _AssignedVehicleCard(info: vehicleInfo),
                 const SizedBox(height: 14),
                 _OperationalSummary(
                   assigned: assigned.length,
                   active: upcoming.length,
-                  completed: history.length,
+                  completed: trips.where((trip) => trip.isCompleted).length,
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -715,20 +761,6 @@ class _HomeConductorState extends State<HomeConductor> {
                       ],
                     ],
                   ],
-                  if (history.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Mi historial',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Figtree',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _HistoryCard(trips: history),
-                  ],
                 ],
               ],
             ),
@@ -750,6 +782,353 @@ class _HomeConductorState extends State<HomeConductor> {
       MaterialPageRoute(builder: (_) => ViajeAsignado(tripId: trip.id)),
     );
   }
+
+  void _openDriverMenu() {
+    showMenu<String>(
+      context: context,
+      position: const RelativeRect.fromLTRB(18, 70, 190, 0),
+      color: const Color(0xFF0B1D4D),
+      elevation: 14,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0x6687B7FF)),
+      ),
+      items: const [
+        PopupMenuItem<String>(
+          value: 'history',
+          child: Row(
+            children: [
+              Icon(Icons.history_rounded, color: cyan),
+              SizedBox(width: 12),
+              Text('Historial de viajes',
+                  style: TextStyle(color: Colors.white, fontFamily: 'Figtree')),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'profile',
+          child: Row(
+            children: [
+              Icon(Icons.person_outline_rounded, color: cyan),
+              SizedBox(width: 12),
+              Text('Mi perfil',
+                  style: TextStyle(color: Colors.white, fontFamily: 'Figtree')),
+            ],
+          ),
+        ),
+      ],
+    ).then((selected) {
+      if (!mounted || selected == null) return;
+      final page = selected == 'history'
+          ? const HistorialConductorScreen()
+          : const PerfilConductorScreen();
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    });
+  }
+}
+
+class _DriverNotificationsSheet extends StatelessWidget {
+  const _DriverNotificationsSheet({
+    required this.trips,
+    required this.news,
+    required this.onTripTap,
+  });
+
+  final List<Trip> trips;
+  final List<String> news;
+  final ValueChanged<Trip> onTripTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(30)),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xEE3E639B), Color(0xF0142B63)],
+                  ),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(30)),
+                  border: Border.all(color: Colors.white.withValues(alpha: .28)),
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 11, 16, 22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .68),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Row(
+                        children: [
+                          Icon(Icons.notifications_active_outlined,
+                              color: Colors.white, size: 23),
+                          SizedBox(width: 9),
+                          Text(
+                            'Notificaciones',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Avisos de asignaciones y actividad de tus viajes',
+                        style: TextStyle(
+                          color: Color(0xE6FFFFFF),
+                          fontSize: 12,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (trips.isEmpty && news.isEmpty)
+                        const GlassCard(
+                          padding: EdgeInsets.all(20),
+                          child: Text(
+                            'No tienes novedades por ahora.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                        ),
+                      for (final trip in trips) ...[
+                        _DriverNewTripCard(
+                          trip: trip,
+                          onTap: () => onTripTap(trip),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      for (final item in news) ...[
+                        _DriverNewsRow(item: item),
+                        const SizedBox(height: 10),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+  }
+}
+
+class _DriverNewTripCard extends StatelessWidget {
+  const _DriverNewTripCard({required this.trip, required this.onTap});
+
+  final Trip trip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      onTap: onTap,
+      color: const Color(0xD91A3D7D),
+      borderRadius: 22,
+      padding: const EdgeInsets.fromLTRB(16, 15, 14, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: cyan.withValues(alpha: .22),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: cyan.withValues(alpha: .55)),
+                ),
+                child: const Text(
+                  'NUEVO VIAJE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .6,
+                    fontFamily: 'Figtree',
+                  ),
+                ),
+              ),
+              const Spacer(),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white, size: 23),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            driverNewTripNotificationTitle(trip),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Figtree',
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DriverNotificationRoute(trip: trip),
+        ],
+      ),
+    );
+  }
+}
+
+class _DriverNotificationRoute extends StatelessWidget {
+  const _DriverNotificationRoute({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 22,
+          child: Column(
+            children: [
+              const _NotificationRouteDot(color: Colors.white),
+              Container(
+                width: 2,
+                height: 25,
+                color: Colors.white.withValues(alpha: .44),
+              ),
+              const _NotificationRouteDot(color: Color(0xFFFF6870)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'RECOGIDA',
+                style: TextStyle(
+                  color: Color(0xBFE7F1FF),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              Text(
+                trip.origin,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'DESTINO',
+                style: TextStyle(
+                  color: Color(0xBFE7F1FF),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              Text(
+                trip.destination,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NotificationRouteDot extends StatelessWidget {
+  const _NotificationRouteDot({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class _DriverNewsRow extends StatelessWidget {
+  const _DriverNewsRow({required this.item});
+
+  final String item;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      color: Colors.white.withValues(alpha: .13),
+      borderRadius: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: cyan.withValues(alpha: .18),
+              shape: BoxShape.circle,
+              border: Border.all(color: cyan.withValues(alpha: .55)),
+            ),
+            child: const Icon(Icons.notifications_none_rounded,
+                color: cyan, size: 19),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              item,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                height: 1.35,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AssignedVehicleCard extends StatelessWidget {
@@ -759,200 +1138,79 @@ class _AssignedVehicleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       height: 146,
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Image.asset(
-              info.asset,
-              height: 126,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.directions_car_filled_rounded,
-                color: Color(0xFFB9D4FF),
-                size: 72,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Image.asset(
+                info.asset,
+                height: 126,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.directions_car_filled_rounded,
+                  color: Color(0xFFB9D4FF),
+                  size: 72,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 14),
-          SizedBox(
-            width: 132,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Vehículo asignado',
-                  style: TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 11,
-                    fontFamily: 'Figtree',
+            const SizedBox(width: 14),
+            SizedBox(
+              width: 132,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Vehículo asignado',
+                    style: TextStyle(
+                      color: Color(0xFFB9D4FF),
+                      fontSize: 11,
+                      fontFamily: 'Figtree',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  info.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .13),
-                    borderRadius: BorderRadius.circular(9),
-                    border: Border.all(color: glassBorder),
-                  ),
-                  child: Text(
-                    info.plate,
+                  const SizedBox(height: 5),
+                  Text(
+                    info.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 11,
+                      fontSize: 19,
                       fontWeight: FontWeight.w800,
                       fontFamily: 'Figtree',
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DriverStatusCard extends StatelessWidget {
-  const _DriverStatusCard({
-    required this.location,
-    required this.hasActiveWork,
-    required this.onRefresh,
-  });
-
-  final CurrentLocation? location;
-  final bool hasActiveWork;
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final gpsActive = location != null;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(15, 14, 12, 14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xCC1454D8), Color(0x991A3D99)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(19),
-        border: Border.all(color: cyan.withValues(alpha: .72)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0D47D9).withValues(alpha: .25),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .14),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withValues(alpha: .35)),
-            ),
-            child: Icon(
-              gpsActive ? Icons.gps_fixed_rounded : Icons.gps_not_fixed_rounded,
-              color: gpsActive ? const Color(0xFF7DFFCE) : Colors.white70,
-              size: 21,
-            ),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hasActiveWork
-                      ? 'Jornada en curso'
-                      : 'Listo para recibir viajes',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  gpsActive
-                      ? 'Tu ubicación se está compartiendo'
-                      : 'Activa el GPS para actualizar tu ubicación',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFFD6E5FF),
-                    fontSize: 11.5,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: onRefresh,
-            borderRadius: BorderRadius.circular(18),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .16),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withValues(alpha: .24)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+                  const SizedBox(height: 5),
                   Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color:
-                          gpsActive ? const Color(0xFF7DFFCE) : Colors.white54,
-                      shape: BoxShape.circle,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 4,
                     ),
-                  ),
-                  const SizedBox(width: 5),
-                  const Text(
-                    'Actualizar',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'Figtree',
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .13),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(color: glassBorder),
+                    ),
+                    child: Text(
+                      info.plate,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -971,13 +1229,9 @@ class _OperationalSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ShowcaseGlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: glassBorder),
-      ),
+      borderRadius: 17,
       child: Row(
         children: [
           Expanded(
@@ -1069,17 +1323,12 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return ShowcaseGlassCard(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        height: 72,
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .09),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: glassBorder),
-        ),
+      borderRadius: 16,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
+      child: SizedBox(
+        height: 52,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1156,7 +1405,7 @@ class _ClientStyleNextTripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTrip = (trip.serviceMode ?? '').toLowerCase().contains('taxi');
+    final isTrip = isTripServiceMode(trip.serviceMode);
     final vehicle = _driverVehicleLabel(trip);
     final quantity = driverHomeQuantityLabel(trip);
     final payment = conductorPaymentLabel(trip);
@@ -1164,187 +1413,176 @@ class _ClientStyleNextTripCard extends StatelessWidget {
         ? null
         : 'Precio: ${formatFareCs(trip.estimatedCostCs!)}';
 
-    return InkWell(
+    return ShowcaseGlassCard(
       onTap: onView,
-      borderRadius: BorderRadius.circular(17),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
-        decoration: BoxDecoration(
-          color: const Color(0xA8143474),
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: const Color(0x6687B7FF)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: .16),
-              blurRadius: 16,
-              offset: const Offset(0, 7),
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
+      borderRadius: 17,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isTrip ? 'PRÓXIMO VIAJE' : 'PRÓXIMO ENVÍO',
+            style: TextStyle(
+              color: Color(0xFFB9D4FF),
+              fontSize: 9,
+              letterSpacing: 1.05,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Figtree',
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isTrip ? 'PRÓXIMO VIAJE' : 'PRÓXIMO ENVÍO',
-              style: TextStyle(
-                color: Color(0xFFB9D4FF),
-                fontSize: 9,
-                letterSpacing: 1.05,
-                fontWeight: FontWeight.w800,
-                fontFamily: 'Figtree',
+          ),
+          const SizedBox(height: 7),
+          Row(
+            children: [
+              _DriverChip(
+                label: isTrip ? 'Viaje' : 'Envío',
+                color: isTrip
+                    ? const Color(0xFFFFC928)
+                    : const Color(0xFF0D5BFF),
+                textColor: isTrip ? Colors.black : Colors.white,
               ),
-            ),
+              const SizedBox(width: 6),
+              _DriverChip(
+                label: vehicle,
+                color: Colors.white.withValues(alpha: .18),
+                borderColor: Colors.white.withValues(alpha: .34),
+              ),
+              const SizedBox(width: 6),
+              _DriverChip(
+                label: trip.statusLabel,
+                color: Colors.white.withValues(alpha: .10),
+                borderColor: Colors.white.withValues(alpha: .28),
+              ),
+              const Spacer(),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white, size: 24),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 70,
+                height: 48,
+                child: Image.asset(
+                  _driverVehicleAsset(trip),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.local_shipping_rounded,
+                    color: Colors.white70,
+                    size: 34,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DriverRouteSummary(
+                  origin: trip.origin,
+                  destination: trip.destination,
+                  tripId: trip.id,
+                  quantity: quantity,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF16C784),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                payment,
+                style: const TextStyle(
+                  color: Color(0xFF61E5B5),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Divider(color: Colors.white.withValues(alpha: .18), height: 1),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _DriverMetaItem(
+                icon: Icons.calendar_today_rounded,
+                text: trip.scheduledDate ?? trip.date,
+              ),
+              const SizedBox(width: 14),
+              _DriverMetaItem(
+                icon: Icons.schedule_rounded,
+                text: trip.scheduledTime ?? trip.pickupTime ?? '—',
+              ),
+              const Spacer(),
+              _DriverMetaItem(
+                icon: isTrip
+                    ? Icons.people_alt_rounded
+                    : Icons.inventory_2_rounded,
+                text: quantity,
+                alignRight: true,
+              ),
+            ],
+          ),
+          if (price != null) ...[
             const SizedBox(height: 7),
             Row(
               children: [
-                _DriverChip(
-                  label: isTrip ? 'Viaje' : 'Envío',
-                  color: const Color(0xFF0D5BFF),
-                ),
-                const SizedBox(width: 6),
-                _DriverChip(
-                  label: vehicle,
-                  color: Colors.white.withValues(alpha: .18),
-                  borderColor: Colors.white.withValues(alpha: .34),
-                ),
-                const SizedBox(width: 6),
-                _DriverChip(
-                  label: trip.statusLabel,
-                  color: Colors.white.withValues(alpha: .10),
-                  borderColor: Colors.white.withValues(alpha: .28),
-                ),
-                const Spacer(),
-                const Icon(Icons.chevron_right_rounded,
-                    color: Colors.white, size: 24),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 70,
-                  height: 48,
-                  child: Image.asset(
-                    _driverVehicleAsset(trip),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.local_shipping_rounded,
-                      color: Colors.white70,
-                      size: 34,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _DriverRouteSummary(
-                    origin: trip.origin,
-                    destination: trip.destination,
-                    tripId: trip.id,
-                    quantity: quantity,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF16C784),
-                    shape: BoxShape.circle,
-                  ),
-                ),
+                const Icon(Icons.payments_outlined, color: cyan, size: 15),
                 const SizedBox(width: 6),
                 Text(
-                  payment,
+                  price,
                   style: const TextStyle(
-                    color: Color(0xFF61E5B5),
+                    color: Colors.white,
                     fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     fontFamily: 'Figtree',
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Divider(color: Colors.white.withValues(alpha: .18), height: 1),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _DriverMetaItem(
-                  icon: Icons.calendar_today_rounded,
-                  text: trip.scheduledDate ?? trip.date,
-                ),
-                const SizedBox(width: 14),
-                _DriverMetaItem(
-                  icon: Icons.schedule_rounded,
-                  text: trip.scheduledTime ?? trip.pickupTime ?? '—',
-                ),
-                const Spacer(),
-                _DriverMetaItem(
-                  icon: isTrip
-                      ? Icons.people_alt_rounded
-                      : Icons.inventory_2_rounded,
-                  text: quantity,
-                  alignRight: true,
-                ),
-              ],
-            ),
-            if (price != null) ...[
-              const SizedBox(height: 7),
-              Row(
-                children: [
-                  const Icon(Icons.payments_outlined, color: cyan, size: 15),
-                  const SizedBox(width: 6),
-                  Text(
-                    price,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Figtree',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 11),
-            SizedBox(
-              width: double.infinity,
-              height: 42,
-              child: Material(
-                color: const Color(0xFF0D5BFF),
-                borderRadius: BorderRadius.circular(24),
-                child: InkWell(
-                  onTap: onView,
-                  borderRadius: BorderRadius.circular(24),
-                  child: const Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Ver viaje',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Figtree',
-                          ),
-                        ),
-                        SizedBox(width: 7),
-                        Icon(Icons.arrow_forward_rounded,
-                            color: Colors.white, size: 17),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ],
-        ),
+          const SizedBox(height: 11),
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: Material(
+              color: const Color(0xFF0D5BFF),
+              borderRadius: BorderRadius.circular(24),
+              child: InkWell(
+                onTap: onView,
+                borderRadius: BorderRadius.circular(24),
+                child: const Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Ver viaje',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        ),
+                      ),
+                      SizedBox(width: 7),
+                      Icon(Icons.arrow_forward_rounded,
+                          color: Colors.white, size: 17),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1394,11 +1632,13 @@ class _DriverChip extends StatelessWidget {
   const _DriverChip({
     required this.label,
     required this.color,
+    this.textColor = Colors.white,
     this.borderColor,
   });
 
   final String label;
   final Color color;
+  final Color textColor;
   final Color? borderColor;
 
   @override
@@ -1412,8 +1652,8 @@ class _DriverChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: textColor,
           fontSize: 9.5,
           fontWeight: FontWeight.w800,
           fontFamily: 'Figtree',
@@ -1818,13 +2058,9 @@ class _UpcomingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ShowcaseGlassCard(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF17285C),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: glassBorder),
-      ),
+      borderRadius: 16,
       child: Column(
         children: [
           Row(
@@ -1940,103 +2176,6 @@ class _UpcomingTile extends StatelessWidget {
   }
 }
 
-class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({required this.trips});
-
-  final List<Trip> trips;
-
-  @override
-  Widget build(BuildContext context) {
-    final earned = trips.fold<double>(
-      0,
-      (sum, t) => sum + (t.estimatedCostCs ?? 0),
-    );
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: const Color(0xFF17285C),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: glassBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Total ganado',
-                  style: TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 12,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-              ),
-              Text(
-                formatFareCs(earned),
-                style: const TextStyle(
-                  color: mint,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 13),
-          for (final trip in trips.take(4)) ...[
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: mint, size: 16),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${trip.id} · ${trip.destination}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'Figtree',
-                          ),
-                        ),
-                        Text(
-                          '${trip.date} · ${driverHomeQuantityLabel(trip)}',
-                          style: const TextStyle(
-                            color: Color(0xFF8FA0C4),
-                            fontSize: 10.5,
-                            fontFamily: 'Figtree',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    trip.estimatedCostCs == null
-                        ? '—'
-                        : formatFareCs(trip.estimatedCostCs!),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'Figtree',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onRetry});
 
@@ -2044,13 +2183,9 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ShowcaseGlassCard(
       padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 22),
-      decoration: BoxDecoration(
-        color: const Color(0xFF17285C),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: glassBorder),
-      ),
+      borderRadius: 18,
       child: Column(
         children: [
           const Icon(Icons.local_shipping_outlined,
@@ -2095,13 +2230,9 @@ class _NoTripsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ShowcaseGlassCard(
       padding: const EdgeInsets.symmetric(vertical: 22),
-      decoration: BoxDecoration(
-        color: const Color(0xFF17285C),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: glassBorder),
-      ),
+      borderRadius: 16,
       child: const Text(
         'Sin viajes de momento',
         textAlign: TextAlign.center,
@@ -2123,13 +2254,9 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ShowcaseGlassCard(
       padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 22),
-      decoration: BoxDecoration(
-        color: const Color(0xFF17285C),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: glassBorder),
-      ),
+      borderRadius: 18,
       child: Column(
         children: [
           const Icon(Icons.cloud_off_rounded,

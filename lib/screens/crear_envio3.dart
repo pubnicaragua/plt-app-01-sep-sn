@@ -248,7 +248,11 @@ class _CrearEnvio3State extends State<CrearEnvio3>
       } else {
         created = await apiClient.getTrip(_createdTripId!);
       }
-      if (widget.paymentMethod.isNotEmpty) {
+      // A recipient-paid shipment is collected by the driver at delivery.
+      // Do not mark it as paid when the client creates the trip.
+      final recipientPays =
+          widget.shipmentPayer.trim().toLowerCase() == 'destinatario';
+      if (widget.paymentMethod.isNotEmpty && !recipientPays) {
         await apiClient.updateTripPayment(
           id: created.id,
           method: widget.paymentMethod,

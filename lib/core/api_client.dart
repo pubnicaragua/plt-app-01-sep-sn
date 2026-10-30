@@ -16,6 +16,7 @@ class ApiClient {
   final http.Client _client;
   String? accessToken;
   SessionUser? currentUser;
+  String? currentDriverId;
 
   static String get _defaultBaseUrl {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -40,6 +41,7 @@ class ApiClient {
     final response = LoginResponse.fromJson(json);
     accessToken = response.accessToken;
     currentUser = response.user;
+    await refreshCurrentDriver(silent: true);
     return response;
   }
 
@@ -55,6 +57,7 @@ class ApiClient {
       if (user is Map) {
         currentUser = SessionUser.fromJson(user.cast<String, dynamic>());
       }
+      await refreshCurrentDriver(silent: true);
       return json['valid'] == true;
     } catch (error) {
       return error is ApiException && error.statusCode == 401 ? false : true;
@@ -64,6 +67,60 @@ class ApiClient {
   Future<void> clearSession() async {
     accessToken = null;
     currentUser = null;
+    currentDriverId = null;
+  }
+
+  Future<SessionUser?> refreshCurrentDriver({bool silent = false}) async {
+    if (currentUser?.role != 'driver' || accessToken == null)
+      return currentUser;
+    try {
+      final driver =
+          (await _send('GET', '/drivers/me')) as Map<String, dynamic>;
+      currentDriverId = driver['id']?.toString();
+      currentUser = currentUser!.copyWith(
+        displayName: driver['name']?.toString(),
+        phone: driver['phone']?.toString(),
+        vehicle: driver['vehicle']?.toString(),
+        plate: driver['plate']?.toString(),
+        licenseNumber: driver['licenseNo']?.toString(),
+        licenseExpiry: driver['licenseExp']?.toString(),
+        vehicleType: driver['vehicle']?.toString(),
+      );
+      return currentUser;
+    } catch (_) {
+      if (!silent) rethrow;
+      return currentUser;
+    }
+  }
+
+  Future<SessionUser> updateCurrentDriver({
+    String? name,
+    String? phone,
+    String? licenseNo,
+    String? licenseExp,
+  }) async {
+    final driverId = currentDriverId ?? currentUser?.id;
+    if (driverId == null || driverId.isEmpty) {
+      throw const ApiException('No se encontró el conductor activo.');
+    }
+    final driver = (await _send(
+      'PATCH',
+      '/drivers/${Uri.encodeComponent(driverId)}',
+      body: {
+        if (name != null) 'name': name.trim(),
+        if (phone != null) 'phone': phone.trim(),
+        if (licenseNo != null) 'licenseNo': licenseNo.trim(),
+        if (licenseExp != null) 'licenseExp': licenseExp.trim(),
+      },
+    )) as Map<String, dynamic>;
+    currentDriverId = driver['id']?.toString() ?? driverId;
+    currentUser = currentUser!.copyWith(
+      displayName: driver['name']?.toString(),
+      phone: driver['phone']?.toString(),
+      licenseNumber: driver['licenseNo']?.toString(),
+      licenseExpiry: driver['licenseExp']?.toString(),
+    );
+    return currentUser!;
   }
 
   Future<LoginResponse> register({
@@ -203,6 +260,7 @@ class ApiClient {
     String? displayName,
     String? password,
     String? status,
+    bool? canPayInvoices,
   }) async {
     final json = (await _send(
       'PATCH',
@@ -211,6 +269,7 @@ class ApiClient {
         if (displayName != null) 'displayName': displayName,
         if (password != null && password.isNotEmpty) 'password': password,
         if (status != null) 'status': status,
+        if (canPayInvoices != null) 'canPayInvoices': canPayInvoices,
       },
     )) as Map<String, dynamic>;
     return CompanyProfile.fromJson(json);
@@ -242,11 +301,18 @@ class ApiClient {
     return Trip.fromJson(json);
   }
 
-  Future<Trip> updateTripStatus(String id, String status) async {
+  Future<Trip> updateTripStatus(
+    String id,
+    String status, {
+    String? deliveryCode,
+  }) async {
     final json = (await _send(
       'PATCH',
       '/trips/${Uri.encodeComponent(id)}/status',
-      body: {'status': status},
+      body: {
+        'status': status,
+        if (deliveryCode != null) 'deliveryCode': deliveryCode,
+      },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);
   }
@@ -515,12 +581,10 @@ class ApiClient {
 
   Future<Map<String, dynamic>> uploadEvidence(
     List<int> bytes,
-    String filename,
-    {
-      String? tripId,
-      String? type,
-    }
-  ) async {
+    String filename, {
+    String? tripId,
+    String? type,
+  }) async {
     final uri = Uri.parse('$baseUrl/uploads/evidence');
     final request = http.MultipartRequest('POST', uri);
     request.files.add(

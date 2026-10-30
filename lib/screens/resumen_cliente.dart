@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/invoice_payment_permission.dart';
 import '../core/invoice_selection.dart';
 import '../core/theme.dart';
 import '../core/trip_routing.dart';
@@ -334,6 +335,11 @@ class _ResumenClienteState extends State<ResumenCliente> {
                   return _InvoiceHistoryPanel(
                     trips: items,
                     profileNames: profileNames,
+                    canPayInvoices: canPayInvoicesForSession(
+                      isSupervisor: apiClient.currentUser?.isSupervisor == true,
+                      profilePermission:
+                          apiClient.currentUser?.canPayInvoices == true,
+                    ),
                     loading: loading && items.isEmpty,
                     error: snapshot.error,
                     onTabChanged: (value) => setState(() {
@@ -1001,6 +1007,7 @@ class _InvoiceHistoryPanel extends StatefulWidget {
   const _InvoiceHistoryPanel({
     required this.trips,
     required this.profileNames,
+    required this.canPayInvoices,
     required this.loading,
     required this.error,
     required this.onTabChanged,
@@ -1008,6 +1015,7 @@ class _InvoiceHistoryPanel extends StatefulWidget {
 
   final List<Trip> trips;
   final Map<String, String> profileNames;
+  final bool canPayInvoices;
   final bool loading;
   final Object? error;
   final ValueChanged<int> onTabChanged;
@@ -1030,6 +1038,7 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
       .toList();
 
   void _toggleBulkSelection() {
+    if (!widget.canPayInvoices) return;
     final pendingIds = _pendingInvoices.map((trip) => trip.id);
     setState(() {
       bulkSelectionMode = !bulkSelectionMode;
@@ -1054,6 +1063,7 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
   }
 
   Future<void> _paySelectedInvoices() async {
+    if (!widget.canPayInvoices) return;
     final selected = widget.trips
         .where((trip) => selectedPendingInvoiceIds.contains(trip.id))
         .where((trip) => invoicePaymentStatusForTrip(trip) == 'Pendiente')
@@ -1370,7 +1380,7 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
           ],
         ),
         const SizedBox(height: 8),
-        if (pendingCount > 0)
+        if (widget.canPayInvoices && pendingCount > 0)
           Column(
             children: [
               GestureDetector(
@@ -1489,9 +1499,10 @@ class _InvoiceHistoryPanelState extends State<_InvoiceHistoryPanel> {
                   profileLabel: trip.profileId == null
                       ? null
                       : widget.profileNames[trip.profileId!],
-                  selectionMode: bulkSelectionMode,
+                  selectionMode: widget.canPayInvoices && bulkSelectionMode,
                   selected: selectedPendingInvoiceIds.contains(trip.id),
-                  selectable: invoicePaymentStatusForTrip(trip) == 'Pendiente',
+                  selectable: widget.canPayInvoices &&
+                      invoicePaymentStatusForTrip(trip) == 'Pendiente',
                   onToggle: () => _toggleInvoice(trip.id),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -1603,6 +1614,7 @@ class _InvoiceHistoryCard extends StatelessWidget {
                   label: isTrip ? 'Viaje' : 'Envío',
                   color: invoiceServiceTypeColor(isTrip: isTrip),
                   textColor: invoiceServiceTypeTextColor(isTrip: isTrip),
+                  fontSize: 10,
                 ),
                 const SizedBox(width: 4),
                 _InvoiceTag(label: invoiceStatus, color: statusColor),
@@ -1623,8 +1635,8 @@ class _InvoiceHistoryCard extends StatelessWidget {
               const SizedBox(height: 11),
               Row(children: [
                 SizedBox(
-                  width: 54,
-                  height: 38,
+                  width: 68,
+                  height: 48,
                   child: Image.asset(_asset(),
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => const Icon(
@@ -1734,11 +1746,17 @@ String formatInvoiceHistoryAmount(double amount) =>
     'C\$ ${amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2)}';
 
 class _InvoiceTag extends StatelessWidget {
-  const _InvoiceTag({required this.label, required this.color, this.textColor});
+  const _InvoiceTag({
+    required this.label,
+    required this.color,
+    this.textColor,
+    this.fontSize = 10,
+  });
 
   final String label;
   final Color color;
   final Color? textColor;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1755,7 +1773,7 @@ class _InvoiceTag extends StatelessWidget {
                     (color.computeLuminance() > 0.55
                         ? Colors.black
                         : Colors.white),
-                fontSize: 7.5,
+                fontSize: fontSize,
                 fontWeight: FontWeight.w800,
                 fontFamily: 'Figtree')),
       );

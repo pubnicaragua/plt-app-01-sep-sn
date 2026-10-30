@@ -59,6 +59,42 @@ void main() {
     expect(driverHomeQuantityLabel(trip), '2 bultos');
   });
 
+  test('usa pasajero y pasajero recogido durante un viaje', () {
+    const trip = Trip(
+      id: '4796',
+      client: 'Logística Nica SA',
+      driver: 'Juan',
+      origin: 'A',
+      destination: 'B',
+      date: '2026-10-27',
+      packages: 0,
+      status: 'Asignado',
+      serviceMode: 'Taxi Privado',
+      recipientName: 'Walford Santana',
+    );
+
+    expect(conductorPickupPersonLabel(trip), 'Walford Santana');
+    expect(conductorPickupActionLabel(trip), 'Pasajero recogido');
+  });
+
+  test('mantiene paquete y remitente para un envío', () {
+    const trip = Trip(
+      id: '4797',
+      client: 'Logística Nica SA',
+      driver: 'Juan',
+      origin: 'A',
+      destination: 'B',
+      date: '2026-10-27',
+      packages: 1,
+      status: 'Asignado',
+      serviceMode: 'Envíos',
+      contactName: 'Logística Nica SA',
+    );
+
+    expect(conductorPickupPersonLabel(trip), 'Logística Nica SA');
+    expect(conductorPickupActionLabel(trip), 'Paquete recogido');
+  });
+
   test('calcula el rumbo de avance para orientar el mapa', () {
     const from = LatLng(12.10, -86.25);
     const east = LatLng(12.10, -86.24);

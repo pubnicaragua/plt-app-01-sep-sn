@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:incoex_logistics_app/models/api_models.dart';
+import 'package:incoex_logistics_app/core/theme.dart';
 import 'package:incoex_logistics_app/screens/envios.dart';
 
 Trip _trip({
@@ -24,6 +26,18 @@ Trip _trip({
 }
 
 void main() {
+  test('usa etiqueta amarilla y texto negro para viajes en clientes', () {
+    expect(clientServiceTagColor(isTrip: true), const Color(0xFFFFC928));
+    expect(clientServiceTagTextColor(isTrip: true), Colors.black);
+    expect(clientServiceTagFontSize(isTrip: true), greaterThan(11));
+  });
+
+  test('mantiene etiqueta azul para envíos en clientes', () {
+    expect(clientServiceTagColor(isTrip: false), accentBlue);
+    expect(clientServiceTagTextColor(isTrip: false), Colors.white);
+    expect(clientServiceTagFontSize(isTrip: false), 12);
+  });
+
   test('solo muestra el horario en programados e historial', () {
     expect(shouldShowTripSchedule(_trip()), isFalse);
     expect(shouldShowTripSchedule(_trip(isScheduled: true)), isTrue);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/theme.dart';
+import '../core/trip_routing.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
 import '../widgets/wizard.dart';
@@ -32,6 +33,25 @@ String conductorQuantityLabel(Trip trip) {
   }
   return '${trip.packages} paquete${trip.packages == 1 ? '' : 's'}';
 }
+
+String conductorBillingRateLabel(Trip trip) =>
+    isTripServiceMode(trip.serviceMode) ? 'Tarifa de viaje' : 'Tarifa de envío';
+
+String conductorBillingSubtotalLabel(Trip trip) => isTripServiceMode(trip.serviceMode)
+    ? 'Subtotal del viaje'
+    : 'Subtotal del envío';
+
+bool shouldShowConductorShipmentDetails(Trip trip) =>
+    !isTripServiceMode(trip.serviceMode);
+
+String conductorContactSectionTitle(Trip trip) =>
+    isTripServiceMode(trip.serviceMode) ? 'PASAJERO' : 'CLIENTE Y ENTREGA';
+
+String conductorPassengerName(Trip trip) =>
+    _firstNonEmpty([trip.recipientName, trip.contactName, trip.client]);
+
+String conductorPassengerPhone(Trip trip) =>
+    _firstNonEmpty([trip.recipientPhone, trip.contactPhone]);
 
 String _firstNonEmpty(Iterable<String?> values) {
   for (final value in values) {
@@ -270,7 +290,9 @@ class _ViajeAsignadoState extends State<ViajeAsignado> {
   }
 
   Future<void> _startTrip(Trip trip) async {
-    if (trip.status == 'En camino' || trip.status == 'En entrega') {
+    if (trip.status == 'Asignado' ||
+        trip.status == 'En camino' ||
+        trip.status == 'En entrega') {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => ViajeEnCurso(trip: trip)),
       );
@@ -283,18 +305,9 @@ class _ViajeAsignadoState extends State<ViajeAsignado> {
       }
       return;
     }
-    try {
-      final updated = await apiClient.updateTripStatus(trip.id, 'En camino');
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => ViajeEnCurso(trip: updated)),
-      );
-    } catch (failure) {
-      final message = failure is ApiException
-          ? failure.message
-          : 'No se pudo iniciar el viaje.';
-      if (mounted) setState(() => error = message);
-    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => ViajeEnCurso(trip: trip)),
+    );
   }
 
   @override
@@ -841,7 +854,7 @@ class _DetailBodyV2 extends StatelessWidget {
   Widget build(BuildContext context) {
     final distance = trip.distanceKm ?? 12.4;
     final minutes = (distance * 2.8).round();
-    final isTrip = (trip.serviceMode ?? '').toLowerCase().contains('taxi');
+    final isTrip = isTripServiceMode(trip.serviceMode);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
@@ -932,26 +945,22 @@ class _DetailBodyV2 extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 17),
-        const _SectionTitle2('PAQUETE'),
-        const SizedBox(height: 9),
-        _PackagePhotoCard(trip: trip),
+        if (shouldShowConductorShipmentDetails(trip)) ...[
+          const SizedBox(height: 17),
+          const _SectionTitle2('PAQUETE'),
+          const SizedBox(height: 9),
+          _PackagePhotoCard(trip: trip),
+        ],
         const SizedBox(height: 17),
         const _SectionTitle2('INFORMACIÓN DEL SERVICIO'),
         const SizedBox(height: 9),
         _ServiceCard2(trip: trip),
-        if (trip.options.isNotEmpty) ...[
-          const SizedBox(height: 13),
-          const _SectionTitle2('SERVICIOS ADICIONALES'),
-          const SizedBox(height: 9),
-          _OptionsCard2(trip: trip),
-        ],
         const SizedBox(height: 17),
         const _SectionTitle2('PAGO Y FACTURACIÓN'),
         const SizedBox(height: 9),
         _PaymentCard2(trip: trip),
         const SizedBox(height: 17),
-        const _SectionTitle2('CLIENTE Y ENTREGA'),
+        _SectionTitle2(conductorContactSectionTitle(trip)),
         const SizedBox(height: 9),
         _ContactCard2(trip: trip, onCall: () => _dial(context)),
         if (trip.returnTrip) ...[
@@ -1208,6 +1217,7 @@ class _ServiceCard2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTrip = isTripServiceMode(trip.serviceMode);
     final reference = _firstNonEmpty([trip.destinationRefs, trip.originRefs]);
     return _BlueCard2(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
@@ -1215,19 +1225,22 @@ class _ServiceCard2 extends StatelessWidget {
         children: [
           DetailRow(
             label: 'Servicio',
-            value: (trip.serviceMode ?? '').toLowerCase().contains('taxi')
-                ? 'Taxi privado'
-                : 'Envíos',
+            value: isTrip ? 'Taxi privado' : 'Envíos',
           ),
           const SizedBox(height: 4),
-          DetailRow(label: 'Cliente', value: trip.client),
-          const SizedBox(height: 4),
-          DetailRow(label: 'Paquete', value: conductorPackageLabel(trip)),
+          DetailRow(
+            label: isTrip ? 'Pasajero' : 'Cliente',
+            value: isTrip ? conductorPassengerName(trip) : trip.client,
+          ),
+          if (!isTrip) ...[
+            const SizedBox(height: 4),
+            DetailRow(label: 'Paquete', value: conductorPackageLabel(trip)),
+          ],
           if (reference.isNotEmpty) ...[
             const SizedBox(height: 4),
             DetailRow(label: 'Referencia', value: reference),
           ],
-          if (trip.weight != null) ...[
+          if (!isTrip && trip.weight != null) ...[
             const SizedBox(height: 4),
             DetailRow(
               label: 'Peso',
@@ -1235,7 +1248,7 @@ class _ServiceCard2 extends StatelessWidget {
                   '${trip.weight!.toStringAsFixed(trip.weight! % 1 == 0 ? 0 : 1)} ${trip.weightUnit ?? 'kg'}',
             ),
           ],
-          if (trip.fragile) ...[
+          if (!isTrip && trip.fragile) ...[
             const SizedBox(height: 11),
             Divider(color: glassBorder, height: 1),
             const SizedBox(height: 11),
@@ -1261,88 +1274,6 @@ class _ServiceCard2 extends StatelessWidget {
   }
 }
 
-class _OptionsCard2 extends StatelessWidget {
-  const _OptionsCard2({required this.trip});
-
-  final Trip trip;
-
-  @override
-  Widget build(BuildContext context) {
-    return _BlueCard2(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-      child: Column(
-        children: [
-          for (var index = 0; index < trip.options.length; index++) ...[
-            if (index > 0) const SizedBox(height: 8),
-            _OptionRow2(option: trip.options[index]),
-          ],
-          if (trip.optionsTotalCs > 0) ...[
-            const SizedBox(height: 11),
-            Divider(color: glassBorder, height: 1),
-            const SizedBox(height: 11),
-            DetailRow(
-              label: 'Total adicionales',
-              value: formatFareCs(trip.optionsTotalCs),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _OptionRow2 extends StatelessWidget {
-  const _OptionRow2({required this.option});
-
-  final TripOptionSelection option;
-
-  @override
-  Widget build(BuildContext context) {
-    final quantity = option.quantity;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Icon(Icons.add_circle_outline_rounded, color: cyan, size: 17),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                option.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Figtree',
-                ),
-              ),
-              if (quantity > 1)
-                Text(
-                  'Cantidad: $quantity',
-                  style: const TextStyle(
-                    color: Color(0xFFB9D4FF),
-                    fontSize: 11,
-                    fontFamily: 'Figtree',
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Text(
-          formatFareCs(option.priceCs * quantity),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            fontFamily: 'Figtree',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _PaymentCard2 extends StatelessWidget {
   const _PaymentCard2({required this.trip});
 
@@ -1351,6 +1282,25 @@ class _PaymentCard2 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = conductorTotalAmount(trip);
+    if (isTripServiceMode(trip.serviceMode)) {
+      return _BlueCard2(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+        child: Column(
+          children: [
+            DetailRow(
+              label: conductorBillingRateLabel(trip),
+              value: formatFareCs(total),
+            ),
+            const SizedBox(height: 4),
+            DetailRow(
+              label: conductorBillingSubtotalLabel(trip),
+              value: formatFareCs(total),
+            ),
+          ],
+        ),
+      );
+    }
+
     final paymentMethod = invoiceServicePaymentMethodForTrip(trip);
     final productAmount = trip.invoiceAmountCs ?? 0;
     final productIsSale = invoiceProductIsSaleForTrip(trip);
@@ -1383,12 +1333,12 @@ class _PaymentCard2 extends StatelessWidget {
           if (!hasAdditionalConcepts) ...[
             if (total > 0)
               DetailRow(
-                label: 'Tarifa de envío',
+                label: conductorBillingRateLabel(trip),
                 value: formatFareCs(total),
               ),
             const SizedBox(height: 4),
             DetailRow(
-              label: 'Subtotal del envío',
+              label: conductorBillingSubtotalLabel(trip),
               value: formatFareCs(total),
             ),
           ] else ...[
@@ -1413,7 +1363,7 @@ class _PaymentCard2 extends StatelessWidget {
               const SizedBox(height: 4),
             ],
             DetailRow(
-              label: 'Tarifa de envío',
+              label: conductorBillingRateLabel(trip),
               value: formatFareCs(shippingRate),
             ),
             for (final option in trip.options) ...[
@@ -1431,7 +1381,7 @@ class _PaymentCard2 extends StatelessWidget {
             ],
             const SizedBox(height: 4),
             DetailRow(
-              label: 'Subtotal del envío',
+              label: conductorBillingSubtotalLabel(trip),
               value: formatFareCs(total),
             ),
           ],
@@ -1650,6 +1600,20 @@ class _ContactCard2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isTripServiceMode(trip.serviceMode)) {
+      return _BlueCard2(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        child: _PartyRow(
+          label: 'Pasajero',
+          name: conductorPassengerName(trip),
+          phone: conductorPassengerPhone(trip),
+          address: '',
+          icon: Icons.person_outline_rounded,
+          onCall: onCall,
+        ),
+      );
+    }
+
     final sender = conductorSenderName(trip);
     final senderPhone = conductorSenderPhone(trip);
     final recipient = conductorRecipientName(trip);
@@ -1659,9 +1623,11 @@ class _ContactCard2 extends StatelessWidget {
         _BlueCard2(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
           child: _PartyRow(
-            label: 'Remitente',
+            label: 'Punto de retiro',
             name: sender.isEmpty ? trip.client : sender,
             phone: senderPhone,
+            address: trip.origin,
+            icon: Icons.inventory_2_outlined,
             onCall: onCall,
           ),
         ),
@@ -1672,6 +1638,8 @@ class _ContactCard2 extends StatelessWidget {
             label: 'Destinatario',
             name: recipient,
             phone: recipientPhone,
+            address: trip.destination,
+            icon: Icons.person_outline_rounded,
             onCall: onCall,
           ),
         ),
@@ -1685,12 +1653,16 @@ class _PartyRow extends StatelessWidget {
     required this.label,
     required this.name,
     required this.phone,
+    required this.address,
+    required this.icon,
     required this.onCall,
   });
 
   final String label;
   final String name;
   final String phone;
+  final String address;
+  final IconData icon;
   final VoidCallback onCall;
 
   @override
@@ -1699,7 +1671,7 @@ class _PartyRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label.toUpperCase(),
+          label,
           style: const TextStyle(
             color: Color(0xFFB9D4FF),
             fontSize: 10,
@@ -1715,21 +1687,13 @@ class _PartyRow extends StatelessWidget {
               width: 40,
               height: 40,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(11),
+                gradient: const LinearGradient(
                   colors: [Color(0xFF0D47D9), Color(0xFF083EC0)],
                 ),
               ),
-              child: Text(
-                initials(name),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-              ),
+              child: Icon(icon, color: Colors.white, size: 21),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1747,6 +1711,28 @@ class _PartyRow extends StatelessWidget {
                       fontFamily: 'Figtree',
                     ),
                   ),
+                  if (address.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined,
+                            color: cyan, size: 13),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            address,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFB9D4FF),
+                              fontSize: 10.5,
+                              fontFamily: 'Figtree',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   if (phone.isNotEmpty)
                     Text(
                       phone,
@@ -1759,22 +1745,22 @@ class _PartyRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (phone.isNotEmpty)
-              InkWell(
-                onTap: onCall,
-                borderRadius: BorderRadius.circular(30),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: .10),
-                    border: Border.all(color: glassBorder),
-                  ),
-                  child: const Icon(Icons.call_rounded,
-                      color: Colors.white, size: 18),
+            const SizedBox(width: 6),
+            InkWell(
+              onTap: onCall,
+              borderRadius: BorderRadius.circular(30),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: .10),
+                  border: Border.all(color: glassBorder),
                 ),
+                child: const Icon(Icons.call_rounded,
+                    color: Colors.white, size: 18),
               ),
+            ),
           ],
         ),
       ],
@@ -1898,24 +1884,13 @@ class _BlueCard2 extends StatelessWidget {
       {required this.child, this.padding = const EdgeInsets.all(16)});
 
   final Widget child;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ShowcaseGlassCard(
       padding: padding,
-      decoration: BoxDecoration(
-        color: const Color(0xA8143474),
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: const Color(0x6687B7FF)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .12),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+      borderRadius: 17,
       child: child,
     );
   }

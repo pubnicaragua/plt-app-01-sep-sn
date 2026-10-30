@@ -38,6 +38,7 @@ InvoiceBreakdown buildInvoiceBreakdown({
   required double invoiceAmountCs,
   required bool invoiceAlreadyPaid,
   required List<TripOptionSelection> options,
+  String shipmentPayer = 'Remitente / Comercio',
   double dollarRate = 36.5,
 }) {
   final isTrip = _normalized(serviceMode) == 'taxi privado' ||
@@ -74,7 +75,10 @@ InvoiceBreakdown buildInvoiceBreakdown({
         : option.priceCs;
     final quantity = option.quantity < 1 ? 1 : option.quantity;
     final totalOptionCs = amountCs * quantity;
-    optionsTotalCs += totalOptionCs;
+    final recipientPays = shipmentPayer.trim().toLowerCase() == 'destinatario';
+    if (!(recipientPays && _isInsuranceOption(option))) {
+      optionsTotalCs += totalOptionCs;
+    }
     lines.add(InvoiceBreakdownLine(
       label: quantity == 1 ? option.title : '${option.title} (x$quantity)',
       amountCs: totalOptionCs,
@@ -93,3 +97,9 @@ InvoiceBreakdown buildInvoiceBreakdown({
 
 String _normalized(String value) =>
     value.trim().toLowerCase().replaceAll('á', 'a').replaceAll('ó', 'o');
+
+bool _isInsuranceOption(TripOptionSelection option) {
+  return option.code.toLowerCase().contains('insurance') ||
+      option.code.toLowerCase().contains('seguro') ||
+      option.title.toLowerCase().contains('seguro');
+}

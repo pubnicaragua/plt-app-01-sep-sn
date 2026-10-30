@@ -198,6 +198,11 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
     if (mounted) setState(() => photos.addAll(bytes));
   }
 
+  void _removePhoto(int index) {
+    if (index < 0 || index >= photos.length) return;
+    setState(() => photos.removeAt(index));
+  }
+
   Future<bool> _validateWeightCapacity() async {
     final value = double.tryParse(weightController.text.trim());
     if (value == null || value <= 0) {
@@ -410,6 +415,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
                     _PhotoUploadBox(
                       photos: photos,
                       onTap: _pickPhotos,
+                      onRemove: _removePhoto,
                     ),
                     const SizedBox(height: 14),
                     _FragileRow(
@@ -1746,9 +1752,15 @@ class _SmallAction extends StatelessWidget {
 }
 
 class _PhotoUploadBox extends StatelessWidget {
-  const _PhotoUploadBox({required this.photos, required this.onTap});
+  const _PhotoUploadBox({
+    required this.photos,
+    required this.onTap,
+    required this.onRemove,
+  });
+
   final List<Uint8List> photos;
   final VoidCallback onTap;
+  final ValueChanged<int> onRemove;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -1787,9 +1799,49 @@ class _PhotoUploadBox extends StatelessWidget {
                       mainAxisSpacing: 8,
                     ),
                     itemCount: photos.length,
-                    itemBuilder: (_, index) => ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.memory(photos[index], fit: BoxFit.cover),
+                    itemBuilder: (_, index) => Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child:
+                                Image.memory(photos[index], fit: BoxFit.cover),
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => onRemove(index),
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE5484D),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: .85),
+                                  width: 1.2,
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x55000000),
+                                    blurRadius: 5,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                                size: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
           ),

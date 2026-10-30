@@ -49,7 +49,8 @@ class _PerfilesEmpresaScreenState extends State<PerfilesEmpresaScreen> {
       if (!mounted) return;
       setState(() {
         _profiles = _profiles.then((profiles) {
-          final index = profiles.indexWhere((profile) => profile.id == created.id);
+          final index =
+              profiles.indexWhere((profile) => profile.id == created.id);
           if (index >= 0) {
             return [...profiles]..[index] = created;
           }
@@ -70,12 +71,13 @@ class _PerfilesEmpresaScreenState extends State<PerfilesEmpresaScreen> {
   ) async {
     try {
       final profiles = await _reload();
-      if (profiles != null && profileMutationReflected(
-        profiles: profiles,
-        username: result.username,
-        displayName: result.displayName,
-        expectedStatus: 'Activo',
-      )) {
+      if (profiles != null &&
+          profileMutationReflected(
+            profiles: profiles,
+            username: result.username,
+            displayName: result.displayName,
+            expectedStatus: 'Activo',
+          )) {
         _message('Perfil creado correctamente.');
         return;
       }
@@ -100,9 +102,8 @@ class _PerfilesEmpresaScreenState extends State<PerfilesEmpresaScreen> {
           return [...profiles]..[index] = updated;
         });
       });
-      _message(nextStatus == 'Activo'
-          ? 'Perfil activado.'
-          : 'Perfil desactivado.');
+      _message(
+          nextStatus == 'Activo' ? 'Perfil activado.' : 'Perfil desactivado.');
     } on ApiException catch (error) {
       await _recoverToggle(profile, nextStatus, error.message);
     } catch (_) {
@@ -114,6 +115,70 @@ class _PerfilesEmpresaScreenState extends State<PerfilesEmpresaScreen> {
     }
   }
 
+  Future<void> _toggleInvoicePermission(CompanyProfile profile) async {
+    final nextPermission = !profile.canPayInvoices;
+    try {
+      final updated = await apiClient.updateCompanyProfile(
+        profile.id,
+        canPayInvoices: nextPermission,
+      );
+      if (!mounted) return;
+      setState(() {
+        _profiles = _profiles.then((profiles) {
+          final index = profiles.indexWhere((item) => item.id == updated.id);
+          if (index < 0) return profiles;
+          return [...profiles]..[index] = updated;
+        });
+      });
+      _message(nextPermission
+          ? 'El perfil puede pagar facturas.'
+          : 'El perfil ya no puede pagar facturas.');
+    } on ApiException catch (error) {
+      await _recoverInvoicePermission(profile, nextPermission, error.message);
+    } catch (_) {
+      await _recoverInvoicePermission(
+        profile,
+        nextPermission,
+        'No se pudo actualizar el permiso de facturas.',
+      );
+    }
+  }
+
+  Future<void> _handleProfileAction(
+    CompanyProfile profile,
+    String action,
+  ) async {
+    if (action == 'status') {
+      await _toggleProfile(profile);
+    } else if (action == 'invoices') {
+      await _toggleInvoicePermission(profile);
+    }
+  }
+
+  Future<void> _recoverInvoicePermission(
+    CompanyProfile profile,
+    bool expectedPermission,
+    String errorMessage,
+  ) async {
+    try {
+      final profiles = await _reload();
+      if (profiles != null &&
+          profileMutationReflected(
+            profiles: profiles,
+            profileId: profile.id,
+            expectedCanPayInvoices: expectedPermission,
+          )) {
+        _message(expectedPermission
+            ? 'El perfil puede pagar facturas.'
+            : 'El perfil ya no puede pagar facturas.');
+        return;
+      }
+    } catch (_) {
+      // Keep the original error when the verification request also fails.
+    }
+    _message(errorMessage);
+  }
+
   Future<void> _recoverToggle(
     CompanyProfile profile,
     String expectedStatus,
@@ -121,11 +186,12 @@ class _PerfilesEmpresaScreenState extends State<PerfilesEmpresaScreen> {
   ) async {
     try {
       final profiles = await _reload();
-      if (profiles != null && profileMutationReflected(
-        profiles: profiles,
-        profileId: profile.id,
-        expectedStatus: expectedStatus,
-      )) {
+      if (profiles != null &&
+          profileMutationReflected(
+            profiles: profiles,
+            profileId: profile.id,
+            expectedStatus: expectedStatus,
+          )) {
         _message(expectedStatus == 'Activo'
             ? 'Perfil activado.'
             : 'Perfil desactivado.');
@@ -299,7 +365,8 @@ class _PerfilesEmpresaScreenState extends State<PerfilesEmpresaScreen> {
               return Center(
                 child: Text(
                   'No se pudieron cargar los perfiles.',
-                  style: const TextStyle(color: Colors.white, fontFamily: 'Figtree'),
+                  style: const TextStyle(
+                      color: Colors.white, fontFamily: 'Figtree'),
                 ),
               );
             }
@@ -313,14 +380,19 @@ class _PerfilesEmpresaScreenState extends State<PerfilesEmpresaScreen> {
                 children: [
                   const Text(
                     'Administra quién puede operar esta cuenta.',
-                    style: TextStyle(color: Color(0xD9FFFFFF), fontFamily: 'Figtree'),
+                    style: TextStyle(
+                        color: Color(0xD9FFFFFF), fontFamily: 'Figtree'),
                   ),
                   const SizedBox(height: 16),
                   for (final profile in profiles) ...[
                     _ProfileCard(
                       profile: profile,
-                      onToggle: profile.isSupervisor ? null : () => _toggleProfile(profile),
-                      onEnter: profile.isSupervisor ? null : () => _enterProfile(profile),
+                      onToggle: profile.isSupervisor
+                          ? null
+                          : () => _toggleProfile(profile),
+                      onAction: profile.isSupervisor
+                          ? null
+                          : (action) => _handleProfileAction(profile, action),
                     ),
                     const SizedBox(height: 10),
                   ],
@@ -390,9 +462,8 @@ class _ProfileTextFieldState extends State<_ProfileTextField> {
         prefixIcon: Icon(widget.icon, color: Colors.white70),
         suffixIcon: widget.obscureText
             ? IconButton(
-                tooltip: _obscureText
-                    ? 'Mostrar contraseña'
-                    : 'Ocultar contraseña',
+                tooltip:
+                    _obscureText ? 'Mostrar contraseña' : 'Ocultar contraseña',
                 icon: Icon(
                   _obscureText
                       ? Icons.visibility_outlined
@@ -416,48 +487,131 @@ class _ProfileTextFieldState extends State<_ProfileTextField> {
 }
 
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.profile, this.onToggle, this.onEnter});
+  const _ProfileCard({
+    required this.profile,
+    this.onToggle,
+    this.onAction,
+  });
 
   final CompanyProfile profile;
   final VoidCallback? onToggle;
-  final VoidCallback? onEnter;
+  final void Function(String action)? onAction;
 
   @override
   Widget build(BuildContext context) {
     final active = profile.status == 'Activo';
     return AppGlassSurface(
       borderRadius: 18,
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: active ? accentBlue : Colors.white24,
-          child: const Icon(Icons.person_outline_rounded, color: Colors.white),
-        ),
-        title: Text(
-          profile.displayName,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontFamily: 'Figtree'),
-        ),
-        subtitle: Text(
-          '@${profile.username} · ${profile.isSupervisor ? 'Supervisor' : profile.status}',
-          style: const TextStyle(color: Color(0xBFFFFFFF), fontFamily: 'Figtree'),
-        ),
-        trailing: onToggle == null
-            ? const Icon(Icons.verified_rounded, color: Color(0xFF1CDB83))
-            : Row(
-                mainAxisSize: MainAxisSize.min,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              backgroundColor: active ? accentBlue : Colors.white24,
+              child:
+                  const Icon(Icons.person_outline_rounded, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (active)
-                    TextButton(
-                      onPressed: onEnter,
-                      child: const Text('Entrar'),
-                    ),
-                  Switch(
-                    value: active,
-                    activeTrackColor: const Color(0xFF19D27D),
-                    activeThumbColor: Colors.white,
-                    onChanged: (_) => onToggle!(),
+                  Text(
+                    profile.displayName,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree'),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '@${profile.username} · ${profile.isSupervisor ? 'Supervisor' : profile.status}',
+                    style: const TextStyle(
+                        color: Color(0xBFFFFFFF), fontFamily: 'Figtree'),
                   ),
                 ],
               ),
+            ),
+            if (onToggle == null)
+              const Icon(Icons.verified_rounded, color: Color(0xFF1CDB83))
+            else
+              PopupMenuButton<String>(
+                tooltip: 'Acciones del perfil',
+                onSelected: onAction,
+                color: const Color(0xFF102965),
+                position: PopupMenuPosition.under,
+                offset: const Offset(-80, 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                icon: const Icon(Icons.more_vert_rounded,
+                    color: Colors.white, size: 24),
+                itemBuilder: (_) => [
+                  PopupMenuItem<String>(
+                    value: 'status',
+                    child: _ProfileActionItem(
+                      label: 'Perfil activo',
+                      value: active,
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'invoices',
+                    child: _ProfileActionItem(
+                      label: 'Permitir pagar facturas',
+                      value: profile.canPayInvoices,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileActionItem extends StatelessWidget {
+  const _ProfileActionItem({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 190),
+      child: Row(
+        children: [
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Figtree',
+              ),
+            ),
+          ),
+          IgnorePointer(
+            child: Transform.scale(
+              scale: .84,
+              child: Switch(
+                value: value,
+                onChanged: (_) {},
+                activeTrackColor: const Color(0xFF19D27D),
+                activeThumbColor: Colors.white,
+                inactiveThumbColor: Colors.white,
+                inactiveTrackColor: Colors.white38,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
+import '../core/driver_payment_summary.dart';
 import '../core/trip_routing.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
@@ -12,9 +13,14 @@ import '../widgets/incident_sheet.dart';
 import 'home_conductor.dart';
 
 class ConfirmarEntrega extends StatefulWidget {
-  const ConfirmarEntrega({super.key, required this.trip});
+  const ConfirmarEntrega({
+    super.key,
+    required this.trip,
+    this.productCollected = false,
+  });
 
   final Trip trip;
+  final bool productCollected;
 
   @override
   State<ConfirmarEntrega> createState() => _ConfirmarEntregaState();
@@ -23,6 +29,139 @@ class ConfirmarEntrega extends StatefulWidget {
 class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
   String picked = 'Entregado con éxito';
   bool updating = false;
+
+  Future<String?> _askForDeliveryCode() async {
+    final controllers = List.generate(4, (_) => TextEditingController());
+    final focusNodes = List.generate(4, (_) => FocusNode());
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+        backgroundColor: const Color(0xFF172F70),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text(
+          'Validación final',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Figtree',
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Solicita al cliente el código de seguimiento de este viaje e introdúcelo para completar la entrega.',
+              style: TextStyle(
+                color: Color(0xFFB9D4FF),
+                fontSize: 12,
+                height: 1.35,
+                fontFamily: 'Figtree',
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Código de entrega',
+              style: TextStyle(
+                color: Color(0xFFB9D4FF),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Figtree',
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                for (var index = 0; index < controllers.length; index++) ...[
+                  Expanded(
+                    child: TextField(
+                      controller: controllers[index],
+                      focusNode: focusNodes[index],
+                      autofocus: index == 0,
+                      textAlign: TextAlign.center,
+                      textCapitalization: TextCapitalization.characters,
+                      keyboardType: TextInputType.text,
+                      maxLength: 1,
+                      onChanged: (value) {
+                        setDialogState(() {});
+                        if (value.isNotEmpty && index < controllers.length - 1) {
+                          focusNodes[index + 1].requestFocus();
+                        } else if (value.isEmpty && index > 0) {
+                          focusNodes[index - 1].requestFocus();
+                        }
+                      },
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree',
+                      ),
+                      decoration: InputDecoration(
+                        counterText: '',
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: .06),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF168DFF)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF168DFF)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF52C7FF),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (index < controllers.length - 1) const SizedBox(width: 6),
+                ],
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar',
+                style:
+                    TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Figtree')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              controllers.map((controller) => controller.text).join(),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0D47D9),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Validar',
+                style: TextStyle(
+                    fontFamily: 'Figtree', fontWeight: FontWeight.w800)),
+          ),
+        ],
+        ),
+      ),
+    );
+    for (final controller in controllers) {
+      controller.dispose();
+    }
+    for (final focusNode in focusNodes) {
+      focusNode.dispose();
+    }
+    return result;
+  }
+
+  String _normalizeCode(String value) =>
+      value.trim().replaceFirst(RegExp(r'^#'), '').toLowerCase();
 
   Future<void> _submit() async {
     if (updating) return;
@@ -40,6 +179,66 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
       setState(() => updating = false);
       return;
     }
+    if (picked == 'Entregado con éxito') {
+      final payments = driverPaymentSummaryFor(widget.trip);
+      final productSettled =
+          widget.productCollected || !payments.productNeedsCollection;
+      if (!payments.servicePaid || !productSettled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'Primero debes confirmar todos los pagos pendientes del viaje.',
+              style: TextStyle(fontFamily: 'Figtree'),
+            ),
+          ),
+        );
+        return;
+      }
+      final deliveryCode = await _askForDeliveryCode();
+      if (!mounted || deliveryCode == null) return;
+      if (_normalizeCode(deliveryCode) != _normalizeCode(widget.trip.id)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'El código no coincide con este viaje. Pídeselo nuevamente al cliente.',
+              style: TextStyle(fontFamily: 'Figtree'),
+            ),
+          ),
+        );
+        return;
+      }
+      setState(() => updating = true);
+      try {
+        await apiClient.updateTripStatus(
+          widget.trip.id,
+          'Completado',
+          deliveryCode: deliveryCode,
+        );
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeConductor()),
+          (route) => false,
+        );
+      } catch (error) {
+        if (mounted) {
+          setState(() => updating = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              content: Text(
+                error is ApiException
+                    ? error.message
+                    : 'No se pudo confirmar la entrega. Verifica tu conexión.',
+                style: const TextStyle(fontFamily: 'Figtree'),
+              ),
+            ),
+          );
+        }
+      }
+      return;
+    }
     setState(() => updating = true);
     try {
       if (picked == 'No entregado') {
@@ -55,10 +254,7 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
           return;
         }
       }
-      await apiClient.updateTripStatus(
-        widget.trip.id,
-        picked == 'Entregado con éxito' ? 'Completado' : 'Cancelado',
-      );
+      await apiClient.updateTripStatus(widget.trip.id, 'Cancelado');
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeConductor()),
@@ -86,20 +282,25 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
   Widget build(BuildContext context) {
     final trip = widget.trip;
     final packageValue = trip.invoiceAmountCs ?? 0;
+    final payment = driverPaymentSummaryFor(trip);
     final productStatus = RegExp(
       r'(?:Estado factura producto|Estado pago producto):\s*([^·]+)',
       caseSensitive: false,
     ).firstMatch(trip.description ?? '')?.group(1)?.trim().toLowerCase();
-    final productIsPaid = productStatus?.contains('pagad') == true;
+    final productIsPaid = widget.productCollected ||
+        productStatus?.contains('pagad') == true ||
+        productStatus == 'contado' ||
+        productStatus?.contains('verificad') == true ||
+        productStatus?.contains('aprob') == true;
     final productIsApproximate = RegExp(
-      r'Tipo valor producto:\s*([^·]+)',
-      caseSensitive: false,
-    ).firstMatch(trip.description ?? '')?.group(1)?.toLowerCase().contains(
-          'aproximado',
-        ) ==
+          r'Tipo valor producto:\s*([^·]+)',
+          caseSensitive: false,
+        ).firstMatch(trip.description ?? '')?.group(1)?.toLowerCase().contains(
+              'aproximado',
+            ) ==
         true;
-    final totalToCollect = (trip.estimatedCostCs ?? 0) +
-        (productIsPaid || productIsApproximate ? 0 : packageValue);
+    final totalToCollect = (payment.servicePaid ? 0.0 : payment.serviceAmount) +
+        (productIsPaid || productIsApproximate ? 0.0 : packageValue);
     return Scaffold(
       backgroundColor: const Color(0xFF0D1F52),
       body: AppBackground(
@@ -215,8 +416,7 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: const Color(
-                                      0xFFE7EEFF),
+                                  color: const Color(0xFFE7EEFF),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
@@ -237,8 +437,9 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                           _DetailRow(
                             icon: Icons.person_rounded,
                             label: 'Cliente',
-                            value:
-                                trip.recipientName ?? trip.contactName ?? 'Cliente',
+                            value: trip.recipientName ??
+                                trip.contactName ??
+                                'Cliente',
                           ),
                           const SizedBox(height: 15),
                           _DetailRow(
@@ -250,15 +451,15 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                           _DetailRow(
                             icon: Icons.inventory_2_rounded,
                             label: 'Paquetes',
-                            value: '${trip.packages} unidad${trip.packages == 1 ? '' : 'es'} certificada${trip.packages == 1 ? '' : 's'}',
+                            value:
+                                '${trip.packages} unidad${trip.packages == 1 ? '' : 'es'} certificada${trip.packages == 1 ? '' : 's'}',
                           ),
                           if (trip.estimatedCostCs != null) ...[
                             const SizedBox(height: 15),
                             _DetailRow(
                               icon: Icons.payments_outlined,
                               label: 'Precio del viaje',
-                              value:
-                                  formatFareCs(trip.estimatedCostCs!),
+                              value: formatFareCs(trip.estimatedCostCs!),
                             ),
                             const SizedBox(height: 15),
                             _DetailRow(
@@ -300,8 +501,8 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                             label: 'Entregado con éxito',
                             picked: picked == 'Entregado con éxito',
                             filled: true,
-                            onTap: () => setState(
-                                () => picked = 'Entregado con éxito'),
+                            onTap: () =>
+                                setState(() => picked = 'Entregado con éxito'),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -445,9 +646,8 @@ class _OptionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = picked
-        ? const Color(0xFF0D47D9)
-        : const Color(0xFFD7DCE8);
+    final borderColor =
+        picked ? const Color(0xFF0D47D9) : const Color(0xFFD7DCE8);
     final bg = picked
         ? filled
             ? const Color(0xFFE7EEFF)
@@ -607,7 +807,8 @@ class _EvidenceDeliveryState extends State<_EvidenceDelivery> {
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: photo == null ? glassBorder : mint.withValues(alpha: .5),
+                  color:
+                      photo == null ? glassBorder : mint.withValues(alpha: .5),
                 ),
               ),
               child: photo == null

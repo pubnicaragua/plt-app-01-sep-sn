@@ -6,6 +6,7 @@ bool profileMutationReflected({
   String? username,
   String? displayName,
   String? expectedStatus,
+  bool? expectedCanPayInvoices,
 }) {
   CompanyProfile? match;
   for (final profile in profiles) {
@@ -20,5 +21,7 @@ bool profileMutationReflected({
   if (match == null) return false;
   if (displayName != null && match.displayName != displayName) return false;
   if (expectedStatus != null && match.status != expectedStatus) return false;
+  if (expectedCanPayInvoices != null &&
+      match.canPayInvoices != expectedCanPayInvoices) return false;
   return true;
 }
