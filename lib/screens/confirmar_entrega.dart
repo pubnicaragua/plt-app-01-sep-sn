@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
+import '../core/dialog_lifecycle.dart';
+import '../core/delivery_confirmation_flow.dart';
 import '../core/driver_payment_summary.dart';
 import '../core/trip_routing.dart';
 import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../widgets/glass.dart';
-import '../widgets/incident_sheet.dart';
 import 'home_conductor.dart';
 
 class ConfirmarEntrega extends StatefulWidget {
@@ -27,127 +28,135 @@ class ConfirmarEntrega extends StatefulWidget {
 }
 
 class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
-  String picked = 'Entregado con éxito';
   bool updating = false;
+  bool codeValidated = false;
+  bool evidenceUploaded = false;
+  String? deliveryCode;
 
   Future<String?> _askForDeliveryCode() async {
     final controllers = List.generate(4, (_) => TextEditingController());
     final focusNodes = List.generate(4, (_) => FocusNode());
-    final result = await showDialog<String>(
+    final result = await showDialogAndWaitForDismissal<String>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-        backgroundColor: const Color(0xFF172F70),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Text(
-          'Validación final',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-            fontFamily: 'Figtree',
+          backgroundColor: const Color(0xFF172F70),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: const Text(
+            'Validación final',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Figtree',
+            ),
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Solicita al cliente el código de seguimiento de este viaje e introdúcelo para completar la entrega.',
-              style: TextStyle(
-                color: Color(0xFFB9D4FF),
-                fontSize: 12,
-                height: 1.35,
-                fontFamily: 'Figtree',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Solicita al cliente el código de seguimiento de este viaje e introdúcelo para completar la entrega.',
+                style: TextStyle(
+                  color: Color(0xFFB9D4FF),
+                  fontSize: 12,
+                  height: 1.35,
+                  fontFamily: 'Figtree',
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Código de entrega',
-              style: TextStyle(
-                color: Color(0xFFB9D4FF),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Figtree',
+              const SizedBox(height: 16),
+              const Text(
+                'Código de entrega',
+                style: TextStyle(
+                  color: Color(0xFFB9D4FF),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Figtree',
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                for (var index = 0; index < controllers.length; index++) ...[
-                  Expanded(
-                    child: TextField(
-                      controller: controllers[index],
-                      focusNode: focusNodes[index],
-                      autofocus: index == 0,
-                      textAlign: TextAlign.center,
-                      textCapitalization: TextCapitalization.characters,
-                      keyboardType: TextInputType.text,
-                      maxLength: 1,
-                      onChanged: (value) {
-                        setDialogState(() {});
-                        if (value.isNotEmpty && index < controllers.length - 1) {
-                          focusNodes[index + 1].requestFocus();
-                        } else if (value.isEmpty && index > 0) {
-                          focusNodes[index - 1].requestFocus();
-                        }
-                      },
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 21,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Figtree',
-                      ),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: .06),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFF168DFF)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  for (var index = 0; index < controllers.length; index++) ...[
+                    Expanded(
+                      child: TextField(
+                        controller: controllers[index],
+                        focusNode: focusNodes[index],
+                        autofocus: index == 0,
+                        textAlign: TextAlign.center,
+                        textCapitalization: TextCapitalization.characters,
+                        keyboardType: TextInputType.text,
+                        maxLength: 1,
+                        onChanged: (value) {
+                          setDialogState(() {});
+                          if (value.isNotEmpty &&
+                              index < controllers.length - 1) {
+                            focusNodes[index + 1].requestFocus();
+                          } else if (value.isEmpty && index > 0) {
+                            focusNodes[index - 1].requestFocus();
+                          }
+                        },
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 21,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
                         ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFF168DFF)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF52C7FF),
-                            width: 2,
+                        decoration: InputDecoration(
+                          counterText: '',
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: .06),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                const BorderSide(color: Color(0xFF168DFF)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                const BorderSide(color: Color(0xFF168DFF)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF52C7FF),
+                              width: 2,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  if (index < controllers.length - 1) const SizedBox(width: 6),
+                    if (index < controllers.length - 1)
+                      const SizedBox(width: 6),
+                  ],
                 ],
-              ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar',
+                  style: TextStyle(
+                      color: Color(0xFFB9D4FF), fontFamily: 'Figtree')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                controllers.map((controller) => controller.text).join(),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF0D47D9),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Validar',
+                  style: TextStyle(
+                      fontFamily: 'Figtree', fontWeight: FontWeight.w800)),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar',
-                style:
-                    TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Figtree')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              dialogContext,
-              controllers.map((controller) => controller.text).join(),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF0D47D9),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Validar',
-                style: TextStyle(
-                    fontFamily: 'Figtree', fontWeight: FontWeight.w800)),
-          ),
-        ],
         ),
       ),
     );
@@ -166,7 +175,6 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
   Future<void> _submit() async {
     if (updating) return;
     if (widget.trip.status != 'En entrega') {
-      setState(() => updating = true);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
@@ -176,85 +184,71 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
           ),
         ),
       );
-      setState(() => updating = false);
       return;
     }
-    if (picked == 'Entregado con éxito') {
-      final payments = driverPaymentSummaryFor(widget.trip);
-      final productSettled =
-          widget.productCollected || !payments.productNeedsCollection;
-      if (!payments.servicePaid || !productSettled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            content: Text(
-              'Primero debes confirmar todos los pagos pendientes del viaje.',
-              style: TextStyle(fontFamily: 'Figtree'),
-            ),
+    if (!codeValidated) {
+      await _validateDeliveryCode();
+      return;
+    }
+    if (!evidenceUploaded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Primero agrega la foto del paquete entregado.',
+            style: TextStyle(fontFamily: 'Figtree'),
           ),
-        );
-        return;
-      }
-      final deliveryCode = await _askForDeliveryCode();
-      if (!mounted || deliveryCode == null) return;
-      if (_normalizeCode(deliveryCode) != _normalizeCode(widget.trip.id)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            content: Text(
-              'El código no coincide con este viaje. Pídeselo nuevamente al cliente.',
-              style: TextStyle(fontFamily: 'Figtree'),
-            ),
+        ),
+      );
+      return;
+    }
+    await _registerDelivery();
+  }
+
+  Future<void> _validateDeliveryCode() async {
+    final enteredCode = await _askForDeliveryCode();
+    if (!mounted || enteredCode == null) return;
+    if (_normalizeCode(enteredCode) != _normalizeCode(widget.trip.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'El código no coincide con este viaje. Pídeselo nuevamente al cliente.',
+            style: TextStyle(fontFamily: 'Figtree'),
           ),
-        );
-        return;
-      }
-      setState(() => updating = true);
-      try {
-        await apiClient.updateTripStatus(
-          widget.trip.id,
-          'Completado',
-          deliveryCode: deliveryCode,
-        );
-        if (!mounted) return;
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeConductor()),
-          (route) => false,
-        );
-      } catch (error) {
-        if (mounted) {
-          setState(() => updating = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              behavior: SnackBarBehavior.floating,
-              content: Text(
-                error is ApiException
-                    ? error.message
-                    : 'No se pudo confirmar la entrega. Verifica tu conexión.',
-                style: const TextStyle(fontFamily: 'Figtree'),
-              ),
-            ),
-          );
-        }
-      }
+        ),
+      );
+      return;
+    }
+    setState(() {
+      deliveryCode = enteredCode;
+      codeValidated = true;
+    });
+  }
+
+  Future<void> _registerDelivery() async {
+    final payments = driverPaymentSummaryFor(widget.trip);
+    final productSettled =
+        widget.productCollected || !payments.productNeedsCollection;
+    if (!payments.serviceSettled || !productSettled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Primero debes confirmar todos los pagos pendientes del viaje.',
+            style: TextStyle(fontFamily: 'Figtree'),
+          ),
+        ),
+      );
       return;
     }
     setState(() => updating = true);
     try {
-      if (picked == 'No entregado') {
-        final incident = await showIncidentSheet(
-          context,
-          tripId: widget.trip.id,
-          driverName: widget.trip.driver,
-          clientName: widget.trip.client,
-        );
-        if (!mounted) return;
-        if (incident == null) {
-          setState(() => updating = false);
-          return;
-        }
-      }
-      await apiClient.updateTripStatus(widget.trip.id, 'Cancelado');
+      await apiClient.updateTripStatus(
+        widget.trip.id,
+        'Completado',
+        deliveryCode: deliveryCode,
+      );
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeConductor()),
@@ -269,7 +263,7 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
             content: Text(
               error is ApiException
                   ? error.message
-                  : 'No se pudo confirmar la entrega. Verifica tu conexión.',
+                  : 'No se pudo registrar la entrega. Verifica tu conexión.',
               style: const TextStyle(fontFamily: 'Figtree'),
             ),
           ),
@@ -299,8 +293,14 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
               'aproximado',
             ) ==
         true;
-    final totalToCollect = (payment.servicePaid ? 0.0 : payment.serviceAmount) +
+    final totalToCollect =
+        (payment.serviceSettled ? 0.0 : payment.serviceAmount) +
         (productIsPaid || productIsApproximate ? 0.0 : packageValue);
+    final buttonLabel = deliveryConfirmationButtonLabel(
+      codeValidated: codeValidated,
+      evidenceUploaded: evidenceUploaded,
+    );
+    final waitingForPhoto = codeValidated && !evidenceUploaded;
     return Scaffold(
       backgroundColor: const Color(0xFF0D1F52),
       body: AppBackground(
@@ -480,54 +480,28 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    // Evidencia de entrega: foto + firma
-                    _EvidenceDelivery(tripId: trip.id),
-                    const SizedBox(height: 20),
-                    const Text(
-                      '¿Se realizó la entrega?',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Figtree',
+                    if (codeValidated) ...[
+                      const SizedBox(height: 20),
+                      _EvidenceDelivery(
+                        tripId: trip.id,
+                        onUploaded: () {
+                          if (mounted) {
+                            setState(() => evidenceUploaded = true);
+                          }
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _OptionButton(
-                            label: 'Entregado con éxito',
-                            picked: picked == 'Entregado con éxito',
-                            filled: true,
-                            onTap: () =>
-                                setState(() => picked = 'Entregado con éxito'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _OptionButton(
-                            label: 'No entregado',
-                            picked: picked == 'No entregado',
-                            filled: false,
-                            onTap: () =>
-                                setState(() => picked = 'No entregado'),
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                     const SizedBox(height: 24),
                     SizedBox(
                       height: 54,
                       child: Material(
-                        color: updating
-                            ? const Color(0xFF0B3DBB)
+                        color: updating || waitingForPhoto
+                            ? const Color(0xFF4A5D86)
                             : const Color(0xFF0D47D9),
                         borderRadius: BorderRadius.circular(30),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(30),
-                          onTap: _submit,
+                          onTap: updating || waitingForPhoto ? null : _submit,
                           child: Center(
                             child: updating
                                 ? const SizedBox(
@@ -538,9 +512,9 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                                       strokeWidth: 2.5,
                                     ),
                                   )
-                                : const Text(
-                                    'Registrar entrega',
-                                    style: TextStyle(
+                                : Text(
+                                    buttonLabel,
+                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 16,
                                       fontWeight: FontWeight.w800,
@@ -554,9 +528,12 @@ class _ConfirmarEntregaState extends State<ConfirmarEntrega> {
                     const SizedBox(height: 12),
                     Center(
                       child: Text(
-                        picked == 'Entregado con éxito'
-                            ? 'El viaje pasará a tu historial de completados.'
-                            : 'El viaje se marcará como cancelado.',
+                        !codeValidated
+                            ? 'Valida el código del viaje para continuar.'
+                            : !evidenceUploaded
+                                ? 'Agrega la foto del paquete para registrar la entrega.'
+                                : 'El viaje pasará a tu historial de completados.',
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Color(0xFFB9D4FF),
                           fontSize: 11,
@@ -631,70 +608,11 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-class _OptionButton extends StatelessWidget {
-  const _OptionButton({
-    required this.label,
-    required this.picked,
-    required this.filled,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool picked;
-  final bool filled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final borderColor =
-        picked ? const Color(0xFF0D47D9) : const Color(0xFFD7DCE8);
-    final bg = picked
-        ? filled
-            ? const Color(0xFFE7EEFF)
-            : const Color(0xFFEFEFF3)
-        : const Color(0xFFF5F6F9);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(26),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: borderColor, width: 1.3),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              filled ? Icons.check_circle_rounded : Icons.cancel_rounded,
-              color: const Color(0xFF0D47D9),
-              size: 17,
-            ),
-            const SizedBox(width: 7),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF0D47D9),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Figtree',
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _EvidenceDelivery extends StatefulWidget {
-  const _EvidenceDelivery({required this.tripId});
+  const _EvidenceDelivery({required this.tripId, required this.onUploaded});
 
   final String tripId;
+  final VoidCallback onUploaded;
 
   @override
   State<_EvidenceDelivery> createState() => _EvidenceDeliveryState();
@@ -714,6 +632,7 @@ class _EvidenceDeliveryState extends State<_EvidenceDelivery> {
       );
       if (image == null) return;
       final bytes = await image.readAsBytes();
+      if (!mounted) return;
       setState(() {
         photo = bytes;
         photoName = image.name;
@@ -730,6 +649,7 @@ class _EvidenceDeliveryState extends State<_EvidenceDelivery> {
         photoName = uploaded['evidence']?.toString() ?? photoName;
         uploading = false;
       });
+      widget.onUploaded();
     } catch (_) {
       if (mounted) {
         setState(() => uploading = false);
@@ -788,7 +708,7 @@ class _EvidenceDeliveryState extends State<_EvidenceDelivery> {
           ),
           const SizedBox(height: 5),
           const Text(
-            'Toma una foto del paquete entregado para respaldar la entrega.',
+            'Agrega una foto del paquete entregado para respaldar la entrega.',
             style: TextStyle(
               color: Color(0xFFB9D4FF),
               fontSize: 11,
@@ -797,7 +717,7 @@ class _EvidenceDeliveryState extends State<_EvidenceDelivery> {
           ),
           const SizedBox(height: 12),
           InkWell(
-            onTap: _pickPhoto,
+            onTap: uploading ? null : _pickPhoto,
             borderRadius: BorderRadius.circular(14),
             child: Container(
               height: 120,
@@ -820,7 +740,7 @@ class _EvidenceDeliveryState extends State<_EvidenceDelivery> {
                               color: Colors.white70, size: 26),
                           const SizedBox(height: 7),
                           const Text(
-                            'Tomar foto de la evidencia',
+                            'Agregar foto del paquete',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 12.5,

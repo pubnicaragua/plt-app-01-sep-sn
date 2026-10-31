@@ -317,6 +317,30 @@ class ApiClient {
     return Trip.fromJson(json);
   }
 
+  Future<Trip> confirmPickupWithEvidence({
+    required String tripId,
+    required String deliveryCode,
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/trips/${Uri.encodeComponent(tripId)}/pickup-confirmation',
+    );
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['deliveryCode'] = deliveryCode
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    if (accessToken != null && accessToken!.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $accessToken';
+    }
+    final streamed = await request.send().timeout(const Duration(seconds: 75));
+    final response = await http.Response.fromStream(streamed);
+    final decoded = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(decoded is Map ? decoded['message']?.toString() ?? 'No se pudo confirmar la recogida.' : 'No se pudo confirmar la recogida.');
+    }
+    return Trip.fromJson((decoded as Map).cast<String, dynamic>());
+  }
+
   Future<Trip> updateTripSchedule(
       String id, String scheduledDate, String scheduledTime) async {
     final json = (await _send(
@@ -338,6 +362,8 @@ class ApiClient {
     String? description,
     String? recipientName,
     String? recipientPhone,
+    String? contactName,
+    String? contactPhone,
     bool fragile = false,
     double? originLat,
     double? originLng,
@@ -377,6 +403,8 @@ class ApiClient {
         'description': description,
         'recipientName': recipientName,
         'recipientPhone': recipientPhone,
+        'contactName': contactName,
+        'contactPhone': contactPhone,
         'fragile': fragile,
         'originLat': originLat,
         'originLng': originLng,
@@ -424,20 +452,22 @@ class ApiClient {
 
   Future<Trip> updateTripPayment({
     required String id,
-    required String method,
-    required double amount,
+    String? method,
+    double? amount,
     String? ref,
     String? status,
+    String? productStatus,
   }) async {
     final json = (await _send(
       'PATCH',
       '/trips/${Uri.encodeComponent(id)}/payment',
       body: {
-        'method': method,
-        'amount': amount,
-        'ref': ref,
+        if (method != null) 'method': method,
+        if (amount != null) 'amount': amount,
+        if (ref != null) 'ref': ref,
         'date': DateTime.now().toIso8601String(),
         if (status != null) 'status': status,
+        if (productStatus != null) 'productStatus': productStatus,
       },
     )) as Map<String, dynamic>;
     return Trip.fromJson(json);

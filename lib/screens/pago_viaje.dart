@@ -16,14 +16,6 @@ const _navy = Color(0xFF0D1F52);
 const _muted = Color(0xFFB9D4FF);
 const _mint = Color(0xFF1CDB83);
 
-bool _paymentIsComplete(String? value) {
-  final normalized = (value ?? '').trim().toLowerCase();
-  return normalized == 'pagado' ||
-      normalized == 'verificado' ||
-      normalized == 'aprobado' ||
-      normalized == 'contado';
-}
-
 String _paymentMethodFor(Trip trip) {
   final value = (trip.servicePaymentMethod ?? trip.paymentMethod ?? '').trim();
   if (value.isEmpty) return 'Efectivo';
@@ -51,14 +43,15 @@ class _PagoViajeState extends State<PagoViaje> {
   String? evidenceName;
   Uint8List? evidencePreview;
   bool productCollected = false;
+  Trip? updatedTrip;
 
-  Trip get trip => widget.trip;
+  Trip get trip => updatedTrip ?? widget.trip;
   String get method => _paymentMethodFor(trip);
   String get status =>
       trip.servicePaymentStatus ?? trip.paymentStatus ?? 'Sin pagar';
   double get total => trip.estimatedCostCs ?? 0;
-  bool get complete => _paymentIsComplete(status);
   DriverPaymentSummary get paymentSummary => driverPaymentSummaryFor(trip);
+  bool get complete => paymentSummary.serviceSettled;
   bool get productSettled =>
       productCollected || !paymentSummary.productNeedsCollection;
   bool get allPaymentsComplete => complete && productSettled;
@@ -72,7 +65,28 @@ class _PagoViajeState extends State<PagoViaje> {
       status: 'Pagado',
       amount: total,
       ref: 'EFECTIVO-${DateTime.now().millisecondsSinceEpoch}',
-      collectProduct: paymentSummary.productNeedsCollection,
+      collectProduct: paymentSummary.productNeedsCollection &&
+          paymentSummary.productMethod == 'Efectivo',
+    );
+  }
+
+  Future<void> _toggleServicePayment() async {
+    final settled = paymentSummary.serviceSettled && !paymentSummary.serviceCredit;
+    await _savePayment(
+      method: method,
+      status: settled ? 'Sin pagar' : 'Pagado',
+      amount: settled ? 0 : total,
+      ref: settled
+          ? ''
+          : 'DRIVER_CONFIRMED-${DateTime.now().millisecondsSinceEpoch}',
+    );
+  }
+
+  Future<void> _toggleProductPayment() async {
+    final pending = paymentSummary.productNeedsCollection;
+    await _savePayment(
+      productStatus: pending ? 'Pagado' : 'Pendiente',
+      collectProduct: pending,
     );
   }
 
@@ -126,11 +140,12 @@ class _PagoViajeState extends State<PagoViaje> {
   }
 
   Future<void> _savePayment({
-    required String method,
-    required String status,
-    required double amount,
+    String? method,
+    String? status,
+    double? amount,
     String? ref,
     bool collectProduct = false,
+    String? productStatus,
   }) async {
     if (saving) return;
     setState(() => saving = true);
@@ -141,13 +156,16 @@ class _PagoViajeState extends State<PagoViaje> {
         amount: amount,
         ref: ref,
         status: status,
+        productStatus: productStatus,
       );
       if (!mounted) return;
+      updatedTrip = updated;
       if (collectProduct) productCollected = true;
-      final serviceComplete = _paymentIsComplete(
-          updated.paymentStatus ?? updated.servicePaymentStatus);
-      if (serviceComplete && (productCollected || !paymentSummary.productNeedsCollection)) {
-        Navigator.of(context).pushReplacement(
+      final updatedPayment = driverPaymentSummaryFor(updated);
+      final serviceComplete = updatedPayment.serviceSettled;
+      if (serviceComplete &&
+          (productCollected || !updatedPayment.productNeedsCollection)) {
+        Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => ConfirmarEntrega(
               trip: updated,
@@ -158,7 +176,11 @@ class _PagoViajeState extends State<PagoViaje> {
         return;
       }
       setState(() => saving = false);
-      _showMessage('Comprobante enviado. Esperando validación administrativa.');
+      _showMessage(
+        productStatus != null
+            ? 'Estado del producto actualizado.'
+            : 'Pago actualizado correctamente.',
+      );
     } catch (error) {
       if (mounted) {
         setState(() => saving = false);
@@ -168,11 +190,11 @@ class _PagoViajeState extends State<PagoViaje> {
   }
 
   void _continueIfComplete() {
-    if (!complete) {
-      _showMessage('Aún falta confirmar el pago del servicio.');
+    if (!allPaymentsComplete) {
+      _showMessage('Aún falta confirmar todos los pagos del viaje.');
       return;
     }
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ConfirmarEntrega(
           trip: trip,
@@ -202,13 +224,14 @@ class _PagoViajeState extends State<PagoViaje> {
     final payment = paymentSummary;
     final productCashPending = payment.productNeedsCollection &&
         payment.productMethod == 'Efectivo';
-    final cashToCollect = isCash || productCashPending;
+    final cashToCollect =
+        (payment.serviceNeedsCollection && isCash) || productCashPending;
     final awaitingReview = status.toLowerCase().contains('revisión') ||
         status.toLowerCase().contains('revision');
 
     return Scaffold(
       backgroundColor: _navy,
-      bottomNavigationBar: complete
+      bottomNavigationBar: allPaymentsComplete
           ? SafeArea(
               top: false,
               child: Padding(
@@ -284,6 +307,14 @@ class _PagoViajeState extends State<PagoViaje> {
                     _PaymentSummary(
                       payment: payment,
                       productSettled: productSettled,
+                      saving: saving,
+                      onToggleServicePayment: payment.serviceCredit
+                          ? null
+                          : _toggleServicePayment,
+                      onToggleProductPayment: payment.productAmount > 0 &&
+                              !payment.productApproximate
+                          ? _toggleProductPayment
+                          : null,
                     ),
                     const SizedBox(height: 18),
                     if (allPaymentsComplete)
@@ -326,7 +357,7 @@ class _PagoViajeState extends State<PagoViaje> {
                       ),
                     ],
                     const SizedBox(height: 24),
-                    if (!complete && cashToCollect)
+                    if (!complete && payment.serviceNeedsCollection && isCash)
                       _PrimaryButton(
                           label: payment.productNeedsCollection && complete
                               ? 'Marcar producto recibido'
@@ -391,14 +422,32 @@ class _PagoViajeState extends State<PagoViaje> {
 }
 
 class _PaymentSummary extends StatelessWidget {
-  const _PaymentSummary({required this.payment, required this.productSettled});
+  const _PaymentSummary({
+    required this.payment,
+    required this.productSettled,
+    required this.saving,
+    this.onToggleServicePayment,
+    this.onToggleProductPayment,
+  });
 
   final DriverPaymentSummary payment;
   final bool productSettled;
+  final bool saving;
+  final VoidCallback? onToggleServicePayment;
+  final VoidCallback? onToggleProductPayment;
 
   @override
   Widget build(BuildContext context) {
-    final paid = payment.servicePaid;
+    final serviceSettled = payment.serviceSettled;
+    final serviceStatus = driverServicePaymentStatusLabel(payment);
+    final statusColor = payment.serviceCredit
+        ? cyan
+        : serviceSettled
+            ? _mint
+            : const Color(0xFFFFC928);
+    final payer = payment.shipmentPayer.trim().isEmpty
+        ? 'No definido'
+        : payment.shipmentPayer.trim();
     return ShowcaseGlassCard(
       padding: const EdgeInsets.all(18),
       borderRadius: 22,
@@ -432,11 +481,21 @@ class _PaymentSummary extends StatelessWidget {
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             fontFamily: 'Figtree')),
+                    const SizedBox(height: 3),
+                    Text('Paga: $payer',
+                        style: const TextStyle(
+                            color: _muted,
+                            fontSize: 10.5,
+                            fontFamily: 'Figtree')),
                   ],
                 ),
               ),
-              Icon(paid ? Icons.check_circle_rounded : Icons.schedule_rounded,
-                  color: paid ? _mint : const Color(0xFFFFC928)),
+              Icon(
+                serviceSettled
+                    ? Icons.check_circle_rounded
+                    : Icons.schedule_rounded,
+                color: statusColor,
+              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -463,23 +522,43 @@ class _PaymentSummary extends StatelessWidget {
               const Text('Estado actual',
                   style: TextStyle(
                       color: _muted, fontSize: 12, fontFamily: 'Figtree')),
-              Text(paid ? 'Pagado' : 'Pendiente',
+              Text(serviceStatus,
                   style: TextStyle(
-                      color: paid ? _mint : const Color(0xFFFFC928),
+                      color: statusColor,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       fontFamily: 'Figtree')),
             ],
           ),
+          if (onToggleServicePayment != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _PaymentActionButton(
+                label: serviceSettled
+                    ? 'Desmarcar servicio como pagado'
+                    : 'Marcar servicio como pagado',
+                loading: saving,
+                onTap: onToggleServicePayment!,
+              ),
+            ),
+          ],
           if (payment.productAmount > 0) ...[
             const SizedBox(height: 15),
             Divider(color: Colors.white.withValues(alpha: .13), height: 1),
             const SizedBox(height: 14),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.receipt_long_outlined, color: cyan, size: 22),
-                const SizedBox(width: 11),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _blue.withValues(alpha: .35),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Icon(Icons.receipt_long_outlined, color: cyan),
+                ),
+                const SizedBox(width: 13),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,42 +572,118 @@ class _PaymentSummary extends StatelessWidget {
                       Text(payment.productMethod,
                           style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 15,
+                              fontSize: 16,
                               fontWeight: FontWeight.w800,
+                              fontFamily: 'Figtree')),
+                      const SizedBox(height: 3),
+                      Text('Paga: $payer',
+                          style: const TextStyle(
+                              color: _muted,
+                              fontSize: 10.5,
                               fontFamily: 'Figtree')),
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(formatFareCs(payment.productAmount),
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Figtree')),
-                    const SizedBox(height: 3),
-                    Text(productSettled ? 'Pagado / recibido' : 'Pendiente',
-                        style: TextStyle(
-                            color: productSettled
-                                ? _mint
-                                : const Color(0xFFFFC928),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Figtree')),
-                  ],
+                Icon(
+                  productSettled
+                      ? Icons.check_circle_rounded
+                      : Icons.schedule_rounded,
+                  color: productSettled
+                      ? _mint
+                      : const Color(0xFFFFC928),
                 ),
               ],
             ),
-          ],
-          if (payment.recipientPays) ...[
-            const SizedBox(height: 13),
-            Text('Paga el destinatario · efectivo',
-                style: const TextStyle(
-                    color: _muted, fontSize: 11, fontFamily: 'Figtree')),
+            const SizedBox(height: 18),
+            Divider(color: Colors.white.withValues(alpha: .13), height: 1),
+            const SizedBox(height: 15),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Total del producto',
+                    style: TextStyle(
+                        color: _muted, fontSize: 12, fontFamily: 'Figtree')),
+                Text(formatFareCs(payment.productAmount),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Estado actual',
+                    style: TextStyle(
+                        color: _muted, fontSize: 12, fontFamily: 'Figtree')),
+                Text(productSettled ? 'Pagado' : 'Pendiente',
+                    style: TextStyle(
+                        color: productSettled
+                            ? _mint
+                            : const Color(0xFFFFC928),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Figtree')),
+              ],
+            ),
+            if (onToggleProductPayment != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: _PaymentActionButton(
+                  label: productSettled
+                      ? 'Desmarcar producto como pagado'
+                      : 'Marcar producto como pagado',
+                  loading: saving,
+                  onTap: onToggleProductPayment!,
+                ),
+              ),
+            ],
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _PaymentActionButton extends StatelessWidget {
+  const _PaymentActionButton({
+    required this.label,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: loading ? null : onTap,
+      icon: loading
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                color: _mint,
+                strokeWidth: 2,
+              ),
+            )
+          : const Icon(Icons.check_rounded, size: 16),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _mint,
+        side: BorderSide(color: _mint.withValues(alpha: .55)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        textStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Figtree',
+        ),
       ),
     );
   }

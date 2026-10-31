@@ -37,6 +37,8 @@ class CrearEnvio3 extends StatefulWidget {
     this.invoicePhoto,
     this.invoiceFileName = 'factura.jpg',
     this.originRefs = '',
+    this.pickupName = '',
+    this.pickupPhone = '',
     this.destinationRefs = '',
     this.recipientName = '',
     this.recipientPhone = '',
@@ -78,6 +80,8 @@ class CrearEnvio3 extends StatefulWidget {
   final Uint8List? invoicePhoto;
   final String invoiceFileName;
   final String originRefs;
+  final String pickupName;
+  final String pickupPhone;
   final String destinationRefs;
   final String recipientName;
   final String recipientPhone;
@@ -226,6 +230,8 @@ class _CrearEnvio3State extends State<CrearEnvio3>
           destinationRefs: widget.destinationRefs.isEmpty ? null : widget.destinationRefs,
           recipientName: widget.recipientName.isEmpty ? null : widget.recipientName,
           recipientPhone: widget.recipientPhone.isEmpty ? null : widget.recipientPhone,
+          contactName: widget.pickupName.isEmpty ? null : widget.pickupName,
+          contactPhone: widget.pickupPhone.isEmpty ? null : widget.pickupPhone,
           serviceType: widget.serviceType,
           scheduledDate: widget.scheduledDate,
           scheduledTime: widget.scheduledTime,
@@ -252,13 +258,24 @@ class _CrearEnvio3State extends State<CrearEnvio3>
       // Do not mark it as paid when the client creates the trip.
       final recipientPays =
           widget.shipmentPayer.trim().toLowerCase() == 'destinatario';
-      if (widget.paymentMethod.isNotEmpty && !recipientPays) {
+      final shipmentIsCredit = widget.paymentStatus == shipmentCreditStatus;
+      if (recipientPays) {
         await apiClient.updateTripPayment(
           id: created.id,
-          method: widget.paymentMethod,
-          amount: shipmentPaymentIsImmediate(widget.paymentStatus)
+          method: 'Efectivo',
+          amount: 0,
+          status: 'Sin pagar',
+        );
+      } else if (widget.paymentMethod.isNotEmpty || shipmentIsCredit) {
+        await apiClient.updateTripPayment(
+          id: created.id,
+          method: widget.paymentMethod.isEmpty ? null : widget.paymentMethod,
+          amount: shipmentIsCredit
+              ? 0
+              : shipmentPaymentIsImmediate(widget.paymentStatus)
               ? (created.estimatedCostCs ?? 0)
               : 0,
+          status: shipmentIsCredit ? shipmentCreditStatus : null,
         );
       }
       if (!mounted) return;

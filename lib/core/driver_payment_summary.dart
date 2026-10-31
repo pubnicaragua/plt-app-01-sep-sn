@@ -11,6 +11,7 @@ class DriverPaymentSummary {
     required this.shipmentPayer,
     required this.serviceAmount,
     required this.servicePaid,
+    required this.serviceCredit,
     required this.serviceMethod,
   });
 
@@ -21,12 +22,14 @@ class DriverPaymentSummary {
   final String shipmentPayer;
   final double serviceAmount;
   final bool servicePaid;
+  final bool serviceCredit;
   final String serviceMethod;
 
   bool get recipientPays => shipmentPayer.toLowerCase().contains('destinatario');
   bool get productNeedsCollection =>
       productAmount > 0 && !productPaid && !productApproximate;
-  bool get serviceNeedsCollection => !servicePaid;
+  bool get serviceSettled => servicePaid || serviceCredit;
+  bool get serviceNeedsCollection => !serviceSettled;
   bool get complete => !productNeedsCollection && !serviceNeedsCollection;
   double get totalToCollect =>
       (productNeedsCollection ? productAmount : 0) +
@@ -53,6 +56,10 @@ DriverPaymentSummary driverPaymentSummaryFor(Trip trip) {
   final serviceStatus = trip.servicePaymentStatus ??
       trip.paymentStatus ??
       _descriptionValue(description, r'Estado pago envío');
+  final describedServiceStatus =
+      _descriptionValue(description, r'Estado pago envío');
+  final recipientPays = shipmentPayer.toLowerCase().contains('destinatario');
+  final servicePaymentRecordedByDriver = _hasDriverPaymentReceipt(trip);
   final productApproximate = _descriptionValue(
     description,
     r'Tipo valor producto',
@@ -65,12 +72,20 @@ DriverPaymentSummary driverPaymentSummaryFor(Trip trip) {
     productApproximate: productApproximate,
     shipmentPayer: shipmentPayer,
     serviceAmount: trip.estimatedCostCs ?? 0,
-    servicePaid: _isPaid(serviceStatus),
+    servicePaid: (!recipientPays || servicePaymentRecordedByDriver) &&
+        (_isPaid(serviceStatus) || _isPaid(describedServiceStatus)),
+    serviceCredit: !recipientPays &&
+        (_isCredit(serviceStatus) || _isCredit(describedServiceStatus)),
     serviceMethod: serviceMethod.isEmpty ? 'Efectivo' : serviceMethod,
   );
 }
 
-bool paymentValueIsComplete(String? value) => _isPaid(value);
+String driverServicePaymentStatusLabel(DriverPaymentSummary payment) {
+  if (payment.serviceCredit) return 'Crédito';
+  return payment.servicePaid ? 'Pagado' : 'Pendiente';
+}
+
+bool paymentValueIsComplete(String? value) => _isPaid(value) || _isCredit(value);
 
 String _descriptionValue(String source, String labelPattern) {
   final match = RegExp(
@@ -83,9 +98,19 @@ String _descriptionValue(String source, String labelPattern) {
 bool _isPaid(String? value) {
   final normalized = (value ?? '').trim().toLowerCase();
   return normalized.contains('pagad') ||
-      normalized == 'contado' ||
       normalized.contains('verificad') ||
       normalized.contains('aprob');
+}
+
+bool _isCredit(String? value) =>
+    (value ?? '').trim().toLowerCase().contains('crédito') ||
+    (value ?? '').trim().toLowerCase().contains('credito');
+
+bool _hasDriverPaymentReceipt(Trip trip) {
+  final reference = trip.paymentRef?.trim().toUpperCase() ?? '';
+  return reference.startsWith('DRIVER_CONFIRMED') ||
+      reference.startsWith('EFECTIVO-') ||
+      reference == 'BYPASS_LOCAL_PAYMENT';
 }
 
 String _normalizeMethod(String? value) {

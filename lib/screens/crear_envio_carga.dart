@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../core/dialog_lifecycle.dart';
 import '../core/theme.dart';
 import '../core/truck_capacity.dart';
 import '../core/vehicle_capacity.dart';
@@ -234,7 +235,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
         ? const <String, double?>{}
         : _estimatedFaresFor(compatibleVehicles);
     if (recommendation == null) {
-      await showDialog<void>(
+      await showDialogAndWaitForDismissal<void>(
         context: context,
         builder: (context) => _WeightLimitDialog(
           vehicle: currentVehicleLabel,
@@ -250,7 +251,7 @@ class _CrearEnvioCargaState extends State<CrearEnvioCarga> {
       );
       return false;
     }
-    final selectedVehicle = await showDialog<String>(
+    final selectedVehicle = await showDialogAndWaitForDismissal<String>(
       context: context,
       builder: (context) => _WeightLimitDialog(
         vehicle: currentVehicleLabel,
@@ -1244,11 +1245,12 @@ class _ProductValueCard extends StatelessWidget {
                                 ),
                                 SizedBox(
                                   width: 42,
+                                  height: 36,
                                   child: TextField(
                                     controller: bundlesController,
                                     keyboardType: TextInputType.number,
                                     textAlignVertical:
-                                        const TextAlignVertical(y: 0.35),
+                                        const TextAlignVertical(y: 0.25),
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
                                       color: Colors.white,

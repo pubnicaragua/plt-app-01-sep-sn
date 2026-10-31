@@ -4,10 +4,13 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
+import '../core/dialog_lifecycle.dart';
 import '../core/location_service.dart';
+import '../core/map_camera_follow.dart';
 import '../core/theme.dart';
 import '../core/trip_routing.dart';
 import '../models/api_models.dart';
@@ -38,9 +41,16 @@ String conductorPickupReference(Trip trip) {
 
 String conductorPickupPersonLabel(Trip trip) {
   if (!isTripServiceMode(trip.serviceMode)) {
-    return trip.contactName?.trim().isNotEmpty == true
-        ? trip.contactName!.trim()
-        : 'Remitente';
+    final contact = trip.contactName?.trim();
+    if (contact?.isNotEmpty == true) return contact!;
+    // Compatibilidad con viajes creados antes de guardar el contacto de recojo
+    // como campo propio: esos viajes ya contienen el nombre en la descripción.
+    final pickupMatch = RegExp(
+      r'Recojo:\s*([^·]+)',
+      caseSensitive: false,
+    ).firstMatch(trip.description ?? '');
+    final pickupName = pickupMatch?.group(1)?.trim();
+    return pickupName?.isNotEmpty == true ? pickupName! : 'Remitente';
   }
 
   for (final value in [trip.recipientName, trip.contactName, trip.client]) {
@@ -123,6 +133,8 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
   List<LatLng> routePoints = const [];
   bool mapHasCentered = false;
   bool mapReady = false;
+  final CameraFollowController cameraFollow = CameraFollowController();
+  bool cameraAnimationRunning = false;
   LatLng? previousNavigationPoint;
   double navigationBearing = 0;
   bool hasNavigationBearing = false;
@@ -193,7 +205,8 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
         center.dy - painter.height / 2,
       ),
     );
-    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final image =
+        await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
@@ -237,7 +250,8 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
       11,
       Paint()..color = const Color(0xFF21C88A),
     );
-    canvas.drawCircle(const ui.Offset(103, 22), 7, Paint()..color = Colors.white);
+    canvas.drawCircle(
+        const ui.Offset(103, 22), 7, Paint()..color = Colors.white);
     final image = await recorder.endRecording().toImage(128, 128);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     if (bytes == null) {
@@ -318,8 +332,9 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
     }
     previousNavigationPoint = point;
     if (!mounted || !mapReady || mapController == null) return;
+    if (!cameraFollow.shouldAnimate || cameraAnimationRunning) return;
     final cameraTarget = driverNavigationCameraTarget(point, navigationBearing);
-    mapController!.animateCamera(
+    _animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: cameraTarget,
@@ -329,6 +344,18 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
         ),
       ),
     );
+  }
+
+  void _animateCamera(CameraUpdate update) {
+    final controller = mapController;
+    if (!mounted || controller == null || !cameraFollow.shouldAnimate) return;
+
+    cameraAnimationRunning = true;
+    cameraFollow.beginProgrammaticMove();
+    controller.animateCamera(update).whenComplete(() {
+      cameraAnimationRunning = false;
+      cameraFollow.endProgrammaticMove();
+    });
   }
 
   double _bearingAlongRoute(LatLng driver) {
@@ -370,8 +397,8 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
     }
     if (activeTrip.destinationLat != null &&
         activeTrip.destinationLng != null) {
-      points.add(
-          LatLng(activeTrip.destinationLat!, activeTrip.destinationLng!));
+      points
+          .add(LatLng(activeTrip.destinationLat!, activeTrip.destinationLng!));
     }
     return points;
   }
@@ -394,13 +421,14 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
     if (!mounted ||
         mapController == null ||
         routePoints.length < 2 ||
+        !cameraFollow.shouldAnimate ||
         mapHasCentered) {
       return;
     }
     mapHasCentered = true;
     final latitudes = routePoints.map((point) => point.latitude).toList();
     final longitudes = routePoints.map((point) => point.longitude).toList();
-    mapController!.animateCamera(
+    _animateCamera(
       CameraUpdate.newLatLngBounds(
         LatLngBounds(
           southwest: LatLng(
@@ -500,23 +528,12 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
         mapReady = true;
         final driver = _driverPoint;
         if (driver != null) {
-          controller.animateCamera(
-            CameraUpdate.newCameraPosition(
-              CameraPosition(
-                target: driverNavigationCameraTarget(
-                  driver,
-                  navigationBearing,
-                ),
-                zoom: 17.2,
-                tilt: 62,
-                bearing: navigationBearing,
-              ),
-            ),
-          );
+          _followDriverAt(driver);
         } else {
           _centerOnRouteIfNeeded();
         }
       },
+      onCameraMoveStarted: cameraFollow.handleCameraMoveStarted,
     );
   }
 
@@ -537,10 +554,37 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
     setState(() => updating = true);
     try {
       final goingToPickup = activeTrip.status == 'Asignado';
-      final updated = await apiClient.updateTripStatus(
-        activeTrip.id,
-        goingToPickup ? 'En camino' : 'En entrega',
-      );
+      final Trip updated;
+      if (goingToPickup) {
+        final deliveryCode = await _askForPickupCode();
+        if (deliveryCode == null) {
+          if (mounted) setState(() => updating = false);
+          return;
+        }
+        final openCamera = await _askForPickupPhoto();
+        if (!openCamera) {
+          if (mounted) setState(() => updating = false);
+          return;
+        }
+        final image = await ImagePicker().pickImage(
+          source: ImageSource.camera,
+          imageQuality: 85,
+          maxWidth: 1600,
+        );
+        if (image == null) {
+          if (mounted) setState(() => updating = false);
+          return;
+        }
+        final bytes = await image.readAsBytes();
+        updated = await apiClient.confirmPickupWithEvidence(
+          tripId: activeTrip.id,
+          deliveryCode: deliveryCode,
+          bytes: bytes,
+          filename: image.name.trim().isEmpty ? 'recogida.jpg' : image.name,
+        );
+      } else {
+        updated = await apiClient.updateTripStatus(activeTrip.id, 'En entrega');
+      }
       if (!mounted) return;
       if (goingToPickup) {
         setState(() {
@@ -575,6 +619,154 @@ class _ViajeEnCursoState extends State<ViajeEnCurso> {
         );
       }
     }
+  }
+
+  Future<String?> _askForPickupCode() async {
+    final controllers = List.generate(4, (_) => TextEditingController());
+    final focusNodes = List.generate(4, (_) => FocusNode());
+    final code = await showDialogAndWaitForDismissal<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF172F70),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: const Text(
+            'Código de entrega',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Figtree',
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Solicita al cliente el código de 4 dígitos para confirmar la recogida.',
+                style: TextStyle(
+                  color: Color(0xFFB9D4FF),
+                  fontSize: 12,
+                  height: 1.35,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Código de entrega',
+                style: TextStyle(
+                  color: Color(0xFFB9D4FF),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Figtree',
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  for (var index = 0; index < controllers.length; index++) ...[
+                    Expanded(
+                      child: TextField(
+                        controller: controllers[index],
+                        focusNode: focusNodes[index],
+                        autofocus: index == 0,
+                        textAlign: TextAlign.center,
+                        keyboardType: TextInputType.number,
+                        maxLength: 1,
+                        onChanged: (value) {
+                          setDialogState(() {});
+                          if (value.isNotEmpty && index < controllers.length - 1) {
+                            focusNodes[index + 1].requestFocus();
+                          } else if (value.isEmpty && index > 0) {
+                            focusNodes[index - 1].requestFocus();
+                          }
+                        },
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 21,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Figtree',
+                        ),
+                        decoration: InputDecoration(
+                          counterText: '',
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: .06),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Color(0xFF168DFF)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Color(0xFF168DFF)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Color(0xFF52C7FF), width: 2),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (index < controllers.length - 1) const SizedBox(width: 6),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar', style: TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Figtree')),
+            ),
+            FilledButton(
+              onPressed: controllers.every((controller) => controller.text.isNotEmpty)
+                  ? () => Navigator.pop(dialogContext, controllers.map((controller) => controller.text).join())
+                  : null,
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0D47D9), foregroundColor: Colors.white),
+              child: const Text('Validar', style: TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
+      ),
+    );
+    for (final focusNode in focusNodes) {
+      focusNode.dispose();
+    }
+    for (final controller in controllers) {
+      controller.dispose();
+    }
+    return code;
+  }
+
+  Future<bool> _askForPickupPhoto() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF172F70),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        icon: const Icon(Icons.photo_camera_rounded, color: Color(0xFF52C7FF), size: 42),
+        title: const Text('Foto de la recogida', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontFamily: 'Figtree')),
+        content: const Text(
+          'Toma una foto del paquete en el momento de recogerlo. Solo se permite usar la cámara.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Color(0xFFB9D4FF), fontSize: 12, height: 1.35, fontFamily: 'Figtree'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar', style: TextStyle(color: Color(0xFFB9D4FF), fontFamily: 'Figtree')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0D47D9), foregroundColor: Colors.white),
+            child: const Text('Abrir cámara', style: TextStyle(fontFamily: 'Figtree', fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
   }
 
   @override
@@ -876,7 +1068,9 @@ class _DeliverySheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      headingToPickup ? 'PUNTO DE RETIRO' : 'DESTINO DE ENTREGA',
+                      headingToPickup
+                          ? 'PUNTO DE RETIRO'
+                          : 'DESTINO DE ENTREGA',
                       style: TextStyle(
                         color: Color(0xFF9FB2DC),
                         fontSize: 9,
@@ -942,8 +1136,8 @@ class _DeliverySheet extends StatelessWidget {
               ),
               if (!isTripServiceMode(trip.serviceMode))
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(20),
@@ -1009,7 +1203,7 @@ class _DeliverySheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(25),
               child: InkWell(
                 borderRadius: BorderRadius.circular(25),
-              onTap: () => _openWaze(context),
+                onTap: () => _openWaze(context),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

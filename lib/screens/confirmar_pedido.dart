@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
+import '../core/dialog_lifecycle.dart';
 import '../core/invoice_breakdown.dart';
 import '../core/insurance_flow.dart';
 import '../core/shipment_payment_logic.dart';
@@ -41,6 +42,8 @@ class Confirmarpedido extends StatefulWidget {
     this.invoicePhoto,
     this.invoiceFileName = 'factura.jpg',
     this.originRefs = '',
+    this.pickupName = '',
+    this.pickupPhone = '',
     this.destinationRefs = '',
     this.recipientName = '',
     this.recipientPhone = '',
@@ -81,6 +84,8 @@ class Confirmarpedido extends StatefulWidget {
   final Uint8List? invoicePhoto;
   final String invoiceFileName;
   final String originRefs;
+  final String pickupName;
+  final String pickupPhone;
   final String destinationRefs;
   final String recipientName;
   final String recipientPhone;
@@ -460,6 +465,8 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
           invoicePhoto: _isTripService ? null : invoicePhoto,
           invoiceFileName: _isTripService ? '' : invoiceFileName,
           originRefs: widget.originRefs,
+          pickupName: widget.pickupName,
+          pickupPhone: widget.pickupPhone,
           destinationRefs: widget.destinationRefs,
           recipientName: widget.recipientName,
           recipientPhone: widget.recipientPhone,
@@ -1146,7 +1153,7 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
   }
 
   Future<void> _showInvoicePicker() async {
-    await showModalBottomSheet<void>(
+    final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: const Color(0xFF102A68),
       shape: const RoundedRectangleBorder(
@@ -1160,35 +1167,36 @@ class _ConfirmarpedidoState extends State<Confirmarpedido> {
                   const Icon(Icons.photo_camera_outlined, color: Colors.white),
               title: const Text('Tomar foto',
                   style: TextStyle(color: Colors.white, fontFamily: 'Figtree')),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _pickInvoiceImage(ImageSource.camera);
-              },
+              onTap: () => Navigator.pop(sheetContext, 'camera'),
             ),
             ListTile(
               leading:
                   const Icon(Icons.photo_library_outlined, color: Colors.white),
               title: const Text('Elegir imagen',
                   style: TextStyle(color: Colors.white, fontFamily: 'Figtree')),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _pickInvoiceImage(ImageSource.gallery);
-              },
+              onTap: () => Navigator.pop(sheetContext, 'gallery'),
             ),
             ListTile(
               leading:
                   const Icon(Icons.attach_file_rounded, color: Colors.white),
               title: const Text('Seleccionar archivo',
                   style: TextStyle(color: Colors.white, fontFamily: 'Figtree')),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _pickInvoiceFile();
-              },
+              onTap: () => Navigator.pop(sheetContext, 'file'),
             ),
           ],
         ),
       ),
     );
+    await waitForRouteDismissal();
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'camera':
+        await _pickInvoiceImage(ImageSource.camera);
+      case 'gallery':
+        await _pickInvoiceImage(ImageSource.gallery);
+      case 'file':
+        await _pickInvoiceFile();
+    }
   }
 
   Widget _transportCard(

@@ -116,7 +116,7 @@ class _FinalizarViajeState extends State<FinalizarViaje> {
   Future<void> _pickEvidencePhoto() async {
     try {
       final image = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+        source: ImageSource.camera,
         imageQuality: 80,
         maxWidth: 1600,
       );

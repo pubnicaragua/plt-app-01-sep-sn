@@ -645,6 +645,8 @@ class _CrearEnvio2State extends State<CrearEnvio2> {
             if (description.text.trim().isNotEmpty) description.text.trim(),
             if (extraDescription.isNotEmpty) extraDescription,
           ].join(' · '),
+          pickupName: isShipping ? pickupName.text.trim() : '',
+          pickupPhone: isShipping ? pickupPhone.text.trim() : '',
           fragile: fragile,
           invoiceNumber: invoiceNumber.text.trim(),
           invoiceAmount: invoiceAmountCs,
